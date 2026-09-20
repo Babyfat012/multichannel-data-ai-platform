@@ -1,0 +1,4 @@
+# Tài liệu nội bộ của quá trình thiết kế, không đẩy lên repo
+CONTEXT.md
+docs/adr/
+docs/domain-overview.md
