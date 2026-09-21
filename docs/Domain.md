@@ -91,12 +91,13 @@ Bên seller **không có clickstream** (lượt xem, giỏ hàng), vì đó là 
 | Vấn đề | Cụ thể |
 |---|---|
 | **Skew** | Order theo Storefront: Amazon US 45%, TikTok Shop US 15%, Amazon UK 12%, Amazon DE 10%, Shopify 8%, Walmart US 7%, Shopee VN 3%. Vài SKU chiếm phần lớn doanh số (Zipf). 8 danh mục với tỷ lệ trả hàng khác nhau, quần áo khoảng 22%, đồ gia dụng khoảng 4% |
-| **High cardinality** | 2.000 SKU, hơn 1 triệu Order Line, khoảng 720 nghìn Order (khoảng 4.000 Order mỗi ngày trong 180 ngày) |
-| **Schema evolution** | TikTok Shop đổi phiên bản payload từ một ngày cố định (đổi tên field, thêm cấu trúc lồng nhau). Amazon thêm một cột mới giữa chừng nên partition cũ bị null |
+| **High cardinality** | Giữ 2.000 SKU. Cardinality cao nằm ở mã Order (khoảng 720 nghìn), mã Order Line (hơn 1 triệu), mã vận đơn và mã buyer theo Channel |
+| **Schema evolution** | Từ một ngày cố định, dữ liệu đơn Amazon chuyển từ model Orders v0 sang Orders 2026-01-01: đổi tên field, đổi cấu trúc, thêm field mới nên partition cũ bị null |
+| **Duplicate offline** | Khoảng 2% dòng bị trùng do export chồng lấn ngày, gồm bản trùng y hệt và bản sửa lại mới hơn |
 | **Data drift** | (1) Covariate: đợt sale kiểu Prime Day làm mức giảm giá và phân phối SKU đổi đột ngột trên các Storefront Amazon. (2) Concept: livestream TikTok làm tỷ lệ trả quần áo tăng gần gấp đôi nhưng feature trông vẫn bình thường |
-| **Duplicate, burst, late** | Tùy đặc tính từng Channel như mục 6 |
+| **Duplicate, burst, late (stream)** | Tùy đặc tính từng Channel như mục 6 |
 
-Mọi con số đều là config của generator, có thể tăng khi chạy trên cloud.
+Mọi con số đều là config của generator, có thể tăng khi chạy trên cloud. Thiết kế chi tiết xem [generator-design.md](generator-design.md).
 
 ## 9. Phần mở rộng riêng của Amazon
 
@@ -109,6 +110,6 @@ Phí, settlement, quảng cáo, tồn kho FBA chưa làm ở giai đoạn này, 
 
 ## 10. Giả định và giới hạn
 
-- **Phần chưa xác minh với tài liệu chính thức**: trạng thái đơn và khái niệm storefront của Shopee, cùng payload webhook của TikTok Shop, hiện chỉ có nguồn phụ. Các phần này là *giả định*, cần đối chiếu lại khi có tài liệu chính thức. Chỉ những field đã có nguồn mới được mô hình hóa.
+- **Mức xác minh của dạng dữ liệu từng Channel**: đơn hàng và trả hàng của cả 5 Channel đã đối chiếu với tài liệu chính thức. Một số chi tiết vẫn là *giả định* (ví dụ ngày giao thực tế của Amazon và Shopee, notification của Amazon). Danh sách đầy đủ, kèm nguồn và mức tin cậy, xem [channel-sources.md](channel-sources.md).
 - **Dữ liệu hoàn toàn giả lập**: phân phối (tỷ trọng Storefront, tỷ lệ trả hàng theo danh mục) là tham số của generator, không phải số liệu thật.
 - **Không có clickstream**: dữ liệu lượt xem, giỏ hàng là dữ liệu nội bộ của sàn, nằm ngoài phạm vi góc nhìn Seller.

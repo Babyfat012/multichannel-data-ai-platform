@@ -61,8 +61,8 @@ flowchart LR
     PGWH[("PostgreSQL<br/>Data Warehouse")]
     DATAHUB["DataHub"]
 
-    GEN -->|"B1: bảng orders, order lines, returns, listings"| PGSRC
-    GEN -->|"B2: file export theo định dạng từng Channel"| MINIO
+    GEN -->|"B1: đơn và trả hàng Walmart, Shopee; danh mục SKU"| PGSRC
+    GEN -->|"B2: file export Amazon, TikTok Shop, Shopify; Listing; tỷ giá"| MINIO
     AIRFLOW -->|"B3: submit job DP1, DP2, DP3"| SPARK
     PGSRC -->|"B4: dòng dữ liệu thô"| SPARK
     MINIO -->|"B5: file export và bảng bronze/silver"| SPARK
@@ -127,9 +127,10 @@ Các lựa chọn này là dự kiến và có thể thay đổi trong quá trì
 Generator tạo dữ liệu theo cấu hình. Ví dụ cấu hình dự kiến:
 
 ```yaml
-n_skus: 2000
-days_history: 180
-orders_per_day: 4000          # trên toàn bộ 7 Storefront
+scale:
+  n_skus: 2000
+  days_history: 180
+  orders_per_day: 4000        # trên toàn bộ 7 Storefront
 storefront_weights:
   amazon_us: 0.45
   tiktok_shop_us: 0.15
@@ -140,15 +141,16 @@ storefront_weights:
   shopee_vn: 0.03
 ```
 
-Quy mô kết quả: khoảng 720 nghìn Order và hơn 1 triệu Order Line.
+Quy mô kết quả: khoảng 720 nghìn Order và hơn 1 triệu Order Line. Cấu hình đầy đủ xem [docs/generator-design.md](docs/generator-design.md#10-cấu-hình).
 
 Các vấn đề dữ liệu được mô phỏng:
 
 | Vấn đề | Cách mô phỏng |
 |---|---|
 | Skew | Tỷ trọng Storefront lệch, vài SKU chiếm phần lớn doanh số, 8 danh mục với tỷ lệ trả hàng khác nhau |
-| High cardinality | 2.000 SKU và hơn 1 triệu Order Line |
-| Schema evolution | TikTok Shop đổi phiên bản payload, Amazon thêm cột mới giữa chừng |
+| High cardinality | Khoảng 720 nghìn mã Order, hơn 1 triệu mã Order Line, mã vận đơn, mã buyer theo Channel |
+| Schema evolution | Dữ liệu đơn Amazon chuyển từ Orders v0 sang Orders 2026-01-01 giữa chừng (đổi tên, đổi cấu trúc, thêm field) |
+| Duplicate offline | Khoảng 2% dòng trùng do export chồng lấn ngày, có cả bản sửa lại |
 | Duplicate, burst, late arrival | Đặc tính riêng của từng Channel trong luồng streaming |
 | Data drift | Đợt sale lớn và livestream làm tỷ lệ trả hàng đổi mà feature vẫn trông bình thường |
 
@@ -161,6 +163,7 @@ Cấu trúc dự kiến. Thư mục nào chưa tồn tại sẽ được tạo k
 ├── README.md              # Tài liệu tổng quan này
 ├── docs/                  # Toàn bộ tài liệu chi tiết, kèm ảnh chụp minh họa
 ├── generator/             # Data Generator: sinh dữ liệu batch và streaming theo cấu hình
+├── notebooks/             # Notebook báo cáo chất lượng dữ liệu (output xóa trước khi commit)
 ├── jobs/
 │   ├── spark/             # Các job Spark cho DP1, DP2, DP3
 │   └── flink/             # Job Flink xử lý luồng event
@@ -175,8 +178,10 @@ Cấu trúc dự kiến. Thư mục nào chưa tồn tại sẽ được tạo k
 | Tài liệu | Nội dung |
 |---|---|
 | [docs/Domain.md](docs/Domain.md) | Business domain, thuật ngữ, bài toán dự đoán, vấn đề dữ liệu cần mô phỏng |
+| [docs/generator-design.md](docs/generator-design.md) | Thiết kế Data Generator: kiến trúc, đường thời gian Batch và Stream, vấn đề dữ liệu, nơi lưu, cấu hình, bằng chứng chất lượng |
+| [docs/channel-sources.md](docs/channel-sources.md) | Nguồn tài liệu và mức tin cậy của dạng dữ liệu từng Channel |
 
-Các tài liệu sau sẽ được bổ sung cùng phần triển khai tương ứng: tối ưu Docker image, Data Generator, tối ưu Spark và Flink, tối ưu lưu trữ, thiết kế schema, Orchestration, Governance.
+Các tài liệu sau sẽ được bổ sung cùng phần triển khai tương ứng: tối ưu Docker image, tối ưu Spark và Flink, tối ưu lưu trữ, thiết kế schema, Orchestration, Governance.
 
 ## 7. Lộ trình
 
