@@ -2,7 +2,7 @@
 
 Data platform gom dữ liệu bán hàng của một Seller trên 5 nền tảng thương mại điện tử (Amazon, TikTok Shop, Shopify, Walmart, Shopee) vào một lakehouse, phục vụ bài toán dự đoán khả năng trả hàng. Toàn bộ dữ liệu được sinh giả lập.
 
-> **Trạng thái**: đang ở giai đoạn thiết kế. Repo Structure, công nghệ và cấu hình trong tài liệu này là **dự kiến**, chưa có code triển khai.
+> **Trạng thái**: đang triển khai Data Generator (tiến độ xem [docs/generator-design.md](docs/generator-design.md#15-triển-khai)). Các phần khác, công nghệ và cấu hình trong tài liệu này vẫn là **dự kiến**.
 
 ## Mục lục
 
@@ -163,6 +163,7 @@ Cấu trúc dự kiến. Thư mục nào chưa tồn tại sẽ được tạo k
 ├── README.md              # Tài liệu tổng quan này
 ├── docs/                  # Toàn bộ tài liệu chi tiết, kèm ảnh chụp minh họa
 ├── generator/             # Data Generator: sinh dữ liệu batch và streaming theo cấu hình
+├── configs/               # File cấu hình YAML của generator (small để thử, default đủ quy mô)
 ├── notebooks/             # Notebook báo cáo chất lượng dữ liệu (output xóa trước khi commit)
 ├── jobs/
 │   ├── spark/             # Các job Spark cho DP1, DP2, DP3
@@ -170,7 +171,8 @@ Cấu trúc dự kiến. Thư mục nào chưa tồn tại sẽ được tạo k
 ├── dags/                  # Airflow DAG cho DP1, DP2, DP3
 ├── docker/                # Dockerfile và docker-compose cho từng unit
 ├── sql/                   # DDL cho bảng ở các zone và Data Warehouse
-└── tests/                 # Unit test
+├── tests/                 # Unit test
+└── pyproject.toml         # Thư viện Python của dự án (quản lý bằng uv)
 ```
 
 ## 6. Tài liệu chi tiết
