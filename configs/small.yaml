@@ -1,0 +1,16 @@
+# Cấu hình nhỏ để chạy thử nhanh trên máy cá nhân (vài giây).
+seed: 42
+scale:
+  n_skus: 50
+  start_date: 2026-01-01
+  days_history: 60
+  orders_per_day: 200
+  sku_zipf_exponent: 0.8
+offline_problems:
+  duplicate_rate: 0.02
+  overlap_days: 3
+  amazon_orders_api_switch_day: 30
+drift:
+  prime_day: {day: 40, days: 2, order_multiplier: 4, discount_share: 0.7, deal_skus: 5}
+storage:
+  output_root: ./out/small
