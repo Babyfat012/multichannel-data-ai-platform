@@ -1,6 +1,6 @@
 # Thiết kế Data Generator
 
-Tài liệu thiết kế của generator dữ liệu giả lập cho dự án. Trạng thái: **thiết kế, chưa có code**. Thuật ngữ (Channel, Storefront, Order Line, ...) xem [Domain.md](Domain.md). Nguồn và mức tin cậy của dạng dữ liệu từng Channel xem [channel-sources.md](channel-sources.md).
+Tài liệu thiết kế của generator dữ liệu giả lập cho dự án. Trạng thái: **đang triển khai**, phần đã có code xem [mục 15](#15-triển-khai). Thuật ngữ (Channel, Storefront, Order Line, ...) xem [Domain.md](Domain.md). Nguồn và mức tin cậy của dạng dữ liệu từng Channel xem [channel-sources.md](channel-sources.md).
 
 ## Mục lục
 
@@ -18,6 +18,7 @@ Tài liệu thiết kế của generator dữ liệu giả lập cho dự án. T
 12. [Kỹ thuật và đóng gói](#12-kỹ-thuật-và-đóng-gói)
 13. [Giả định và việc còn mở](#13-giả-định-và-việc-còn-mở)
 14. [Đối chiếu với rubric](#14-đối-chiếu-với-rubric)
+15. [Triển khai](#15-triển-khai)
 
 ## 1. Mục tiêu và phạm vi
 
@@ -240,6 +241,22 @@ Mọi con số có thể tăng khi chạy trên cloud (ví dụ `n_skus`, `order
 
 Sau mỗi lần chạy, generator ghi `run_manifest.json`: seed, cấu hình, số dòng theo nguồn, tỷ lệ lỗi thật đã chèn (duplicate, late, burst), ngày đổi schema, các đợt drift, dung lượng và số file theo nguồn. Đây là đáp án để đối chiếu.
 
+### Bảng nhãn (`labels`)
+
+Generator xuất riêng bảng nhãn thật, không chỉ ghi trong manifest, vì rubric final-coursework yêu cầu một bảng "id và label" để join với bảng feature khi train.
+
+| Cột | Nghĩa |
+|---|---|
+| `order_line_id` | Mã Order Line chuẩn của lõi |
+| `label` | 1 nếu Order Line bị Return hoặc Refund trong 30 ngày kể từ `delivered_at`, ngược lại 0 |
+| `delivered_at` | Ngày giao thật (UTC), để join theo thời điểm |
+| `label_available_at` | `delivered_at` + 30 ngày, lúc nhãn thật sự biết được |
+
+- Chỉ có Order Line đã giao. Order bị hủy trước khi giao không có nhãn.
+- Bảng của Batch chỉ gồm dòng có `label_available_at` trước `cutoff`. Dòng còn lại có nhãn khi phát Stream.
+- Lưu dạng Parquet tại `ground-truth/labels/` trong MinIO, tách khỏi `source-exports` vì đây không phải dữ liệu của Channel nào.
+- Để join được với dữ liệu Channel, bảng phụ `ground-truth/order_line_keys/` ánh xạ `order_line_id` sang mã gốc của Channel (ví dụ `OrderItemId` của Amazon).
+
 ### Báo cáo chất lượng dữ liệu
 
 Rubric yêu cầu ảnh chụp output tóm tắt chất lượng dữ liệu. Phần này chia làm hai:
@@ -285,7 +302,6 @@ Mỗi con số đo được đặt cạnh con số trong `run_manifest.json`.
 
 **Việc còn mở:**
 - Tình trạng REST và GraphQL của Shopify năm 2026.
-- Có lưu bảng nhãn thật (ground truth) ở nơi riêng hay chỉ trong manifest.
 - Ước lượng dung lượng dữ liệu: đo từ lần chạy nhỏ đầu tiên rồi ngoại suy, không đoán trước.
 - Thiết kế bảng theo từng tầng (`raw_`, `stg_`, `dim_`, `fact_`, `feat_`, SCD2) thuộc phần schema design, chưa làm.
 
@@ -309,3 +325,81 @@ Mỗi con số đo được đặt cạnh con số trong `run_manifest.json`.
 | Document config generator | Mục 10 | Tài liệu từng khóa |
 
 Các phần sau dùng dữ liệu của generator: dim SCD2 và quan hệ dim–fact (mục 7), bài toán small-file của Lakehouse (mục 8), window của Flink (mục 5, streaming).
+
+## 15. Triển khai
+
+Mục này ghi phần đã có code: code nằm ở đâu, chạy thế nào, và vì sao viết như vậy. Mỗi file trong `generator/` có đoạn mô tả ở đầu file, giải thích kỹ hơn.
+
+### Tiến độ
+
+| Bước | Nội dung | Trạng thái |
+|---|---|---|
+| 1 | Lõi mô phỏng, Amazon Orders (có đổi schema), Walmart Orders, duplicate do export chồng lấn, bảng nhãn, manifest, Sale Event kiểu Prime Day | Xong |
+| 2 | Docker Compose (MinIO, PostgreSQL), lệnh nạp PostgreSQL, `report.py` và notebook đo chất lượng | Đang làm |
+| 2b | Amazon Returns và FBA reports, small-file, Listing, tỷ giá | Chưa làm |
+| 3 | Stream qua Kafka: burst, late, duplicate | Chưa làm |
+| 4 | TikTok Shop, Shopify, Shopee, drift | Chưa làm |
+
+### Chạy thử
+
+```bash
+uv sync                                                   # cài thư viện vào .venv
+uv run pytest -q                                          # chạy test, vài giây
+uv run python -m generator batch --config configs/small.yaml     # dữ liệu nhỏ, khoảng 1 giây, ghi vào ./out/small
+uv run python -m generator batch --config configs/default.yaml --output s3://...   # đủ quy mô
+```
+
+Với cấu hình đầy đủ (2.000 SKU, 180 ngày, 4.000 Order mỗi ngày), một lần chạy trên máy cá nhân mất khoảng 82 giây, dùng tối đa khoảng 800 MB RAM, ghi ra khoảng 485 MB.
+
+### Bản đồ code
+
+Code chia theo đúng ba lớp ở [mục 2](#2-kiến-trúc-ba-lớp). Đọc theo thứ tự dưới đây là dễ hiểu nhất.
+
+| File | Lớp | Việc |
+|---|---|---|
+| `generator/config.py` | | Đọc YAML vào dataclass, báo lỗi khi gõ sai khóa |
+| `generator/core/storefronts.py` | Lõi | Hằng số: 7 Storefront (tiền tệ, thành phố, tỷ lệ Channel giao hàng), 8 danh mục (tỷ lệ trả mục tiêu, khoảng giá) |
+| `generator/core/rngs.py` | Lõi | Bộ sinh số ngẫu nhiên riêng cho từng phần, để cùng seed luôn ra cùng dữ liệu |
+| `generator/core/catalog.py` | Lõi | Sinh SKU, SKU Defect Propensity, độ phổ biến Zipf và phân phối của ngày sale |
+| `generator/core/model.py` | Lõi | `Order`, `OrderLine`, `Buyer`, và `Order.status_at(t)` |
+| `generator/core/returns.py` | Lõi | Hàm logistic tính xác suất trả, độ trễ trả, nhãn |
+| `generator/core/simulate.py` | Lõi | Sinh Order từng ngày cùng toàn bộ vòng đời |
+| `generator/delivery/batch_exports.py` | Giao hàng | Order nằm ở ngày export nào, chèn duplicate |
+| `generator/channels/amazon.py`, `walmart.py` | Renderer | Vẽ Order thành bản ghi gốc của Channel |
+| `generator/batch.py` | | Nối ba lớp, ghi file, ghi manifest |
+| `generator/storage.py` | | Ghi ra thư mục local hoặc MinIO qua fsspec |
+
+### Bốn ý chính của cách làm
+
+**1. Lõi sinh cả tương lai của Order, renderer chỉ "chụp ảnh".** Khi tạo một Order, lõi quyết định luôn lúc thanh toán, gửi, giao, có bị trả không. Kết quả lưu thành `timeline`, danh sách các lần đổi Order Status. Renderer gọi `order.status_at(t)` để biết Order trông thế nào tại thời điểm `t`. Nhờ vậy cùng một Order có thể xuất ở nhiều ngày export với trạng thái khác nhau, và sau này Stream chỉ cần chụp tiếp sau `cutoff`.
+
+**2. Mỗi Order xuất đúng một lần, rồi mới chèn duplicate.** Bản chính của một Order nằm ở ngày export chứa lần cập nhật cuối của nó trước `cutoff`. Khi chưa chèn lỗi, tỷ lệ trùng theo khóa bằng 0, nên tỷ lệ trùng đo được đúng bằng phần đã chèn. Với xác suất `p = r / (1 - r)` (r là `duplicate_rate`), Order có thêm một bản: bản y hệt ở ngày export muộn hơn, hoặc bản cũ hơn ở ngày export sớm hơn. Công thức cho `p` giải thích ở đầu `batch_exports.py`.
+
+**3. Sale Event đổi tham số của lõi, không sửa dữ liệu sau khi sinh.** Trong hai ngày Prime Day, lõi nhân số Order của các Storefront Amazon lên, tăng tỷ lệ và mức giảm giá, và dồn nhu cầu vào một nhóm SKU deal. Mức giảm giá nằm sẵn trong hàm tính xác suất trả, nên tỷ lệ trả của mấy ngày này tự nhích lên mà không cần chỉnh riêng. Đó là covariate drift: feature đổi phân phối, còn quan hệ giữa feature và nhãn thì giữ nguyên.
+
+**4. Mã gốc của Channel suy ra từ mã chuẩn bằng hàm băm.** `AmazonOrderId`, `purchaseOrderId`, ASIN, mã vận đơn không được rút ngẫu nhiên mà băm từ mã chuẩn (`ORD-017-00042`) cùng seed. Cùng một Order luôn có cùng mã gốc ở mọi lần export, ở cả Batch lẫn Stream, và renderer không cần lưu bảng tra.
+
+### Đo được ở lần chạy đầy đủ
+
+| Chỉ số | Mục tiêu | Đo được |
+|---|---|---|
+| Tỷ lệ trùng `amazon.orders` | 2% | 1,98% (4.819 bản cũ hơn, 4.933 bản y hệt) |
+| Tỷ lệ trùng `walmart.orders` | 2% | 1,98% |
+| Tỷ lệ trả toàn bộ | khoảng 10 đến 12% | 11,2% |
+| Tỷ lệ trả quần áo | khoảng 22% | 23,3% |
+| Tỷ lệ trả đồ gia dụng | khoảng 4% | 4,6% |
+| Order Amazon mỗi ngày trong Sale Event | gấp 4 lần ngày thường | 10.642 so với 2.679, tức gấp 3,97 lần |
+| Mức giảm giá trung bình của Amazon trong Sale Event | khoảng 21% | 21,0% so với 4,4% ngày thường |
+| Tỷ lệ trả của Amazon trong Sale Event | cao hơn ngày thường | 13,5% so với 11,3% |
+| SKU bán chạy nhất trong Order Line Amazon | khoảng 5% | 5,4% (đo ở lần chạy 60 ngày) |
+
+Số của tỷ lệ trả khớp mục tiêu vì mọi tác động trong hàm logistic được tâm hóa (trừ giá trị trung bình), giải thích ở đầu `returns.py`.
+
+### Đơn giản hóa so với Channel thật
+
+- Amazon v0 thật tách Order Item sang lời gọi `getOrderItems`. Ở đây `OrderItems` nằm chung bản ghi, một dòng JSON mỗi Order.
+- Mọi Order Line của một Order cùng trạng thái, không có giao từng phần.
+- Mỗi Order Line được quyết định Return độc lập, không có tương quan giữa các dòng trong cùng Order. Ngoài đời, buyer đã trả một món thì dễ trả thêm món khác trong cùng đơn (mua nhiều size để thử, không hài lòng cả đơn). Vì vậy dữ liệu chưa có tín hiệu kiểu "cả đơn cùng bị trả" cho mô hình học.
+- Walmart ghi ra `pg-load/walmart.orders/`, là các dòng sẽ nạp vào bảng `walmart.orders`. Bước nạp vào PostgreSQL làm cùng Docker Compose.
+- Tỷ giá tạm cố định trong `price_factor` của Storefront. Bảng tỷ giá ngày làm ở bước 2.
+
