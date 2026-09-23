@@ -5,3 +5,8 @@ docs/domain-overview.md
 
 # Tài liệu rubric của khóa học, không thuộc mã nguồn dự án
 Coursework Tracking (Public).xlsx
+
+# Dữ liệu sinh ra khi chạy generator
+out/
+.venv/
+__pycache__/
