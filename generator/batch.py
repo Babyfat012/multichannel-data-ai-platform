@@ -16,12 +16,14 @@ Bố cục đầu ra (dưới `storage.output_root`):
 
     source-exports/channel=amazon/dataset=orders/export_date=YYYY-MM-DD/part-00000.jsonl
     pg-load/walmart.orders/export_date=YYYY-MM-DD/part-00000.jsonl
+    pg-load/seller.skus/part-00000.jsonl
     ground-truth/labels/labels.parquet
     ground-truth/order_line_keys/<channel>.parquet
     run_manifest.json
 
-`pg-load/` chứa đúng các dòng sẽ nạp vào PostgreSQL (cột `purchase_order_id`,
-`raw_payload`, `fetched_at`). Bước nạp vào PostgreSQL chạy riêng, cùng Docker Compose.
+`pg-load/` chứa đúng các dòng sẽ nạp vào PostgreSQL: đơn Walmart (cột
+`purchase_order_id`, `raw_payload`, `fetched_at`) và danh mục SKU của Seller.
+Bước nạp chạy riêng bằng lệnh `load-postgres` (xem `generator/load_postgres.py`).
 """
 
 from __future__ import annotations
@@ -120,6 +122,7 @@ class BatchRun:
                 self._handle_order(order, rng, sale_day)
             self._flush(up_to_day=day)
         self._write_ground_truth()
+        self._write_skus()
         manifest = self._manifest()
         self.store.write_json("run_manifest.json", manifest)
         return manifest
@@ -183,6 +186,24 @@ class BatchRun:
             stats = self.stats[f"{channel}.{renderer.dataset}"]
             stats.bytes += self.store.write_jsonl(relative, (r.record for r in records))
             stats.files += 1
+
+    def _write_skus(self) -> None:
+        """Ghi danh mục SKU của Seller, sẽ nạp vào bảng `seller.skus`.
+
+        Đây là hệ thống của chính Seller nên có danh mục (`category`), thứ mà dữ liệu
+        đơn của Channel không có. Báo cáo skew theo danh mục join vào bảng này.
+        SKU Defect Propensity là giá trị ẩn nên không ghi ra.
+        """
+        rows = [
+            {"sku": sku.sku_id, "name": sku.name, "category": sku.category,
+             "base_price_usd": sku.base_price_usd, "unit_cost_usd": sku.unit_cost_usd}
+            for sku in self.simulator.catalog.skus
+        ]
+        stats = self.stats["seller.skus"]
+        stats.rows = len(rows)
+        stats.keys = {row["sku"] for row in rows}
+        stats.bytes = self.store.write_jsonl("pg-load/seller.skus/part-00000.jsonl", rows)
+        stats.files = 1
 
     def _write_ground_truth(self) -> None:
         """Ghi bảng nhãn và bảng ánh xạ mã Order Line sang mã gốc của Channel."""

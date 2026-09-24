@@ -1,0 +1,11 @@
+# Không gửi vào build context: dữ liệu sinh ra, môi trường ảo, git, tài liệu.
+.git
+.venv
+.pytest_cache
+**/__pycache__
+out
+docs
+tests
+notebooks
+*.xlsx
+.env

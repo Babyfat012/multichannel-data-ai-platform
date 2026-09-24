@@ -64,3 +64,12 @@ def test_same_config_produces_identical_files(tiny_config, tmp_path):
     second = Path(other.storage.output_root)
     for part in first.glob("source-exports/**/*.jsonl"):
         assert part.read_bytes() == (second / part.relative_to(first)).read_bytes()
+
+
+def test_seller_skus_cover_catalog_without_hidden_propensity(tiny_config):
+    manifest = BatchRun(tiny_config).run()
+    part = Path(tiny_config.storage.output_root) / "pg-load/seller.skus/part-00000.jsonl"
+    rows = [json.loads(line) for line in part.read_text().splitlines()]
+    assert len(rows) == tiny_config.scale.n_skus == manifest["datasets"]["seller.skus"]["rows"]
+    assert {"sku", "category", "base_price_usd"} <= set(rows[0])
+    assert "defect_propensity" not in rows[0]

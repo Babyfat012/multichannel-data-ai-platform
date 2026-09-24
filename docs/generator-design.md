@@ -164,8 +164,8 @@ Các phần sau cần bảng dim có lịch sử (SCD2) và quan hệ dim–fact
 
 ## 8. Bố cục lưu trữ
 
-- **MinIO**, bucket `source-exports`: đường dẫn theo nguồn rồi theo **ngày export**, ví dụ `channel=amazon/dataset=orders/export_date=2026-03-14/`. Chia theo ngày export (không theo ngày đặt hàng) vì export chồng lấn và thay đổi schema đều gắn với ngày export, và pipeline DP1 kéo dữ liệu theo từng ngày. Mỗi ngày vài file cỡ vừa. Một số ngày cố ý sinh rất nhiều file nhỏ để tạo bài toán small-file cho phần Lakehouse.
-- **PostgreSQL** (giả lập hệ thống của phòng ban khác): mỗi nguồn một schema, gồm `walmart.orders`, `walmart.returns`, `shopee.orders`, `shopee.returns`, `seller.skus`. Tiền tố `raw_` để dành cho tầng Bronze, không dùng ở hệ thống nguồn.
+- **MinIO**, bucket `fsds`, tiền tố `source-exports/`: đường dẫn theo nguồn rồi theo **ngày export**, ví dụ `source-exports/channel=amazon/dataset=orders/export_date=2026-03-14/`. Cùng bucket còn có `pg-load/` (dòng chờ nạp PostgreSQL), `ground-truth/` và `run_manifest.json`. Dùng một bucket vì manifest phải nằm trong một bucket nào đó, xem [Docker.md](Docker.md#1-môi-trường-nguồn-bằng-docker-compose). Chia theo ngày export (không theo ngày đặt hàng) vì export chồng lấn và thay đổi schema đều gắn với ngày export, và pipeline DP1 kéo dữ liệu theo từng ngày. Mỗi ngày vài file cỡ vừa. Một số ngày cố ý sinh rất nhiều file nhỏ để tạo bài toán small-file cho phần Lakehouse.
+- **PostgreSQL** (giả lập hệ thống của phòng ban khác): mỗi nguồn một schema, gồm `walmart.orders`, `walmart.returns`, `shopee.orders`, `shopee.returns`, `seller.skus`. Bảng đơn giữ body API trong một cột `JSONB` cạnh vài cột khóa, như một hệ thống lưu lại response API. Bảng đơn không có khóa chính, vì bản trùng phải còn nguyên để pipeline phía sau dedup. Tiền tố `raw_` để dành cho tầng Bronze, không dùng ở hệ thống nguồn.
 - **Kafka**: mỗi Channel một topic. Key là mã Order để các event của cùng một Order vào cùng partition. Value là payload gốc của Channel (ví dụ body webhook TikTok Shop).
 
 ## 9. Buyer, tiền tệ và thời gian
@@ -189,7 +189,7 @@ Các phần sau cần bảng dim có lịch sử (SCD2) và quan hệ dim–fact
 
 ## 10. Cấu hình
 
-Toàn bộ tham số nằm trong một file YAML. Tên khóa và giá trị dưới đây là **đề xuất**, sẽ chốt khi viết code. Tài liệu đầy đủ từng khóa sẽ nằm trong tài liệu của generator khi có code.
+Toàn bộ tham số nằm trong một file YAML. Tên khóa và giá trị dưới đây là **đề xuất** cho toàn bộ generator. Các khóa đã có code, kèm ý nghĩa từng khóa, xem [mục 15](#các-khóa-cấu-hình-đang-dùng).
 
 ```yaml
 seed: 42
@@ -254,15 +254,15 @@ Generator xuất riêng bảng nhãn thật, không chỉ ghi trong manifest, v�
 
 - Chỉ có Order Line đã giao. Order bị hủy trước khi giao không có nhãn.
 - Bảng của Batch chỉ gồm dòng có `label_available_at` trước `cutoff`. Dòng còn lại có nhãn khi phát Stream.
-- Lưu dạng Parquet tại `ground-truth/labels/` trong MinIO, tách khỏi `source-exports` vì đây không phải dữ liệu của Channel nào.
+- Lưu dạng Parquet tại `ground-truth/labels/` trong MinIO, tách khỏi tiền tố `source-exports/` vì đây không phải dữ liệu của Channel nào.
 - Để join được với dữ liệu Channel, bảng phụ `ground-truth/order_line_keys/` ánh xạ `order_line_id` sang mã gốc của Channel (ví dụ `OrderItemId` của Amazon).
 
 ### Báo cáo chất lượng dữ liệu
 
 Rubric yêu cầu ảnh chụp output tóm tắt chất lượng dữ liệu. Phần này chia làm hai:
 
-- **Module `generator/report.py`** chứa logic đo, có docstring và unit test, dùng DuckDB (nhẹ, có `approx_count_distinct`, đọc được cả MinIO lẫn PostgreSQL). Stream đo bằng một consumer Kafka nhỏ.
-- **Notebook `notebooks/data_quality.ipynb`** chỉ gọi module đó rồi vẽ bảng và biểu đồ để chụp. Output được xóa trước khi commit để repo sạch.
+- **Module `generator/report.py`** chứa logic đo, có docstring và unit test, dùng DuckDB (nhẹ, có `approx_count_distinct`, đọc được cả MinIO lẫn PostgreSQL). Có `--dsn` thì Walmart và danh mục SKU được đọc từ PostgreSQL, không có thì đọc file `pg-load/`. Stream đo bằng một consumer Kafka nhỏ.
+- **Lệnh `python -m generator report`** in các bảng đo ra terminal để chụp, hoặc in dạng Markdown (`--markdown`) để dán vào tài liệu. Notebook vẽ biểu đồ để sau: cần thêm Jupyter và thư viện vẽ, trong khi bảng chữ đã đủ cho ảnh chụp.
 - Ảnh chụp nằm trong `docs/images/generator/` và được nhúng vào mục "Kết quả chạy" sẽ thêm vào chính tài liệu này, mỗi ảnh kèm lời giải thích nó chứng minh điều gì. Như vậy phần generator có đúng một tài liệu, theo yêu cầu dòng Documentation của rubric.
 
 | Rubric yêu cầu chụp | Báo cáo đo gì |
@@ -335,7 +335,7 @@ Mục này ghi phần đã có code: code nằm ở đâu, chạy thế nào, v�
 | Bước | Nội dung | Trạng thái |
 |---|---|---|
 | 1 | Lõi mô phỏng, Amazon Orders (có đổi schema), Walmart Orders, duplicate do export chồng lấn, bảng nhãn, manifest, Sale Event kiểu Prime Day | Xong |
-| 2 | Docker Compose (MinIO, PostgreSQL), lệnh nạp PostgreSQL, `report.py` và notebook đo chất lượng | Đang làm |
+| 2 | Docker Compose (MinIO, PostgreSQL), bảng `seller.skus`, lệnh nạp PostgreSQL, `report.py`, Dockerfile tối ưu | Xong (notebook để sau) |
 | 2b | Amazon Returns và FBA reports, small-file, Listing, tỷ giá | Chưa làm |
 | 3 | Stream qua Kafka: burst, late, duplicate | Chưa làm |
 | 4 | TikTok Shop, Shopify, Shopee, drift | Chưa làm |
@@ -347,7 +347,10 @@ uv sync                                                   # cài thư viện và
 uv run pytest -q                                          # chạy test, vài giây
 uv run python -m generator batch --config configs/small.yaml     # dữ liệu nhỏ, khoảng 1 giây, ghi vào ./out/small
 uv run python -m generator batch --config configs/default.yaml --output s3://...   # đủ quy mô
+uv run python -m generator report --source ./out/small                # báo cáo chất lượng từ file local
 ```
+
+Chạy cả môi trường nguồn (MinIO, PostgreSQL, sinh và nạp dữ liệu) bằng Docker Compose, xem [Docker.md](Docker.md).
 
 Với cấu hình đầy đủ (2.000 SKU, 180 ngày, 4.000 Order mỗi ngày), một lần chạy trên máy cá nhân mất khoảng 82 giây, dùng tối đa khoảng 800 MB RAM, ghi ra khoảng 485 MB.
 
@@ -367,7 +370,9 @@ Code chia theo đúng ba lớp ở [mục 2](#2-kiến-trúc-ba-lớp). Đọc t
 | `generator/delivery/batch_exports.py` | Giao hàng | Order nằm ở ngày export nào, chèn duplicate |
 | `generator/channels/amazon.py`, `walmart.py` | Renderer | Vẽ Order thành bản ghi gốc của Channel |
 | `generator/batch.py` | | Nối ba lớp, ghi file, ghi manifest |
-| `generator/storage.py` | | Ghi ra thư mục local hoặc MinIO qua fsspec |
+| `generator/storage.py` | | Ghi và đọc thư mục local hoặc MinIO qua fsspec |
+| `generator/load_postgres.py` | | Lệnh `load-postgres`: nạp `pg-load/` vào `walmart.orders` và `seller.skus` bằng `COPY` |
+| `generator/report.py` | | Lệnh `report`: đo lại chất lượng dữ liệu bằng DuckDB, đặt cạnh đáp án trong manifest |
 
 ### Bốn ý chính của cách làm
 
@@ -400,6 +405,200 @@ Số của tỷ lệ trả khớp mục tiêu vì mọi tác động trong hàm 
 - Amazon v0 thật tách Order Item sang lời gọi `getOrderItems`. Ở đây `OrderItems` nằm chung bản ghi, một dòng JSON mỗi Order.
 - Mọi Order Line của một Order cùng trạng thái, không có giao từng phần.
 - Mỗi Order Line được quyết định Return độc lập, không có tương quan giữa các dòng trong cùng Order. Ngoài đời, buyer đã trả một món thì dễ trả thêm món khác trong cùng đơn (mua nhiều size để thử, không hài lòng cả đơn). Vì vậy dữ liệu chưa có tín hiệu kiểu "cả đơn cùng bị trả" cho mô hình học.
-- Walmart ghi ra `pg-load/walmart.orders/`, là các dòng sẽ nạp vào bảng `walmart.orders`. Bước nạp vào PostgreSQL làm cùng Docker Compose.
-- Tỷ giá tạm cố định trong `price_factor` của Storefront. Bảng tỷ giá ngày làm ở bước 2.
+- Walmart ghi ra `pg-load/walmart.orders/`, là các dòng sẽ nạp vào bảng `walmart.orders` bằng lệnh `load-postgres`.
+- Tỷ giá tạm cố định trong `price_factor` của Storefront. Bảng tỷ giá ngày làm ở bước 2b.
 
+
+### Các khóa cấu hình đang dùng
+
+Generator đọc YAML vào dataclass trong `generator/config.py`. Khóa không có trong file thì lấy giá trị mặc định. Khóa gõ sai làm lệnh dừng với lỗi, không bị bỏ qua. Hai file mẫu: `configs/small.yaml` (chạy thử vài giây) và `configs/default.yaml` (đủ quy mô).
+
+| Khóa | Mặc định | Ý nghĩa | Vấn đề dữ liệu liên quan |
+|---|---|---|---|
+| `seed` | 42 | Hạt giống ngẫu nhiên. Cùng seed và cùng cấu hình cho cùng dữ liệu | |
+| `scale.n_skus` | 2000 | Số SKU trong danh mục của Seller | Cardinality của SKU, ASIN |
+| `scale.start_date` | 2026-01-01 | Ngày mô phỏng 1 | |
+| `scale.days_history` | 180 | Số ngày lịch sử. `cutoff` là 00:00 UTC ngay sau ngày cuối | Volume |
+| `scale.orders_per_day` | 4000 | Số Order mỗi ngày trên cả 7 Storefront, trước khi nhân Sale Event | Volume, cardinality |
+| `scale.sku_zipf_exponent` | 0.8 | Độ lệch của phân phối SKU. Lớn hơn thì SKU bán chạy nhất chiếm nhiều hơn | Skew theo SKU |
+| `storefront_weights.<storefront>` | Amazon US 0.45, ... | Tỷ trọng Order theo Storefront, phải cộng lại bằng 1 | Skew theo Storefront |
+| `labels.window_days` | 30 | Cửa sổ Return Label tính từ ngày giao | |
+| `offline_problems.duplicate_rate` | 0.02 | Tỷ lệ trùng theo khóa trong mỗi dataset, nằm trong [0, 0.5) | Duplicate |
+| `offline_problems.overlap_days` | 3 | Export lấy lại bao nhiêu ngày gần nhất. Bản trùng rơi vào khoảng này | Duplicate |
+| `offline_problems.amazon_orders_api_switch_day` | 100 | Từ ngày export này Amazon ghi theo Orders 2026-01-01 | Schema evolution |
+| `drift.prime_day.day`, `.days` | 120, 2 | Ngày bắt đầu và độ dài Sale Event trên Storefront Amazon | Skew theo ngày, covariate drift |
+| `drift.prime_day.order_multiplier` | 4 | Số Order Amazon trong ngày sale gấp mấy lần ngày thường | Skew theo ngày |
+| `drift.prime_day.discount_share` | 0.7 | Tỷ lệ Order Line Amazon được giảm giá trong ngày sale | Covariate drift |
+| `drift.prime_day.deal_skus` | 50 | Số SKU hút phần lớn nhu cầu trong ngày sale | Skew theo SKU |
+| `storage.output_root` | `./out` | Nơi ghi: thư mục local hoặc `s3://bucket`. Lệnh `batch --output` ghi đè khóa này | |
+
+Các khóa streaming (`streaming_problems`) và drift của TikTok thêm ở bước 3 và 4.
+
+### Kết quả chạy
+
+Số liệu dưới đây lấy từ lần chạy `configs/default.yaml` qua Docker Compose: `generator-batch` ghi vào MinIO (102 giây), `generator-load` nạp PostgreSQL (3 giây). Sau đó `python -m generator report --source s3://fsds --dsn ... --markdown` chạy trên máy host, đọc Amazon từ MinIO, đọc Walmart và `seller.skus` từ PostgreSQL. Các cột `_truth` lấy từ `run_manifest.json`.
+
+Ảnh chụp màn hình (terminal của lệnh `report`, MinIO console, DBeaver hoặc `psql`) sẽ đặt ở `docs/images/generator/` và nhúng vào đây.
+
+Cách đọc từng bảng:
+
+- **storefront_skew**: số Order đo từ dữ liệu đã xuất trùng khớp đáp án ở cả ba Storefront Amazon và Walmart. Ba Storefront chưa có renderer để trống.
+- **city_skew**: thành phố lớn nhất chiếm khoảng 46 đến 49% Order của mỗi Storefront.
+- **category_skew**: tỷ trọng danh mục lệch (apparel 17,7%, beauty 7,6%), và tỷ lệ trả khác nhau theo danh mục (apparel 23%, home 4,6%). Danh mục chỉ có trong `seller.skus`, nên bảng này phải join với PostgreSQL.
+- **top_skus**: SKU bán chạy nhất chiếm 5,4% Order Line. Khi Spark group theo SKU, task chứa SKU này sẽ chạy chậm rõ rệt.
+- **daily_orders**: hai ngày Sale Event có lượng Order gấp khoảng 3,7 lần trung vị.
+- **cardinality**: khoảng 500 nghìn mã Order Amazon và 720 nghìn mã Order Line. HyperLogLog của DuckDB lệch tới hơn 20% ở vài cột, nên bảng in thêm số đếm chính xác. Job Spark sau này sẽ so với chính số đếm này.
+- **schema_evolution**: `proceeds` null 100% trước ngày 2026-04-10 và 0% từ ngày đó. `IsPrime` ngược lại. Ranh giới rơi đúng vào một ngày export.
+- **duplicates**: tỷ lệ trùng đo được bằng đúng đáp án (1,98% và 1,99%, mục tiêu 2%), và bằng 0 sau khi giữ bản mới nhất theo khóa. Ở Amazon, khoảng một nửa số bản trùng là bản cũ hơn (trạng thái cũ), nên dedup chỉ bỏ bản giống hệt là không đủ.
+- **volume**: Amazon 388 MB JSON Lines trong 180 file, mỗi ngày export một file. Bảng `walmart.orders` trong PostgreSQL 74 MB.
+
+#### Bảng `storefront_skew`
+
+Order theo Storefront. `orders_exported` trống nghĩa là Channel chưa có renderer.
+
+| storefront_id | config_weight | orders_truth | pct_truth | orders_exported |
+|---|---|---|---|---|
+| amazon_us | 0.45 | 334046 | 45.38 | 334046 |
+| tiktok_shop_us | 0.15 | 108042 | 14.68 |  |
+| amazon_uk | 0.12 | 89332 | 12.14 | 89332 |
+| amazon_de | 0.1 | 74778 | 10.16 | 74778 |
+| shopify | 0.08 | 57673 | 7.83 |  |
+| walmart_us | 0.07 | 50499 | 6.86 | 50499 |
+| shopee_vn | 0.03 | 21759 | 2.96 |  |
+
+#### Bảng `city_skew`
+
+Vài thành phố lớn chiếm phần lớn Order của mỗi Storefront.
+
+| storefront_id | city | orders | pct |
+|---|---|---|---|
+| amazon_de | Berlin | 36723 | 49.11 |
+| amazon_de | Hamburg | 15019 | 20.08 |
+| amazon_de | Munich | 8836 | 11.82 |
+| amazon_de | Cologne | 6112 | 8.17 |
+| amazon_de | Frankfurt | 4404 | 5.89 |
+| amazon_de | Stuttgart | 3684 | 4.93 |
+| amazon_uk | London | 43798 | 49.03 |
+| amazon_uk | Manchester | 17889 | 20.03 |
+| amazon_uk | Birmingham | 10376 | 11.62 |
+| amazon_uk | Leeds | 7406 | 8.29 |
+| amazon_uk | Glasgow | 5668 | 6.34 |
+| amazon_uk | Bristol | 4195 | 4.7 |
+| amazon_us | New York | 154019 | 46.11 |
+| amazon_us | Los Angeles | 62144 | 18.6 |
+| amazon_us | Chicago | 36338 | 10.88 |
+| amazon_us | Houston | 25409 | 7.61 |
+| amazon_us | Phoenix | 18969 | 5.68 |
+| amazon_us | Seattle | 14825 | 4.44 |
+| amazon_us | Miami | 12121 | 3.63 |
+| amazon_us | Denver | 10221 | 3.06 |
+| walmart_us | Dallas | 24843 | 49.2 |
+| walmart_us | Houston | 9851 | 19.51 |
+| walmart_us | Atlanta | 6055 | 11.99 |
+| walmart_us | Chicago | 4142 | 8.2 |
+| walmart_us | Phoenix | 3112 | 6.16 |
+| walmart_us | Orlando | 2496 | 4.94 |
+
+#### Bảng `category_skew`
+
+Order Line theo danh mục. `return_pct_truth` là tỷ lệ trả thật từ manifest.
+
+| category | order_lines | pct | return_pct_truth |
+|---|---|---|---|
+| apparel | 140711 | 17.71 | 23.32 |
+| toys | 115003 | 14.48 | 6.69 |
+| electronics | 112797 | 14.2 | 8.1 |
+| accessories | 105104 | 13.23 | 10.16 |
+| sports | 90499 | 11.39 | 8.3 |
+| home | 85100 | 10.71 | 4.57 |
+| footwear | 84430 | 10.63 | 16.08 |
+| beauty | 60717 | 7.64 | 5.83 |
+
+#### Bảng `top_skus`
+
+SKU bán chạy nhất nên chiếm khoảng 5% Order Line: tạo task chậm cho Spark.
+
+| sku | order_lines | pct |
+|---|---|---|
+| ELE-01103 | 43073 | 5.42 |
+| TOY-01453 | 24485 | 3.08 |
+| SPT-01304 | 18065 | 2.27 |
+| ACC-00934 | 14265 | 1.8 |
+| TOY-01474 | 11904 | 1.5 |
+| FTW-00683 | 10132 | 1.28 |
+| ACC-00929 | 9094 | 1.14 |
+| TOY-01568 | 8137 | 1.02 |
+| HOM-01853 | 7522 | 0.95 |
+| SPT-01238 | 7264 | 0.91 |
+
+#### Bảng `daily_orders`
+
+Ngày nhiều Order nhất (Amazon và Walmart). Ngày Sale Event trong manifest: ['2026-04-30', '2026-05-01'].
+
+| day | orders | x_median |
+|---|---|---|
+| 2026-05-01 | 10950 | 3.7 |
+| 2026-04-30 | 10887 | 3.68 |
+| 2026-03-13 | 3119 | 1.05 |
+| 2026-03-07 | 3079 | 1.04 |
+| 2026-04-29 | 3077 | 1.04 |
+
+#### Bảng `cardinality`
+
+Số giá trị khác nhau: ước lượng HyperLogLog của DuckDB và số đếm chính xác. HyperLogLog của DuckDB dùng ít bộ đếm nên có thể lệch hơn 10%.
+
+| dataset | column | approx_distinct | exact_distinct | approx_err_pct | rows |
+|---|---|---|---|---|---|
+| amazon.orders | order_id | 385608 | 498156 | -22.59 | 508227 |
+| amazon.orders | line_id | 818537 | 721099 | 13.51 | 721099 |
+| amazon.orders | asin | 1844 | 2000 | -7.8 | 721099 |
+| amazon.orders | sku | 1526 | 2000 | -23.7 | 721099 |
+| walmart.orders | order_id | 50400 | 50499 | -0.2 | 51523 |
+| walmart.orders | buyerId | 21549 | 21719 | -0.78 | 51523 |
+| walmart.orders | line_id | 68348 | 73262 | -6.71 | 73262 |
+| walmart.orders | tracking_number | 52956 | 48629 | 8.9 | 73262 |
+
+#### Bảng `schema_evolution`
+
+amazon.orders đổi schema từ export_date 2026-04-10: field mới null ở partition cũ và ngược lại.
+
+| period | export_dates | rows | pct_null_proceeds | pct_null_IsPrime | pct_null_AmazonOrderId |
+|---|---|---|---|---|---|
+| before (Orders v0) | 99 | 247213 | 100.0 | 0.0 | 0.0 |
+| after (Orders 2026) | 81 | 261014 | 0.0 | 100.0 | 100.0 |
+
+#### Bảng `schema_evolution_daily`
+
+Tỷ lệ null theo export_date quanh ngày đổi schema 2026-04-10.
+
+| export_date | rows | pct_null_proceeds | pct_null_IsPrime |
+|---|---|---|---|
+| 2026-04-07 | 2786 | 100.0 | 0.0 |
+| 2026-04-08 | 2632 | 100.0 | 0.0 |
+| 2026-04-09 | 2819 | 100.0 | 0.0 |
+| 2026-04-10 | 2688 | 0.0 | 100.0 |
+| 2026-04-11 | 2676 | 0.0 | 100.0 |
+| 2026-04-12 | 2707 | 0.0 | 100.0 |
+
+#### Bảng `duplicates`
+
+Tỷ lệ trùng = 1 - count(distinct khóa) / count(*). Dedup giữ bản cập nhật mới nhất theo khóa. Walmart: mỗi lần kéo có `fetched_at` riêng, nên bản trùng nào cũng thành bản cũ hơn.
+
+| dataset | rows_before | distinct_keys | dup_pct_before | identical_copies | older_versions | rows_after | dup_pct_after | dup_pct_truth |
+|---|---|---|---|---|---|---|---|---|
+| amazon.orders | 508227 | 498156 | 1.98 | 5108 | 4963 | 498156 | 0.0 | 1.98 |
+| walmart.orders | 51523 | 50499 | 1.99 | 0 | 1024 | 50499 | 0.0 | 1.99 |
+
+#### Bảng `volume`
+
+Dung lượng sau khi lưu, theo nơi lưu và định dạng.
+
+| dataset | storage | format | files | size_mb |
+|---|---|---|---|---|
+| amazon.orders | object store | JSON Lines | 180 | 388.02 |
+| walmart.orders | PostgreSQL (trung chuyển) | JSON Lines | 180 | 59.66 |
+| seller.skus | PostgreSQL (trung chuyển) | JSON Lines | 1 | 0.22 |
+| labels | object store | Parquet | 1 | 13.26 |
+| order_line_keys | object store | Parquet | 2 | 21.72 |
+| walmart.orders | PostgreSQL (bảng, gồm index) | heap, cột JSONB |  | 73.61 |
+| seller.skus | PostgreSQL (bảng, gồm index) | heap |  | 0.31 |

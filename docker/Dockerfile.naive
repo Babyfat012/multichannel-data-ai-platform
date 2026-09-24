@@ -1,0 +1,7 @@
+# Image chưa tối ưu, chỉ để đo dung lượng so với Dockerfile ở gốc repo (xem docs/Docker.md).
+# Một stage, base image đầy đủ, pip giữ cache, copy cả repo.
+FROM python:3.12
+WORKDIR /app
+COPY . .
+RUN pip install .
+ENTRYPOINT ["python", "-m", "generator"]
