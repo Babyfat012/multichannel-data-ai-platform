@@ -10,3 +10,7 @@ Coursework Tracking (Public).xlsx
 out/
 .venv/
 __pycache__/
+
+# Ghi chú bàn giao giữa các phiên, bí mật của Docker Compose
+HANDOFF.md
+.env

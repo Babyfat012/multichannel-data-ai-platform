@@ -1,0 +1,61 @@
+# Môi trường nguồn giả lập cho generator: MinIO (export dạng file) và PostgreSQL
+# (hệ thống của phòng ban khác). Chạy: cp .env.example .env && docker compose up -d
+# Thứ tự: minio, postgres -> minio-init (tạo bucket) -> generator-batch -> generator-load.
+
+x-generator: &generator
+  build: .
+  image: fsds-generator:latest
+  env_file: .env
+  environment:
+    AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+    AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+    FSSPEC_S3_ENDPOINT_URL: http://minio:9000
+
+services:
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address :9001
+    env_file: .env
+    ports: ["${MINIO_API_PORT:-9000}:9000", "${MINIO_CONSOLE_PORT:-9001}:9001"]
+    volumes: [minio-data:/data]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      retries: 10
+
+  minio-init:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    depends_on:
+      minio: {condition: service_healthy}
+    env_file: .env
+    entrypoint: >
+      sh -c "mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD
+      && mc mb --ignore-existing local/$$MINIO_BUCKET"
+
+  postgres:
+    image: postgres:15
+    env_file: .env
+    ports: ["${POSTGRES_PORT:-5432}:5432"]
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      retries: 10
+
+  generator-batch:
+    <<: *generator
+    depends_on:
+      minio-init: {condition: service_completed_successfully}
+    command: ["batch", "--config", "${GENERATOR_CONFIG}", "--output", "s3://${MINIO_BUCKET}"]
+
+  generator-load:
+    <<: *generator
+    depends_on:
+      generator-batch: {condition: service_completed_successfully}
+      postgres: {condition: service_healthy}
+    command: ["load-postgres", "--source", "s3://${MINIO_BUCKET}",
+              "--dsn", "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"]
+
+volumes:
+  minio-data:
+  postgres-data:
