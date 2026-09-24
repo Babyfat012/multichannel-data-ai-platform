@@ -154,6 +154,16 @@ Các vấn đề dữ liệu được mô phỏng:
 | Duplicate, burst, late arrival | Đặc tính riêng của từng Channel trong luồng streaming |
 | Data drift | Đợt sale lớn và livestream làm tỷ lệ trả hàng đổi mà feature vẫn trông bình thường |
 
+Chạy môi trường nguồn giả lập (MinIO, PostgreSQL) và sinh dữ liệu vào đó:
+
+```bash
+cp .env.example .env
+docker compose up -d                                   # MinIO, PostgreSQL, sinh Batch, nạp PostgreSQL
+uv run python -m generator report --source ./out/small # báo cáo chất lượng dữ liệu (skew, cardinality, ...)
+```
+
+Chi tiết cách chạy và số liệu tối ưu image xem [docs/Docker.md](docs/Docker.md). Kết quả đo chất lượng của lần chạy đầy đủ xem [docs/generator-design.md](docs/generator-design.md#kết-quả-chạy).
+
 ## 5. Repo Structure
 
 Cấu trúc dự kiến. Thư mục nào chưa tồn tại sẽ được tạo khi triển khai.
@@ -169,7 +179,10 @@ Cấu trúc dự kiến. Thư mục nào chưa tồn tại sẽ được tạo k
 │   ├── spark/             # Các job Spark cho DP1, DP2, DP3
 │   └── flink/             # Job Flink xử lý luồng event
 ├── dags/                  # Airflow DAG cho DP1, DP2, DP3
-├── docker/                # Dockerfile và docker-compose cho từng unit
+├── docker/                # Dockerfile phụ (bản chưa tối ưu để so dung lượng)
+├── Dockerfile             # Image tối ưu của generator (multi-stage)
+├── docker-compose.yml     # MinIO, PostgreSQL và các bước sinh, nạp dữ liệu
+├── .env.example           # Mẫu biến môi trường cho Compose (mật khẩu, cổng)
 ├── sql/                   # DDL cho bảng ở các zone và Data Warehouse
 ├── tests/                 # Unit test
 └── pyproject.toml         # Thư viện Python của dự án (quản lý bằng uv)
@@ -182,8 +195,9 @@ Cấu trúc dự kiến. Thư mục nào chưa tồn tại sẽ được tạo k
 | [docs/Domain.md](docs/Domain.md) | Business domain, thuật ngữ, bài toán dự đoán, vấn đề dữ liệu cần mô phỏng |
 | [docs/generator-design.md](docs/generator-design.md) | Thiết kế Data Generator: kiến trúc, đường thời gian Batch và Stream, vấn đề dữ liệu, nơi lưu, cấu hình, bằng chứng chất lượng |
 | [docs/channel-sources.md](docs/channel-sources.md) | Nguồn tài liệu và mức tin cậy của dạng dữ liệu từng Channel |
+| [docs/Docker.md](docs/Docker.md) | Docker Compose của môi trường nguồn, tối ưu dung lượng image generator |
 
-Các tài liệu sau sẽ được bổ sung cùng phần triển khai tương ứng: tối ưu Docker image, tối ưu Spark và Flink, tối ưu lưu trữ, thiết kế schema, Orchestration, Governance.
+Các tài liệu sau sẽ được bổ sung cùng phần triển khai tương ứng: tối ưu Spark và Flink, tối ưu lưu trữ, thiết kế schema, Orchestration, Governance.
 
 ## 7. Lộ trình
 
