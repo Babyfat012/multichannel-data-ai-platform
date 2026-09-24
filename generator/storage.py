@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import io
 import json
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator
 
 import fsspec
 import pyarrow as pa
@@ -49,6 +49,18 @@ class OutputStore:
         sink = pa.BufferOutputStream()
         pq.write_table(table, sink)
         return self._write_bytes(relative, sink.getvalue().to_pybytes())
+
+    def glob(self, pattern: str) -> list[str]:
+        """Các đường dẫn tương đối (so với gốc) khớp `pattern`, đã sắp xếp."""
+        prefix = self.path("")
+        return sorted(p.removeprefix(prefix) for p in self.fs.glob(self.path(pattern)))
+
+    def read_jsonl(self, relative: str) -> Iterator[dict[str, Any]]:
+        """Đọc lần lượt từng bản ghi của một file JSON Lines."""
+        with self.fs.open(self.path(relative), "rt", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    yield json.loads(line)
 
     def _write_bytes(self, relative: str, data: bytes) -> int:
         """Ghi `data` vào `relative`, tự tạo thư mục cha nếu cần."""
