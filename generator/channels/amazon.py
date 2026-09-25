@@ -39,6 +39,7 @@ from generator.core.model import (
     SHIPPED,
     Order,
     OrderLine,
+    StatusChange,
 )
 from generator.core.storefronts import CURRENCY_DECIMALS
 
@@ -218,3 +219,56 @@ def _shipped_quantity(order: Order, status: str) -> int:
     if status in (SHIPPED, DELIVERED, COMPLETED):
         return sum(line.quantity for line in order.lines)
     return 0
+
+
+class AmazonOrderNotificationRenderer:
+    """Vẽ một lần đổi trạng thái của Order Amazon thành notification `ORDER_CHANGE`.
+
+    Dùng cho Stream. Dạng message theo SP-API Notifications, nhưng **chưa đối
+    chiếu** với tài liệu chính thức (docs/channel-sources.md ghi notification
+    Amazon là mục còn thiếu), nên toàn bộ tên field là giả định, mức Thấp.
+
+    `EventTime` là lúc đổi trạng thái thật. `NotificationMetadata.PublishTime`
+    là lúc message đến, do lớp giao hàng Stream điền, nên message trễ có
+    `PublishTime` muộn hơn `EventTime`.
+    """
+
+    channel = "amazon"
+    dataset = "order_notifications"
+
+    def __init__(self, config: GeneratorConfig) -> None:
+        """Dùng lại cách sinh mã gốc của renderer Orders."""
+        self.orders = AmazonOrdersRenderer(config)
+        self.seed = config.seed
+
+    def notification_id(self, order: Order, change: StatusChange) -> str:
+        """Mã notification dạng UUID, cố định cho một lần đổi trạng thái."""
+        h = native_code(self.seed, "amazon_notification", f"{order.order_id}:{change.status}", 32).lower()
+        return f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:]}"
+
+    def render_event(self, order: Order, change: StatusChange) -> RenderedRecord:
+        """Vẽ lần đổi trạng thái `change` của `order`. `key` là `NotificationId`."""
+        marketplace_id, _ = MARKETPLACES[order.storefront_id]
+        notification_id = self.notification_id(order, change)
+        record = {
+            "NotificationVersion": "1.0",
+            "NotificationType": "ORDER_CHANGE",
+            "PayloadVersion": "1.0",
+            "EventTime": iso_z(change.at),
+            "Payload": {
+                "OrderChangeNotification": {
+                    "NotificationLevel": "OrderLevel",
+                    "AmazonOrderId": self.orders.amazon_order_id(order),
+                    "OrderChangeType": "OrderStatusChange",
+                    "OrderChangeTrigger": {"TimeOfOrderChange": iso_z(change.at)},
+                    "Summary": {
+                        "MarketplaceId": marketplace_id,
+                        "OrderStatus": STATUS_V0[change.status],
+                        "PurchaseDate": iso_z(order.created_at),
+                        "FulfillmentType": "AFN" if order.fulfillment == FULFILLED_BY_CHANNEL else "MFN",
+                    },
+                },
+            },
+            "NotificationMetadata": {"NotificationId": notification_id},
+        }
+        return RenderedRecord(key=notification_id, record=record)

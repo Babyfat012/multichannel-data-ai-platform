@@ -11,6 +11,7 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "s3fs>=2024.6",
     "duckdb>=1.1",
+    "confluent-kafka>=2.15.1",
 ]
 
 [dependency-groups]
