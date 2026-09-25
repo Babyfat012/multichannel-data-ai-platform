@@ -162,7 +162,7 @@ docker compose up -d                                   # MinIO, PostgreSQL, sinh
 uv run python -m generator report --source ./out/small # báo cáo chất lượng dữ liệu (skew, cardinality, ...)
 ```
 
-Chi tiết cách chạy và số liệu tối ưu image xem [docs/Docker.md](docs/Docker.md). Kết quả đo chất lượng của lần chạy đầy đủ xem [docs/generator-design.md](docs/generator-design.md#kết-quả-chạy).
+Image của generator được tối ưu từ **2,35 GB xuống 677 MB** (giảm 71%) nhờ multi-stage build, base image `python:3.12-slim` và không giữ cache cài đặt. Chi tiết cách chạy và cách đo xem [docs/Docker.md](docs/Docker.md). Kết quả đo chất lượng của lần chạy đầy đủ xem [docs/generator-design.md](docs/generator-design.md#kết-quả-chạy).
 
 ## 5. Repo Structure
 

@@ -4,7 +4,7 @@
 
 x-generator: &generator
   build: .
-  image: fsds-generator:latest
+  image: data-generator:optimize
   env_file: .env
   environment:
     AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}

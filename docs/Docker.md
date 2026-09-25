@@ -16,8 +16,8 @@ Tài liệu này ghi cách đóng gói generator thành image, cách dựng môi
 | `minio` | `quay.io/minio/minio` (bản cố định theo ngày) | Object storage chứa export dạng file của Channel | Chạy liên tục. API cổng 9000, console cổng 9001 |
 | `minio-init` | như trên (có sẵn `mc`) | Tạo bucket `fsds` | Chạy một lần |
 | `postgres` | `postgres:15` | Hệ thống của phòng ban khác: `walmart.orders`, `seller.skus` | Chạy liên tục, cổng 5432 |
-| `generator-batch` | `fsds-generator` (build từ `Dockerfile`) | `batch`: sinh lịch sử, ghi thẳng vào MinIO | Chạy một lần, sau `minio-init` |
-| `generator-load` | `fsds-generator` | `load-postgres`: đọc `pg-load/` trên MinIO, nạp vào PostgreSQL | Chạy một lần, sau `generator-batch` và khi `postgres` sẵn sàng |
+| `generator-batch` | `data-generator` (build từ `Dockerfile`) | `batch`: sinh lịch sử, ghi thẳng vào MinIO | Chạy một lần, sau `minio-init` |
+| `generator-load` | `data-generator` | `load-postgres`: đọc `pg-load/` trên MinIO, nạp vào PostgreSQL | Chạy một lần, sau `generator-batch` và khi `postgres` sẵn sàng |
 
 Thứ tự được đảm bảo bằng `depends_on` với `service_healthy` (MinIO, PostgreSQL có healthcheck) và `service_completed_successfully` (các bước chạy một lần).
 
@@ -59,12 +59,16 @@ Cả hai dùng chung `.dockerignore`, loại `.venv`, `out/`, `.git`, `docs/` v�
 
 ### Kết quả
 
-Đo bằng `docker images fsds-generator` (Docker 29):
+Đo bằng `docker images data-generator` (Docker 29):
 
 | Image | Dung lượng |
 |---|---|
-| `fsds-generator:naive` | 2,35 GB |
-| `fsds-generator:latest` | 677 MB |
+| `data-generator:naive` | 2,35 GB |
+| `data-generator:optimize` | 677 MB |
+
+![Dung lượng hai image](images/docker/docker.png)
+
+Trong ảnh, cột `DISK USAGE` là dung lượng sau khi giải nén trên máy. Cột `CONTENT SIZE` là dung lượng nén khi đẩy lên registry, giảm từ 658 MB xuống 167 MB.
 
 Dung lượng giảm khoảng 71%. Phần lớn đến từ base image: `python:3.12` mang theo bộ công cụ build mà generator không cần lúc chạy. Phần còn lại đến từ việc không giữ cache cài đặt.
 
@@ -84,7 +88,7 @@ Muốn giảm thêm có thể tách `duckdb` thành nhóm thư viện tùy chọ
 ### Cách đo lại
 
 ```bash
-docker build -t fsds-generator:naive -f docker/Dockerfile.naive .
-docker build -t fsds-generator:latest .
-docker images fsds-generator
+docker build -t data-generator:naive -f docker/Dockerfile.naive .
+docker build -t data-generator:optimize .
+docker images data-generator
 ```
