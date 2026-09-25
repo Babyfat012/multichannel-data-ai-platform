@@ -9,7 +9,7 @@ Hai nơi nhận (sink):
 30 ngày), 60 là nhanh gấp 60 lần, 0 là không chờ.
 
 Sau khi phát xong, ghi `stream_manifest.json` với số đo thật: tỷ lệ trùng,
-tỷ lệ trễ, số message lệch thứ tự, hệ số burst. Đây là đáp án để đối chiếu
+tỷ lệ trễ, số message lệch thứ tự quá 1 giờ, hệ số burst. Đây là đáp án để đối chiếu
 với những gì Flink đo được.
 """
 
@@ -86,7 +86,8 @@ class StreamStats:
         self.keys[t].add(msg.dedup_key)
         if not msg.is_duplicate:
             self.delays_min[t].append((msg.arrive_at - msg.event_time).total_seconds() / 60)
-        if t in self.max_event and msg.event_time < self.max_event[t]:
+        # Lệch thứ tự đáng kể: đến sau một message có event_time muộn hơn quá 1 giờ.
+        if t in self.max_event and msg.event_time < self.max_event[t] - timedelta(hours=1):
             self.out_of_order[t] += 1
         self.max_event[t] = max(self.max_event.get(t, msg.event_time), msg.event_time)
         if t == TOPICS["tiktok_shop"] and not msg.is_duplicate and msg.value["data"]["order_status"] == "UNPAID":
@@ -103,7 +104,7 @@ class StreamStats:
                 "injected_duplicates": self.duplicates[t],
                 "median_delay_minutes": round(statistics.median(delays), 2) if delays else None,
                 "share_late_over_1h": round(sum(d > 60 for d in delays) / len(delays), 6) if delays else None,
-                "out_of_order": self.out_of_order[t],
+                "out_of_order_over_1h": self.out_of_order[t],
             }
         return {"topics": topics, "burst": self._burst(live_multiplier)}
 
