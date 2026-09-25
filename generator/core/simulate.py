@@ -13,6 +13,10 @@ Vòng đời một Order (thời gian tính từ lúc tạo):
 
 Khoảng 3% Order bị hủy trong vòng 24 giờ sau khi thanh toán, trước khi gửi.
 Khi đó vòng đời dừng ở `cancelled` và các Order Line không có nhãn.
+
+Livestream TikTok (sau `cutoff`): trong vài giờ của buổi live, số Order của
+TikTok Shop gấp `live_multiplier` lần bình thường. Phần Order thêm rút bằng bộ
+sinh riêng, nên các Order còn lại của ngày đó giống hệt khi không có live.
 """
 
 from __future__ import annotations
@@ -113,6 +117,10 @@ class Simulator:
                             for s, w in zip(self.storefronts, self.storefront_weights)}
         # Sale Event chỉ diễn ra ở các Storefront Amazon.
         self.is_amazon = np.array([s.channel == "amazon" for s in self.storefronts])
+        # Hệ số burst của livestream, rút một lần cho cả lần chạy.
+        live = config.drift.tiktok_live
+        self.live_multiplier = (float(rng_for(config.seed, "tiktok_live").uniform(*live.burst_multiplier))
+                                if live is not None else 1.0)
 
     def is_sale_day(self, day: int) -> bool:
         """Ngày mô phỏng `day` có thuộc một Sale Event (Prime Day) không."""
@@ -175,6 +183,37 @@ class Simulator:
             next_sku += n_lines[i]
             orders.append(self._make_order(f"ORD-{day:03d}-{i + 1:05d}", storefront,
                                            created_at, skus_of_order, rng, sale_day))
+        live = self.config.drift.tiktok_live
+        if live is not None and live.day == day:
+            orders += self._live_orders(day, first_number=n_orders + 1)
+            orders.sort(key=lambda o: o.created_at)
+        return orders
+
+    def _live_orders(self, day: int, first_number: int) -> list[Order]:
+        """Order thêm của TikTok Shop trong buổi livestream của ngày `day`.
+
+        Tốc độ thường của TikTok Shop là `orders_per_day * tỷ trọng / 24` mỗi giờ.
+        Trong buổi live, thêm `(live_multiplier - 1)` lần tốc độ đó, nên tổng tốc độ
+        gấp `live_multiplier` lần.
+        """
+        live = self.config.drift.tiktok_live
+        idx = next((i for i, s in enumerate(self.storefronts) if s.storefront_id == "tiktok_shop_us"), None)
+        if idx is None:
+            return []
+        storefront = self.storefronts[idx]
+        rng = rng_for(self.config.seed, "tiktok_live_orders", day)
+        per_hour = self.config.scale.orders_per_day * self.storefront_weights[idx] / 24
+        n_orders = int(rng.poisson(per_hour * (self.live_multiplier - 1) * live.duration_hours))
+        start, _ = live.window(self.config.day_start(day))
+        offsets = np.sort(rng.uniform(0, live.duration_hours * 3600, size=n_orders))
+
+        orders = []
+        for i in range(n_orders):
+            n_lines = 1 + min(int(rng.poisson(EXTRA_LINES_MEAN)), MAX_LINES - 1)
+            skus = rng.choice(len(self.catalog.skus), size=n_lines, p=self.catalog.popularity)
+            created_at = start + timedelta(seconds=float(offsets[i]))
+            orders.append(self._make_order(f"ORD-{day:03d}-{first_number + i:05d}", storefront,
+                                           created_at, skus, rng))
         return orders
 
     def _make_order(
