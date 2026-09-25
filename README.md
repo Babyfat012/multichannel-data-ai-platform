@@ -196,6 +196,7 @@ Cấu trúc dự kiến. Thư mục nào chưa tồn tại sẽ được tạo k
 | [docs/generator-design.md](docs/generator-design.md) | Thiết kế Data Generator: kiến trúc, đường thời gian Batch và Stream, vấn đề dữ liệu, nơi lưu, cấu hình, bằng chứng chất lượng |
 | [docs/channel-sources.md](docs/channel-sources.md) | Nguồn tài liệu và mức tin cậy của dạng dữ liệu từng Channel |
 | [docs/Docker.md](docs/Docker.md) | Docker Compose của môi trường nguồn, tối ưu dung lượng image generator |
+| [docs/data-quality-report.md](docs/data-quality-report.md) | Báo cáo chất lượng dữ liệu của generator, đối chiếu từng dòng rubric với số đo và ảnh chụp |
 
 Các tài liệu sau sẽ được bổ sung cùng phần triển khai tương ứng: tối ưu Spark và Flink, tối ưu lưu trữ, thiết kế schema, Orchestration, Governance.
 
