@@ -39,6 +39,8 @@ docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
     --bootstrap-server localhost:9092 --topic tiktok_shop.order-webhooks --from-beginning --max-messages 3
 ```
 
+**Sau khi sửa code, nhớ `docker compose build`.** `Dockerfile` cài generator bằng `uv sync --reinstall-package fsds-generator`: thiếu cờ đó, cache của `uv` chỉ so `pyproject.toml` nên sửa code mà không đổi phiên bản thì image vẫn cài bản cũ, build vẫn báo thành công.
+
 **Vì sao chỉ một bucket `fsds`.** Mỗi lần chạy ghi bốn thứ: `source-exports/`, `pg-load/`, `ground-truth/` và `run_manifest.json`. Manifest phải nằm trong một bucket, nên generator ghi vào gốc một bucket và bốn phần trên là bốn tiền tố. DP1 chỉ đọc `source-exports/`, còn `ground-truth/` dành cho phần huấn luyện mô hình.
 
 **Mật khẩu và cổng** nằm trong `.env`, file này không được commit. Nếu máy đã có chương trình dùng cổng 9000, 9001 hoặc 5432, đổi `MINIO_API_PORT`, `MINIO_CONSOLE_PORT`, `POSTGRES_PORT` hoặc `KAFKA_PORT` trong `.env`.
