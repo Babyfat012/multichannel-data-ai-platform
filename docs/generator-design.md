@@ -338,7 +338,7 @@ Mục này ghi phần đã có code: code nằm ở đâu, chạy thế nào, v�
 | 1 | Lõi mô phỏng, Amazon Orders (có đổi schema), Walmart Orders, duplicate do export chồng lấn, bảng nhãn, manifest, Sale Event kiểu Prime Day | Xong |
 | 2 | Docker Compose (MinIO, PostgreSQL), bảng `seller.skus`, lệnh nạp PostgreSQL, `report.py`, Dockerfile tối ưu | Xong (notebook để sau) |
 | 2b | Amazon Returns và FBA reports, small-file, Listing, tỷ giá | Chưa làm |
-| 3 | Stream qua Kafka: burst, late, duplicate | Chưa làm |
+| 3 | Stream qua Kafka: burst (livestream TikTok), late (Amazon), duplicate (TikTok Shop), nhịp phát theo đoạn | Xong. Shopify, Walmart và Shopee trong Stream để bước 4 |
 | 4 | TikTok Shop, Shopify, Shopee, drift | Chưa làm |
 
 ### Chạy thử
@@ -370,6 +370,9 @@ Code chia theo đúng ba lớp ở [mục 2](#2-kiến-trúc-ba-lớp). Đọc t
 | `generator/core/simulate.py` | Lõi | Sinh Order từng ngày cùng toàn bộ vòng đời |
 | `generator/delivery/batch_exports.py` | Giao hàng | Order nằm ở ngày export nào, chèn duplicate |
 | `generator/channels/amazon.py`, `walmart.py` | Renderer | Vẽ Order thành bản ghi gốc của Channel |
+| `generator/channels/tiktok.py` | Renderer | Webhook TikTok Shop type 1 (đổi trạng thái đơn) cho Stream |
+| `generator/delivery/stream_events.py` | Giao hàng | Đổi trạng thái sau `cutoff` thành message: lúc đến, trễ, bản trùng, nhịp phát |
+| `generator/stream.py` | | Lệnh `stream`: phát vào Kafka hoặc ra file, đo và ghi `stream_manifest.json` |
 | `generator/batch.py` | | Nối ba lớp, ghi file, ghi manifest |
 | `generator/storage.py` | | Ghi và đọc thư mục local hoặc MinIO qua fsspec |
 | `generator/load_postgres.py` | | Lệnh `load-postgres`: nạp `pg-load/` vào `walmart.orders` và `seller.skus` bằng `COPY` |
@@ -401,6 +404,32 @@ Code chia theo đúng ba lớp ở [mục 2](#2-kiến-trúc-ba-lớp). Đọc t
 
 Số của tỷ lệ trả khớp mục tiêu vì mọi tác động trong hàm logistic được tâm hóa (trừ giá trị trung bình), giải thích ở đầu `returns.py`.
 
+### Stream
+
+Lệnh `stream` sinh lại khoảng 20 ngày cuối trước `cutoff` (để bắt Order cũ còn đổi trạng thái), rồi chạy tiếp `days_stream` ngày. Mỗi lần Order Amazon hoặc TikTok Shop đổi trạng thái trong khoảng `[cutoff, stream_end)` thành một message:
+
+| Topic | Dạng | Khóa dedup | Vấn đề |
+|---|---|---|---|
+| `amazon.order-notifications` | Notification `ORDER_CHANGE` (giả định, chưa đối chiếu tài liệu chính thức) | `NotificationMetadata.NotificationId` | Late: `EventTime` là lúc đổi trạng thái, `PublishTime` là lúc đến |
+| `tiktok_shop.order-webhooks` | Webhook type 1, theo channel-sources.md mục 5 | `tts_notification_id` | Duplicate, burst |
+
+Khóa Kafka là mã đơn gốc, nên message của một Order vào cùng partition. Message được gửi theo thứ tự lúc đến, nên message Amazon trễ đứng sau message có `event_time` muộn hơn.
+
+**Burst nằm ở lõi, không ở lớp giao hàng.** Giống Prime Day, livestream đổi tham số của lõi: trong vài giờ, số Order TikTok Shop gấp `live_multiplier` lần. Hệ số rút một lần trong khoảng `burst_multiplier` và ghi vào `stream_manifest.json`. Order thêm dùng bộ sinh số riêng, nên các Order khác của ngày đó không đổi.
+
+Số đo ở lần chạy `configs/default.yaml` vào Kafka qua Compose (`STREAM_SPEED=60`, 44 giây). Số message trong Kafka khớp số đếm.
+
+| Chỉ số | Mục tiêu | Đo được |
+|---|---|---|
+| Message TikTok Shop | | 93.554 |
+| Message Amazon | | 399.410 |
+| Tỷ lệ trùng TikTok Shop | 1,5% | 1,49% |
+| Tỷ lệ trùng Amazon | 0 | 0 |
+| Độ trễ trung vị Amazon | vài phút | 5,3 phút |
+| Message Amazon trễ hơn 1 giờ | 5% | 4,98% |
+| Message Amazon đến sau message có `event_time` muộn hơn quá 1 giờ | có | 19.729 |
+| Order TikTok Shop mới mỗi giờ trong livestream so với cùng giờ ngày khác | gấp 5 đến 8 lần (đáp án 5,45) | 148,5 so với 25,2, tức gấp 5,89 lần |
+
 ### Đơn giản hóa so với Channel thật
 
 - Amazon v0 thật tách Order Item sang lời gọi `getOrderItems`. Ở đây `OrderItems` nằm chung bản ghi, một dòng JSON mỗi Order.
@@ -408,6 +437,8 @@ Số của tỷ lệ trả khớp mục tiêu vì mọi tác động trong hàm 
 - Mỗi Order Line được quyết định Return độc lập, không có tương quan giữa các dòng trong cùng Order. Ngoài đời, buyer đã trả một món thì dễ trả thêm món khác trong cùng đơn (mua nhiều size để thử, không hài lòng cả đơn). Vì vậy dữ liệu chưa có tín hiệu kiểu "cả đơn cùng bị trả" cho mô hình học.
 - Walmart ghi ra `pg-load/walmart.orders/`, là các dòng sẽ nạp vào bảng `walmart.orders` bằng lệnh `load-postgres`.
 - Tỷ giá tạm cố định trong `price_factor` của Storefront. Bảng tỷ giá ngày làm ở bước 2b.
+- Notification Amazon trong Stream luôn dùng giá trị trạng thái kiểu v0 (`Shipped`), không đổi theo ngày chuyển schema.
+- Livestream chưa có concept drift (tỷ lệ trả quần áo tăng). Phần này làm ở bước 4.
 
 
 ### Các khóa cấu hình đang dùng
@@ -420,6 +451,7 @@ Generator đọc YAML vào dataclass trong `generator/config.py`. Khóa không c
 | `scale.n_skus` | 2000 | Số SKU trong danh mục của Seller | Cardinality của SKU, ASIN |
 | `scale.start_date` | 2026-01-01 | Ngày mô phỏng 1 | |
 | `scale.days_history` | 180 | Số ngày lịch sử. `cutoff` là 00:00 UTC ngay sau ngày cuối | Volume |
+| `scale.days_stream` | 30 | Số ngày Stream sau `cutoff` | |
 | `scale.orders_per_day` | 4000 | Số Order mỗi ngày trên cả 7 Storefront, trước khi nhân Sale Event | Volume, cardinality |
 | `scale.sku_zipf_exponent` | 0.8 | Độ lệch của phân phối SKU. Lớn hơn thì SKU bán chạy nhất chiếm nhiều hơn | Skew theo SKU |
 | `storefront_weights.<storefront>` | Amazon US 0.45, ... | Tỷ trọng Order theo Storefront, phải cộng lại bằng 1 | Skew theo Storefront |
@@ -431,9 +463,17 @@ Generator đọc YAML vào dataclass trong `generator/config.py`. Khóa không c
 | `drift.prime_day.order_multiplier` | 4 | Số Order Amazon trong ngày sale gấp mấy lần ngày thường | Skew theo ngày |
 | `drift.prime_day.discount_share` | 0.7 | Tỷ lệ Order Line Amazon được giảm giá trong ngày sale | Covariate drift |
 | `drift.prime_day.deal_skus` | 50 | Số SKU hút phần lớn nhu cầu trong ngày sale | Skew theo SKU |
+| `streaming_problems.pacing.default_seconds_per_sim_day` | 60 | Số giây thật cho mỗi ngày mô phỏng khi phát Stream | Burst thấy được trên Flink UI |
+| `streaming_problems.pacing.segments` | trống | Danh sách `{from_day, to_day, seconds_per_sim_day}` phát với tốc độ riêng | Burst thấy được trên Flink UI |
+| `streaming_problems.duplicate_rate.<storefront>` | `tiktok_shop_us: 0.015` | Tỷ lệ trùng theo khóa dedup trong Stream | Duplicate |
+| `streaming_problems.amazon_late.median_minutes` | 5 | Độ trễ trung vị của phần notification trễ dưới 1 giờ | Late |
+| `streaming_problems.amazon_late.share_over_1h` | 0.05 | Tỷ lệ notification Amazon trễ 1 đến 6 giờ | Late, lệch thứ tự |
+| `drift.tiktok_live.day` | không có | Ngày mô phỏng có livestream, phải nằm trong khoảng Stream | Burst |
+| `drift.tiktok_live.start_hour_utc`, `.duration_hours` | 12, 6 | Giờ bắt đầu và độ dài buổi live | Burst |
+| `drift.tiktok_live.burst_multiplier` | [5, 8] | Khoảng hệ số nhân số Order TikTok Shop trong buổi live | Burst |
 | `storage.output_root` | `./out` | Nơi ghi: thư mục local hoặc `s3://bucket`. Lệnh `batch --output` ghi đè khóa này | |
 
-Các khóa streaming (`streaming_problems`) và drift của TikTok thêm ở bước 3 và 4.
+Concept drift của livestream (tỷ lệ trả quần áo tăng) thêm ở bước 4.
 
 ### Kết quả chạy
 

@@ -4,13 +4,22 @@ scale:
   n_skus: 50
   start_date: 2026-01-01
   days_history: 60
+  days_stream: 30
   orders_per_day: 200
   sku_zipf_exponent: 0.8
 offline_problems:
   duplicate_rate: 0.02
   overlap_days: 3
   amazon_orders_api_switch_day: 30
+streaming_problems:
+  pacing:
+    default_seconds_per_sim_day: 60
+    segments:
+      - {from_day: 65, to_day: 65, seconds_per_sim_day: 600}   # ngày livestream phát chậm để thấy burst
+  duplicate_rate: {tiktok_shop_us: 0.015}
+  amazon_late: {median_minutes: 5, share_over_1h: 0.05}
 drift:
+  tiktok_live: {day: 65, start_hour_utc: 12, duration_hours: 6, burst_multiplier: [5, 8]}
   prime_day: {day: 40, days: 2, order_multiplier: 4, discount_share: 0.7, deal_skus: 5}
 storage:
   output_root: ./out/small

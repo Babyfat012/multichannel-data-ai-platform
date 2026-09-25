@@ -18,6 +18,8 @@ Tài liệu này ghi cách đóng gói generator thành image, cách dựng môi
 | `postgres` | `postgres:15` | Hệ thống của phòng ban khác: `walmart.orders`, `seller.skus` | Chạy liên tục, cổng 5432 |
 | `generator-batch` | `data-generator` (build từ `Dockerfile`) | `batch`: sinh lịch sử, ghi thẳng vào MinIO | Chạy một lần, sau `minio-init` |
 | `generator-load` | `data-generator` | `load-postgres`: đọc `pg-load/` trên MinIO, nạp vào PostgreSQL | Chạy một lần, sau `generator-batch` và khi `postgres` sẵn sàng |
+| `kafka` (profile `stream`) | `apache/kafka:3.9.1` | Kafka một node, chế độ KRaft. Trong Compose là `kafka:9092`, từ host là `localhost:9094` | Chạy liên tục |
+| `generator-stream` (profile `stream`) | `data-generator` | `stream`: phát message sau `cutoff` vào Kafka, ghi `stream_manifest.json` vào MinIO | Chạy tới khi phát xong, sau khi `kafka` sẵn sàng |
 
 Thứ tự được đảm bảo bằng `depends_on` với `service_healthy` (MinIO, PostgreSQL có healthcheck) và `service_completed_successfully` (các bước chạy một lần).
 
@@ -28,9 +30,18 @@ docker compose wait generator-load    # chờ nạp PostgreSQL xong
 GENERATOR_CONFIG=configs/default.yaml docker compose up -d --force-recreate generator-batch generator-load   # đủ quy mô
 ```
 
+**Stream.** Kafka nằm trong profile `stream`, nên `docker compose up -d` không bật nó. `STREAM_SPEED` trong `.env` chỉnh tốc độ: 1 là đúng nhịp (khoảng 40 phút cho 30 ngày), 60 là nhanh gấp 60 lần (khoảng 40 giây).
+
+```bash
+docker compose --profile stream up -d kafka
+docker compose --profile stream run --rm generator-stream     # in số đo khi xong
+docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
+    --bootstrap-server localhost:9092 --topic tiktok_shop.order-webhooks --from-beginning --max-messages 3
+```
+
 **Vì sao chỉ một bucket `fsds`.** Mỗi lần chạy ghi bốn thứ: `source-exports/`, `pg-load/`, `ground-truth/` và `run_manifest.json`. Manifest phải nằm trong một bucket, nên generator ghi vào gốc một bucket và bốn phần trên là bốn tiền tố. DP1 chỉ đọc `source-exports/`, còn `ground-truth/` dành cho phần huấn luyện mô hình.
 
-**Mật khẩu và cổng** nằm trong `.env`, file này không được commit. Nếu máy đã có chương trình dùng cổng 9000, 9001 hoặc 5432, đổi `MINIO_API_PORT`, `MINIO_CONSOLE_PORT` hoặc `POSTGRES_PORT` trong `.env`.
+**Mật khẩu và cổng** nằm trong `.env`, file này không được commit. Nếu máy đã có chương trình dùng cổng 9000, 9001 hoặc 5432, đổi `MINIO_API_PORT`, `MINIO_CONSOLE_PORT`, `POSTGRES_PORT` hoặc `KAFKA_PORT` trong `.env`.
 
 **Đọc từ máy host.** Lệnh `report` cần ba biến môi trường để đọc MinIO:
 
