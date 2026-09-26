@@ -261,9 +261,10 @@ Generator xuất riêng bảng nhãn thật, không chỉ ghi trong manifest, v�
 
 Rubric yêu cầu ảnh chụp output tóm tắt chất lượng dữ liệu. Phần này chia làm hai:
 
-- **Module `generator/report.py`** chứa logic đo, có docstring và unit test, dùng DuckDB (nhẹ, có `approx_count_distinct`, đọc được cả MinIO lẫn PostgreSQL). Có `--dsn` thì Walmart và danh mục SKU được đọc từ PostgreSQL, không có thì đọc file `pg-load/`. Stream đo bằng một consumer Kafka nhỏ.
+- **Module `generator/report.py`** chứa logic đo, có docstring và unit test, dùng DuckDB (nhẹ, có `approx_count_distinct`, đọc được cả MinIO lẫn PostgreSQL). Có `--dsn` thì Walmart và danh mục SKU được đọc từ PostgreSQL, không có thì đọc file `pg-load/`.
 - **Lệnh `python -m generator report`** in các bảng đo ra terminal để chụp, hoặc in dạng Markdown (`--markdown`) để dán vào tài liệu. Notebook vẽ biểu đồ để sau: cần thêm Jupyter và thư viện vẽ, trong khi bảng chữ đã đủ cho ảnh chụp.
-- Ảnh chụp nằm trong `docs/images/generator/` và được nhúng vào mục "Kết quả chạy" sẽ thêm vào chính tài liệu này, mỗi ảnh kèm lời giải thích nó chứng minh điều gì. Như vậy phần generator có đúng một tài liệu, theo yêu cầu dòng Documentation của rubric.
+- **Stream** có hai nguồn số: `stream_manifest.json` giữ số tổng của lần phát, còn `scripts/stream_evidence.py` phát lại Stream trong bộ nhớ và in ví dụ cụ thể cho từng vấn đề (một cặp tin trùng, một tin trễ nặng nhất, bảng Order mỗi giờ của ngày livestream).
+- **Ảnh chụp và báo cáo** tách theo đường thời gian, mỗi bên một tài liệu và một thư mục ảnh: Batch ở [data-quality-report-batch.md](data-quality-report-batch.md) với `docs/images/batch/`, Stream ở [data-quality-report-stream.md](data-quality-report-stream.md) với `docs/images/stream/`. Mỗi ảnh kèm lời giải thích nó chứng minh điều gì.
 
 | Rubric yêu cầu chụp | Báo cáo đo gì |
 |---|---|
@@ -376,7 +377,8 @@ Code chia theo đúng ba lớp ở [mục 2](#2-kiến-trúc-ba-lớp). Đọc t
 | `generator/batch.py` | | Nối ba lớp, ghi file, ghi manifest |
 | `generator/storage.py` | | Ghi và đọc thư mục local hoặc MinIO qua fsspec |
 | `generator/load_postgres.py` | | Lệnh `load-postgres`: nạp `pg-load/` vào `walmart.orders` và `seller.skus` bằng `COPY` |
-| `generator/report.py` | | Lệnh `report`: đo lại chất lượng dữ liệu bằng DuckDB, đặt cạnh đáp án trong manifest |
+| `generator/report.py` | | Lệnh `report`: đo lại chất lượng dữ liệu Batch bằng DuckDB, đặt cạnh đáp án trong manifest |
+| `scripts/stream_evidence.py` | | Phát lại Stream trong bộ nhớ, in ví dụ cụ thể của trùng, trễ và burst để chụp ảnh |
 
 ### Bốn ý chính của cách làm
 
@@ -388,7 +390,7 @@ Code chia theo đúng ba lớp ở [mục 2](#2-kiến-trúc-ba-lớp). Đọc t
 
 **4. Mã gốc của Channel suy ra từ mã chuẩn bằng hàm băm.** `AmazonOrderId`, `purchaseOrderId`, ASIN, mã vận đơn không được rút ngẫu nhiên mà băm từ mã chuẩn (`ORD-017-00042`) cùng seed. Cùng một Order luôn có cùng mã gốc ở mọi lần export, ở cả Batch lẫn Stream, và renderer không cần lưu bảng tra.
 
-### Đo được ở lần chạy đầy đủ
+### Đo được ở lần chạy đầy đủ (Batch)
 
 | Chỉ số | Mục tiêu | Đo được |
 |---|---|---|
@@ -417,7 +419,7 @@ Khóa Kafka là mã đơn gốc, nên message của một Order vào cùng parti
 
 **Burst nằm ở lõi, không ở lớp giao hàng.** Giống Prime Day, livestream đổi tham số của lõi: trong vài giờ, số Order TikTok Shop gấp `live_multiplier` lần. Hệ số rút một lần trong khoảng `burst_multiplier` và ghi vào `stream_manifest.json`. Order thêm dùng bộ sinh số riêng, nên các Order khác của ngày đó không đổi.
 
-Số đo ở lần chạy `configs/default.yaml` vào Kafka qua Compose (`STREAM_SPEED=60`, 44 giây). Số message trong Kafka khớp số đếm.
+Số đo ở lần chạy `configs/default.yaml` vào Kafka qua Compose (`STREAM_SPEED=60`, 43,7 giây). Số message trong Kafka khớp số đếm. Báo cáo đầy đủ kèm cách kiểm chứng: [data-quality-report-stream.md](data-quality-report-stream.md).
 
 | Chỉ số | Mục tiêu | Đo được |
 |---|---|---|
@@ -429,6 +431,8 @@ Số đo ở lần chạy `configs/default.yaml` vào Kafka qua Compose (`STREAM
 | Message Amazon trễ hơn 1 giờ | 5% | 4,98% |
 | Message Amazon đến sau message có `event_time` muộn hơn quá 1 giờ | có | 19.729 |
 | Order TikTok Shop mới mỗi giờ trong livestream so với cùng giờ ngày khác | gấp 5 đến 8 lần (đáp án 5,45) | 148,5 so với 25,2, tức gấp 5,89 lần |
+
+`measured_ratio` so với trung bình các ngày Stream khác, nên nó chịu ảnh hưởng của việc ngày livestream vốn đông hay vắng. So với chính ngày đó khi tắt livestream thì tỷ lệ là 5,09. Xem [data-quality-report-stream.md](data-quality-report-stream.md#burst-của-livestream-tiktok).
 
 ### Đơn giản hóa so với Channel thật
 
@@ -479,7 +483,7 @@ Concept drift của livestream (tỷ lệ trả quần áo tăng) thêm ở bư�
 
 Số liệu dưới đây lấy từ lần chạy `configs/default.yaml` qua Docker Compose: `generator-batch` ghi vào MinIO (102 giây), `generator-load` nạp PostgreSQL (3 giây). Sau đó `python -m generator report --source s3://fsds --dsn ... --markdown` chạy trên máy host, đọc Amazon từ MinIO, đọc Walmart và `seller.skus` từ PostgreSQL. Các cột `_truth` lấy từ `run_manifest.json`.
 
-Ảnh chụp màn hình (terminal của lệnh `report`, MinIO console, DBeaver hoặc `psql`) sẽ đặt ở `docs/images/generator/` và nhúng vào đây.
+Ảnh chụp màn hình (terminal của lệnh `report`, MinIO console, DBeaver hoặc `psql`) nằm ở `docs/images/batch/` và được nhúng trong [data-quality-report-batch.md](data-quality-report-batch.md).
 
 Cách đọc từng bảng:
 

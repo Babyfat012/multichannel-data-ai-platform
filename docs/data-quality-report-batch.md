@@ -1,6 +1,6 @@
 # Báo cáo chất lượng dữ liệu của Data Generator (Batch)
 
-Báo cáo này đối chiếu từng dòng rubric "Implement Data Generator, Simulate offline data problems" với số đo thật. Bảng đầy đủ của lệnh `report` nằm ở [generator-design.md, mục Kết quả chạy](generator-design.md#kết-quả-chạy).
+Báo cáo này đối chiếu từng dòng rubric "Implement Data Generator, Simulate offline data problems" với số đo thật. Phần Stream nằm ở [data-quality-report-stream.md](data-quality-report-stream.md). Bảng đầy đủ của lệnh `report` nằm ở [generator-design.md, mục Kết quả chạy](generator-design.md#kết-quả-chạy).
 
 ## Lần chạy
 
@@ -150,11 +150,11 @@ Khoảng một nửa bản trùng của Amazon là bản cũ hơn, mang Order St
 
 ### Nơi lưu
 
-![MinIO console](images/generator/minio-bucket.png)
+![MinIO console](images/batch/minio-bucket.png)
 
-![DBeaver](images/generator/dbeaver-walmart-orders.png)
+![DBeaver](images/batch/dbeaver-walmart-orders.png)
 
-![DBeaver seller.skus](images/generator/dbeaver-seller-skus.png)
+![DBeaver seller.skus](images/batch/dbeaver-seller-skus.png)
 
 | Dataset | Nơi lưu | Định dạng | File | Dung lượng |
 |---|---|---|---|---|
