@@ -29,6 +29,7 @@ Bước nạp chạy riêng bằng lệnh `load-postgres` (xem `generator/load_p
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
@@ -45,7 +46,7 @@ from generator.core.rngs import rng_for
 from generator.core.simulate import Simulator
 from generator.core.storefronts import STOREFRONTS
 from generator.delivery.batch_exports import PRIMARY, plan_exports
-from generator.storage import OutputStore
+from generator.storage import OutputStore, ParquetAppender
 
 LABELS_SCHEMA = pa.schema([
     ("order_line_id", pa.string()),
@@ -66,18 +67,17 @@ class DatasetStats:
     """Số liệu thật của một dataset, ghi vào manifest làm đáp án đối chiếu."""
 
     rows: int = 0
-    keys: set[str] = field(default_factory=set)
+    unique_keys: int = 0
     placements: Counter = field(default_factory=Counter)
     files: int = 0
     bytes: int = 0
 
     def summary(self) -> dict[str, Any]:
-        """Tóm tắt thành dict để ghi JSON (không ghi cả tập khóa)."""
-        unique = len(self.keys)
+        """Tóm tắt thành dict để ghi JSON."""
         return {
             "rows": self.rows,
-            "unique_keys": unique,
-            "duplicate_rate": round(1 - unique / self.rows, 6) if self.rows else 0.0,
+            "unique_keys": self.unique_keys,
+            "duplicate_rate": round(1 - self.unique_keys / self.rows, 6) if self.rows else 0.0,
             "rows_by_placement": dict(self.placements),
             "files": self.files,
             "bytes": self.bytes,
@@ -100,9 +100,15 @@ class BatchRun:
         }
         self.buffers: dict[tuple[str, int], list[RenderedRecord]] = defaultdict(list)
         self.stats: dict[str, DatasetStats] = defaultdict(DatasetStats)
-        self.labels: dict[str, list[Any]] = {"order_line_id": [], "label": [], "delivered_at": [],
-                                             "label_available_at": []}
+        # `labels` và `line_keys` là bộ đệm của một ngày mô phỏng, không phải của cả
+        # lần chạy: `_flush` ghi chúng ra Parquet rồi xóa. Tổng số nhãn phải đếm dần
+        # vì bộ đệm không còn giữ lịch sử.
+        self.labels: dict[str, list[Any]] = self._empty_labels()
         self.line_keys: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        self.label_rows = 0
+        self.label_positives = 0
+        self.labels_writer: ParquetAppender | None = None
+        self.line_keys_writers: dict[str, ParquetAppender] = {}
         self.category_labels: dict[str, Counter] = defaultdict(Counter)
         self.orders_by_storefront: Counter = Counter()
         # Số liệu Sale Event, tách theo ngày sale và ngày thường (khóa True/False).
@@ -114,14 +120,23 @@ class BatchRun:
 
     def run(self) -> dict[str, Any]:
         """Sinh toàn bộ Batch, ghi file và trả về manifest."""
-        for day in range(1, self.config.scale.days_history + 1):
-            rng = rng_for(self.config.seed, "batch_exports", day)
-            sale_day = self.simulator.is_sale_day(day)
-            self.sale_days += sale_day
-            for order in self.simulator.simulate_day(day):
-                self._handle_order(order, rng, sale_day)
-            self._flush(up_to_day=day)
-        self._write_ground_truth()
+        with ExitStack() as files:
+            # Mở trước vòng lặp và đóng sau nó: `ExitStack` đảm bảo mọi file Parquet
+            # được đóng (ghi footer) kể cả khi một ngày mô phỏng ném lỗi.
+            self.labels_writer = files.enter_context(
+                self.store.parquet_writer("ground-truth/labels/labels.parquet", LABELS_SCHEMA))
+            self.line_keys_writers = {
+                channel: files.enter_context(self.store.parquet_writer(
+                    f"ground-truth/order_line_keys/{channel}.parquet", LINE_KEYS_SCHEMA))
+                for channel in self.renderers
+            }
+            for day in range(1, self.config.scale.days_history + 1):
+                rng = rng_for(self.config.seed, "batch_exports", day)
+                sale_day = self.simulator.is_sale_day(day)
+                self.sale_days += sale_day
+                for order in self.simulator.simulate_day(day):
+                    self._handle_order(order, rng, sale_day)
+                self._flush(up_to_day=day)
         self._write_skus()
         manifest = self._manifest()
         self.store.write_json("run_manifest.json", manifest)
@@ -144,7 +159,12 @@ class BatchRun:
             self.buffers[(renderer.channel, placement.export_day)].append(rendered)
             stats = self.stats[f"{renderer.channel}.{renderer.dataset}"]
             stats.rows += 1
-            stats.keys.add(rendered.key)
+            # Đếm khóa duy nhất bằng số bản chính, không bằng một set khóa: mỗi Order
+            # có đúng một placement `primary` (xem `plan_exports`) và `rendered.key`
+            # chỉ phụ thuộc Order, nên bản trùng luôn lặp lại khóa của bản chính.
+            # Set khóa ở quy mô 100 GB là ~117 triệu string trong RAM, chỉ để lấy
+            # `len()`. `tests/test_batch.py` khóa bất biến này bằng một lần đối chiếu.
+            stats.unique_keys += placement.kind == PRIMARY
             stats.placements[placement.kind] += 1
 
     def _collect_sale_stats(self, order: Order, sale_day: bool) -> None:
@@ -166,6 +186,8 @@ class BatchRun:
             self.labels["label"].append(line.label)
             self.labels["delivered_at"].append(order.delivered_at)
             self.labels["label_available_at"].append(available_at)
+            self.label_rows += 1
+            self.label_positives += line.label
             category = self.simulator.catalog.skus_by_id[line.sku_id].category
             self.category_labels[category][line.label] += 1
             if STOREFRONTS[order.storefront_id].channel == "amazon":
@@ -186,6 +208,26 @@ class BatchRun:
             stats = self.stats[f"{channel}.{renderer.dataset}"]
             stats.bytes += self.store.write_jsonl(relative, (r.record for r in records))
             stats.files += 1
+        self._flush_ground_truth()
+
+    def _flush_ground_truth(self) -> None:
+        """Ghi bộ đệm nhãn và ánh xạ khóa của ngày vừa sinh, rồi xóa khỏi RAM.
+
+        Mỗi lần gọi tạo một row group trên mỗi file. Nhịp một lần mỗi ngày mô phỏng
+        (180 lần) cho khoảng một triệu dòng mỗi row group ở quy mô 100 GB, đúng vùng
+        Spark đọc hiệu quả, và không cần thêm bộ đếm nào ngoài nhịp `_flush` đã có.
+        """
+        self.labels_writer.write(self.labels)
+        self.labels = self._empty_labels()
+        for channel, rows in self.line_keys.items():
+            columns = {name: [row[name] for row in rows] for name in LINE_KEYS_SCHEMA.names}
+            self.line_keys_writers[channel].write(columns)
+        self.line_keys.clear()
+
+    @staticmethod
+    def _empty_labels() -> dict[str, list[Any]]:
+        """Bộ đệm nhãn rỗng, một list cho mỗi cột của `LABELS_SCHEMA`."""
+        return {name: [] for name in LABELS_SCHEMA.names}
 
     def _write_skus(self) -> None:
         """Ghi danh mục SKU của Seller, sẽ nạp vào bảng `seller.skus`.
@@ -201,16 +243,9 @@ class BatchRun:
         ]
         stats = self.stats["seller.skus"]
         stats.rows = len(rows)
-        stats.keys = {row["sku"] for row in rows}
+        stats.unique_keys = len({row["sku"] for row in rows})
         stats.bytes = self.store.write_jsonl("pg-load/seller.skus/part-00000.jsonl", rows)
         stats.files = 1
-
-    def _write_ground_truth(self) -> None:
-        """Ghi bảng nhãn và bảng ánh xạ mã Order Line sang mã gốc của Channel."""
-        self.store.write_parquet("ground-truth/labels/labels.parquet", self.labels, LABELS_SCHEMA)
-        for channel, rows in self.line_keys.items():
-            columns = {name: [row[name] for row in rows] for name in LINE_KEYS_SCHEMA.names}
-            self.store.write_parquet(f"ground-truth/order_line_keys/{channel}.parquet", columns, LINE_KEYS_SCHEMA)
 
     def _prime_day_summary(self) -> dict[str, Any] | None:
         """Số đo thật của Sale Event, đặt cạnh cấu hình để đối chiếu.
@@ -247,8 +282,8 @@ class BatchRun:
 
     def _manifest(self) -> dict[str, Any]:
         """Tập hợp đáp án của lần chạy: cấu hình, số dòng, lỗi đã chèn, nhãn."""
-        n_labels = len(self.labels["label"])
-        positives = sum(self.labels["label"])
+        n_labels = self.label_rows
+        positives = self.label_positives
         switch_day = self.config.offline_problems.amazon_orders_api_switch_day
         return {
             "config": self.config.to_dict(),

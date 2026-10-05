@@ -9,11 +9,42 @@ from __future__ import annotations
 
 import io
 import json
+from contextlib import contextmanager
 from typing import Any, Iterable, Iterator
 
 import fsspec
 import pyarrow as pa
 import pyarrow.parquet as pq
+
+
+class ParquetAppender:
+    """Bút ghi dần vào một file Parquet đang mở: mỗi lần `write` là một row group.
+
+    Row group là khối dữ liệu độc lập mà Spark đọc hoặc bỏ qua theo thống kê
+    min/max của nó. Nhiều khối bé thì metadata nở và Spark phải mở nhiều khối;
+    một khối khổng lồ thì bên ghi phải giữ cả khối trong RAM. Mốc thường dùng là
+    khoảng một triệu dòng mỗi khối.
+    """
+
+    def __init__(self, writer: pq.ParquetWriter, schema: pa.Schema) -> None:
+        """Bọc một `ParquetWriter` đã mở. Vòng đời file do `OutputStore` giữ."""
+        self._writer = writer
+        self._schema = schema
+        self.rows = 0
+        self.row_groups = 0
+
+    def write(self, columns: dict[str, list[Any]]) -> int:
+        """Ghi một khối dạng cột thành row group mới. Trả về số dòng đã ghi.
+
+        Khối rỗng bị bỏ qua: một row group không dòng nào chỉ làm nở metadata.
+        """
+        rows = len(next(iter(columns.values()), ()))
+        if not rows:
+            return 0
+        self._writer.write_table(pa.table(columns, schema=self._schema))
+        self.rows += rows
+        self.row_groups += 1
+        return rows
 
 
 class OutputStore:
@@ -49,6 +80,21 @@ class OutputStore:
         sink = pa.BufferOutputStream()
         pq.write_table(table, sink)
         return self._write_bytes(relative, sink.getvalue().to_pybytes())
+
+    @contextmanager
+    def parquet_writer(self, relative: str, schema: pa.Schema) -> Iterator[ParquetAppender]:
+        """Mở `relative` để ghi dần, trả về `ParquetAppender` dùng trong khối `with`.
+
+        Dùng khi bảng quá lớn để giữ trọn trong RAM (xem `write_parquet` cho bảng
+        nhỏ). `OutputStore` giữ trách nhiệm đóng file: footer Parquet chỉ được ghi
+        lúc `close`, nên một writer không đóng sẽ để lại file Spark đọc không được.
+        Khối `with` đảm bảo điều đó cả khi thân vòng lặp ném lỗi.
+        """
+        full = self.path(relative)
+        self.fs.makedirs(full.rsplit("/", 1)[0], exist_ok=True)
+        with self.fs.open(full, "wb") as sink:
+            with pq.ParquetWriter(sink, schema) as writer:
+                yield ParquetAppender(writer, schema)
 
     def glob(self, pattern: str) -> list[str]:
         """Các đường dẫn tương đối (so với gốc) khớp `pattern`, đã sắp xếp."""

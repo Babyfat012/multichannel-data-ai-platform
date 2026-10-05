@@ -73,3 +73,40 @@ def test_seller_skus_cover_catalog_without_hidden_propensity(tiny_config):
     assert len(rows) == tiny_config.scale.n_skus == manifest["datasets"]["seller.skus"]["rows"]
     assert {"sku", "category", "base_price_usd"} <= set(rows[0])
     assert "defect_propensity" not in rows[0]
+
+
+def test_unique_keys_equals_primary_placements_so_the_key_set_is_unneeded(tiny_config):
+    """Khóa bất biến cho phép `DatasetStats` đếm khóa duy nhất mà không giữ set khóa.
+
+    `BatchRun` không còn gom `rendered.key` vào một set (ở quy mô 100 GB là ~117
+    triệu string trong RAM) mà lấy `unique_keys` từ số placement `primary`. Test này
+    dựng lại tập khóa thật từ file đầu ra và đối chiếu, nên nếu một Channel sau này
+    sinh khóa phụ thuộc ngày export, hoặc `plan_exports` cho hơn một bản chính, thì
+    test đổ chứ không phải `duplicate_rate` trong manifest âm thầm sai.
+    """
+    manifest = BatchRun(tiny_config).run()
+    root = Path(tiny_config.storage.output_root)
+    key_fields = {"amazon.orders": ("AmazonOrderId", "orderId"), "walmart.orders": ("purchase_order_id",)}
+
+    for dataset, pattern in [
+        ("amazon.orders", "source-exports/channel=amazon/dataset=orders/export_date=*/part-00000.jsonl"),
+        ("walmart.orders", "pg-load/walmart.orders/export_date=*/part-00000.jsonl"),
+    ]:
+        summary = manifest["datasets"][dataset]
+        keys = {
+            next(record[f] for f in key_fields[dataset] if f in record)
+            for part in sorted(root.glob(pattern))
+            for record in map(json.loads, part.read_text().splitlines())
+        }
+        assert len(keys) == summary["rows_by_placement"]["primary"], dataset
+        assert len(keys) == summary["unique_keys"], dataset
+
+
+def test_ground_truth_files_have_one_row_group_per_simulated_day_with_rows(tiny_config):
+    """Nhãn và ánh xạ khóa được ghi dần, nên RAM theo một ngày chứ theo cả lần chạy."""
+    BatchRun(tiny_config).run()
+    root = Path(tiny_config.storage.output_root)
+
+    line_keys = pq.ParquetFile(root / "ground-truth/order_line_keys/amazon.parquet")
+    assert 1 < line_keys.num_row_groups <= tiny_config.scale.days_history
+    assert line_keys.metadata.num_rows > 0
