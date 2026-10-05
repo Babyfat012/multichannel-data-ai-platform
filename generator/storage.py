@@ -17,6 +17,69 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 
+class JsonlAppender:
+    """Bút ghi dần vào một file JSON Lines đang mở. Đếm số dòng và số byte đã ghi."""
+
+    def __init__(self, handle: Any) -> None:
+        """Bọc một file đã mở ở chế độ nhị phân. Vòng đời file do pool giữ."""
+        self._handle = handle
+        self.rows = 0
+        self.bytes = 0
+
+    def write(self, record: dict[str, Any]) -> int:
+        """Ghi một bản ghi thành một dòng JSON. Trả về số byte của dòng đó."""
+        line = json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n"
+        data = line.encode("utf-8")
+        self._handle.write(data)
+        self.rows += 1
+        self.bytes += len(data)
+        return len(data)
+
+    def close(self) -> tuple[int, int]:
+        """Đóng file, trả về `(số dòng, số byte)` đã ghi."""
+        self._handle.close()
+        return self.rows, self.bytes
+
+
+class JsonlWriterPool:
+    """Giữ nhiều file JSON Lines mở cùng lúc, mỗi file một khóa do bên gọi đặt.
+
+    Dùng khi các file phải nhận dòng xen kẽ nhau nên không file nào gom trọn được
+    trong RAM. Ví dụ ở Batch: một Order tạo hôm nay có thể chỉ export sau hai tuần
+    (lúc giao xong), nên cả hai tuần ngày export đều đang chờ dòng mới. Gom theo
+    ngày thì RAM tỉ lệ với số đơn mỗi ngày; mở sẵn file thì RAM không đổi.
+
+    Bên gọi đóng từng khóa khi biết nó không còn nhận dòng nào nữa. Pool đóng mọi
+    file còn lại khi ra khỏi khối `with` của `OutputStore.jsonl_writers`.
+    """
+
+    def __init__(self, store: OutputStore) -> None:
+        """Pool rỗng, ghi vào `store`."""
+        self._store = store
+        self._open: dict[Any, JsonlAppender] = {}
+
+    def keys(self) -> list[Any]:
+        """Các khóa đang mở. Trả về bản chụp để bên gọi vừa duyệt vừa đóng được."""
+        return list(self._open)
+
+    def write(self, key: Any, relative: str, record: dict[str, Any]) -> int:
+        """Ghi `record` vào file của `key`, mở `relative` nếu đây là dòng đầu tiên."""
+        appender = self._open.get(key)
+        if appender is None:
+            appender = self._open[key] = JsonlAppender(self._store.open_write(relative))
+        return appender.write(record)
+
+    def close(self, key: Any) -> tuple[int, int]:
+        """Đóng file của `key`, trả về `(số dòng, số byte)`. Khóa chưa mở trả `(0, 0)`."""
+        appender = self._open.pop(key, None)
+        return appender.close() if appender is not None else (0, 0)
+
+    def close_all(self) -> None:
+        """Đóng mọi file còn mở. Gọi khi kết thúc, kể cả khi đang có lỗi."""
+        while self._open:
+            self.close(next(iter(self._open)))
+
+
 class ParquetAppender:
     """Bút ghi dần vào một file Parquet đang mở: mỗi lần `write` là một row group.
 
@@ -80,6 +143,21 @@ class OutputStore:
         sink = pa.BufferOutputStream()
         pq.write_table(table, sink)
         return self._write_bytes(relative, sink.getvalue().to_pybytes())
+
+    def open_write(self, relative: str) -> Any:
+        """Mở `relative` để ghi nhị phân, tự tạo thư mục cha. Bên gọi phải đóng."""
+        full = self.path(relative)
+        self.fs.makedirs(full.rsplit("/", 1)[0], exist_ok=True)
+        return self.fs.open(full, "wb")
+
+    @contextmanager
+    def jsonl_writers(self) -> Iterator[JsonlWriterPool]:
+        """Mở một `JsonlWriterPool`; mọi file còn lại được đóng khi ra khỏi khối."""
+        pool = JsonlWriterPool(self)
+        try:
+            yield pool
+        finally:
+            pool.close_all()
 
     @contextmanager
     def parquet_writer(self, relative: str, schema: pa.Schema) -> Iterator[ParquetAppender]:

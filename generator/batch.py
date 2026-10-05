@@ -4,13 +4,16 @@ Luồng xử lý cho mỗi ngày mô phỏng `d` từ 1 tới `days_history`:
 
     1. Lõi sinh các Order tạo trong ngày d (kèm cả tương lai của chúng).
     2. Lớp export quyết định mỗi Order nằm ở ngày export nào, có bản trùng không.
-    3. Renderer của Channel vẽ Order thành bản ghi gốc, bỏ vào bộ đệm theo ngày export.
-    4. Ghi ra mọi ngày export <= d, rồi xóa khỏi bộ đệm.
+    3. Renderer của Channel vẽ Order thành bản ghi gốc, ghi thẳng vào file của ngày export.
+    4. Đóng file của mọi ngày export <= d.
 
 Vì sao bước 4 an toàn: một Order tạo ngày d chỉ xuất hiện ở ngày export >= d
 (không thể export một Order trước khi nó tồn tại). Nên khi đã sinh xong ngày d,
-các ngày export <= d không còn nhận thêm bản ghi nào. Nhờ vậy bộ đệm chỉ giữ
-Order của khoảng hai tuần gần nhất, không phải cả 180 ngày.
+các ngày export <= d không còn nhận thêm bản ghi nào.
+
+Vì sao ghi thẳng thay vì gom theo ngày: một Order có thể chỉ export sau hai tuần
+(lúc giao xong), nên gom lại thì RAM phải giữ hai tuần bản ghi — tỉ lệ với số đơn
+mỗi ngày, tức ~33 GB ở quy mô 100 GB. Giữ sẵn ~14 file mở thì RAM không đổi.
 
 Bố cục đầu ra (dưới `storage.output_root`):
 
@@ -38,7 +41,7 @@ import numpy as np
 import pyarrow as pa
 
 from generator.channels.amazon import SCHEMA_2026, AmazonOrdersRenderer
-from generator.channels.base import OBJECT_STORE, ChannelRenderer, RenderedRecord
+from generator.channels.base import OBJECT_STORE, ChannelRenderer
 from generator.channels.walmart import WalmartOrdersRenderer
 from generator.config import GeneratorConfig
 from generator.core.model import Order
@@ -46,7 +49,7 @@ from generator.core.rngs import rng_for
 from generator.core.simulate import Simulator
 from generator.core.storefronts import STOREFRONTS
 from generator.delivery.batch_exports import PRIMARY, plan_exports
-from generator.storage import OutputStore, ParquetAppender
+from generator.storage import JsonlWriterPool, OutputStore, ParquetAppender
 
 LABELS_SCHEMA = pa.schema([
     ("order_line_id", pa.string()),
@@ -98,7 +101,9 @@ class BatchRun:
             "amazon": AmazonOrdersRenderer(config),
             "walmart": WalmartOrdersRenderer(config),
         }
-        self.buffers: dict[tuple[str, int], list[RenderedRecord]] = defaultdict(list)
+        # Không có bộ đệm bản ghi: `jsonl` giữ sẵn một file mở cho mỗi ngày export
+        # đang chờ dòng mới, nên RAM không tỉ lệ với số đơn mỗi ngày.
+        self.jsonl: JsonlWriterPool | None = None
         self.stats: dict[str, DatasetStats] = defaultdict(DatasetStats)
         # `labels` và `line_keys` là bộ đệm của một ngày mô phỏng, không phải của cả
         # lần chạy: `_flush` ghi chúng ra Parquet rồi xóa. Tổng số nhãn phải đếm dần
@@ -130,6 +135,7 @@ class BatchRun:
                     f"ground-truth/order_line_keys/{channel}.parquet", LINE_KEYS_SCHEMA))
                 for channel in self.renderers
             }
+            self.jsonl = files.enter_context(self.store.jsonl_writers())
             for day in range(1, self.config.scale.days_history + 1):
                 rng = rng_for(self.config.seed, "batch_exports", day)
                 sale_day = self.simulator.is_sale_day(day)
@@ -156,7 +162,8 @@ class BatchRun:
             {**keys, "storefront_id": order.storefront_id} for keys in renderer.line_keys(order))
         for placement in plan_exports(order, self.config, rng):
             rendered = renderer.render(order, placement.as_of, placement.export_day)
-            self.buffers[(renderer.channel, placement.export_day)].append(rendered)
+            key = (renderer.channel, placement.export_day)
+            self.jsonl.write(key, self._export_path(renderer, placement.export_day), rendered.record)
             stats = self.stats[f"{renderer.channel}.{renderer.dataset}"]
             stats.rows += 1
             # Đếm khóa duy nhất bằng số bản chính, không bằng một set khóa: mỗi Order
@@ -193,20 +200,28 @@ class BatchRun:
             if STOREFRONTS[order.storefront_id].channel == "amazon":
                 self.amazon_labels[sale_day][line.label] += 1
 
+    def _export_path(self, renderer: ChannelRenderer, export_day: int) -> str:
+        """Đường dẫn file của một ngày export, theo nơi lưu mà Channel dùng."""
+        export_date = self.config.day_start(export_day).date().isoformat()
+        if renderer.storage == OBJECT_STORE:
+            return (f"source-exports/channel={renderer.channel}/dataset={renderer.dataset}/"
+                    f"export_date={export_date}/part-00000.jsonl")
+        return f"pg-load/{renderer.channel}.{renderer.dataset}/export_date={export_date}/part-00000.jsonl"
+
     def _flush(self, up_to_day: int) -> None:
-        """Ghi ra đĩa mọi ngày export <= `up_to_day` và xóa chúng khỏi bộ đệm."""
-        ready = [k for k in self.buffers if k[1] <= up_to_day]
-        for channel, export_day in sorted(ready):
+        """Đóng mọi file có ngày export <= `up_to_day` và cộng số byte vào manifest.
+
+        An toàn vì một Order tạo ngày d chỉ export ở ngày >= d, nên khi đã sinh xong
+        ngày d thì các file ngày <= d không còn nhận dòng nào nữa (xem docstring đầu
+        module). Đóng file ở đây cũng là lúc duy nhất biết được số byte thật của nó.
+        """
+        ready = [k for k in self.jsonl.keys() if k[1] <= up_to_day]
+        for key in sorted(ready):
+            channel, _ = key
             renderer = self.renderers[channel]
-            records = self.buffers.pop((channel, export_day))
-            export_date = self.config.day_start(export_day).date().isoformat()
-            if renderer.storage == OBJECT_STORE:
-                relative = (f"source-exports/channel={channel}/dataset={renderer.dataset}/"
-                            f"export_date={export_date}/part-00000.jsonl")
-            else:
-                relative = f"pg-load/{channel}.{renderer.dataset}/export_date={export_date}/part-00000.jsonl"
+            _, written = self.jsonl.close(key)
             stats = self.stats[f"{channel}.{renderer.dataset}"]
-            stats.bytes += self.store.write_jsonl(relative, (r.record for r in records))
+            stats.bytes += written
             stats.files += 1
         self._flush_ground_truth()
 
