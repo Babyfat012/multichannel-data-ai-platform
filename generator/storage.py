@@ -57,21 +57,30 @@ class JsonlWriterPool:
         """Pool rỗng, ghi vào `store`."""
         self._store = store
         self._open: dict[Any, JsonlAppender] = {}
+        self._closed: set[Any] = set()
 
     def keys(self) -> list[Any]:
         """Các khóa đang mở. Trả về bản chụp để bên gọi vừa duyệt vừa đóng được."""
         return list(self._open)
 
     def write(self, key: Any, relative: str, record: dict[str, Any]) -> int:
-        """Ghi `record` vào file của `key`, mở `relative` nếu đây là dòng đầu tiên."""
+        """Ghi `record` vào file của `key`, mở `relative` nếu đây là dòng đầu tiên.
+
+        Ghi vào một khóa đã đóng là lỗi lập trình, không phải việc cần làm lại: mở
+        lại `relative` sẽ xóa trắng file đã ghi xong. Nên ném lỗi ngay thay vì âm
+        thầm mất dữ liệu — bên gọi chỉ được đóng khóa khi chắc nó hết dòng.
+        """
         appender = self._open.get(key)
         if appender is None:
+            if key in self._closed:
+                raise ValueError(f"khóa {key!r} đã đóng, ghi thêm sẽ xóa trắng {relative}")
             appender = self._open[key] = JsonlAppender(self._store.open_write(relative))
         return appender.write(record)
 
     def close(self, key: Any) -> tuple[int, int]:
         """Đóng file của `key`, trả về `(số dòng, số byte)`. Khóa chưa mở trả `(0, 0)`."""
         appender = self._open.pop(key, None)
+        self._closed.add(key)
         return appender.close() if appender is not None else (0, 0)
 
     def close_all(self) -> None:

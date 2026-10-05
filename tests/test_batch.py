@@ -110,3 +110,24 @@ def test_ground_truth_files_have_one_row_group_per_simulated_day_with_rows(tiny_
     line_keys = pq.ParquetFile(root / "ground-truth/order_line_keys/amazon.parquet")
     assert 1 < line_keys.num_row_groups <= tiny_config.scale.days_history
     assert line_keys.metadata.num_rows > 0
+
+
+def test_manifest_bytes_match_the_real_size_of_the_export_files(tiny_config):
+    """`datasets[*].bytes` là thước đo ngưỡng 100 GB, nên phải bằng byte thật trên đĩa.
+
+    Số byte giờ đến từ `JsonlWriterPool.close()` lúc đóng file, không còn từ một lần
+    `write_jsonl` gom cả ngày. Test này là lý do dám dùng tổng đó làm bằng chứng
+    đạt ngưỡng thay vì `du`.
+    """
+    manifest = BatchRun(tiny_config).run()
+    root = Path(tiny_config.storage.output_root)
+    patterns = {
+        "amazon.orders": "source-exports/channel=amazon/dataset=orders/export_date=*/part-00000.jsonl",
+        "walmart.orders": "pg-load/walmart.orders/export_date=*/part-00000.jsonl",
+        "seller.skus": "pg-load/seller.skus/part-00000.jsonl",
+    }
+    for dataset, pattern in patterns.items():
+        parts = sorted(root.glob(pattern))
+        assert parts, dataset
+        assert manifest["datasets"][dataset]["bytes"] == sum(p.stat().st_size for p in parts), dataset
+        assert manifest["datasets"][dataset]["files"] == len(parts), dataset

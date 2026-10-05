@@ -59,3 +59,21 @@ def test_orders_after_cutoff_are_not_in_batch(tiny_config):
     rng = rng_for(0, "test")
     for order in Simulator(tiny_config).simulate_day(after_cutoff_day):
         assert plan_exports(order, tiny_config, rng) == []
+
+
+def test_order_created_in_the_last_second_before_cutoff_is_left_out(tiny_config):
+    """Order tạo trong giây cuối của lịch sử bị loại, không làm `status_at` ném lỗi.
+
+    Ảnh chụp của Batch lấy ở `cutoff - 1s`, nên Order tạo sau mốc đó chưa tồn tại
+    lúc chụp. Xác suất mỗi Order là 1/86.400: ở `default.yaml` (4.000 Order/ngày)
+    gần như không gặp, nhưng ở `scale-100gb.yaml` (852.099 Order/ngày) thì trung
+    bình ~10 Order mỗi lần chạy. Không có test này thì lỗi chỉ lộ ra sau vài giờ.
+    """
+    order = next(iter(Simulator(tiny_config).simulate_day(1)))
+    rng = rng_for(0, "test")
+    as_of = tiny_config.cutoff - timedelta(seconds=1)
+
+    for offset, expected in [(timedelta(0), True), (timedelta(microseconds=1), False),
+                             (timedelta(milliseconds=500), False)]:
+        late = dataclasses.replace(order, created_at=as_of + offset)
+        assert bool(plan_exports(late, tiny_config, rng)) is expected, offset

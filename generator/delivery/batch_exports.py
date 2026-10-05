@@ -63,13 +63,20 @@ def end_of_day(config: GeneratorConfig, day: int) -> datetime:
 def plan_exports(order: Order, config: GeneratorConfig, rng: np.random.Generator) -> list[ExportPlacement]:
     """Trả về các lần Order xuất hiện trong Batch: bản chính và có thể một bản trùng.
 
-    Order tạo sau `cutoff` không thuộc Batch nên trả về danh sách rỗng.
+    Ảnh chụp của Batch lấy ở giây cuối trước `cutoff`. Order tạo sau thời điểm đó
+    chưa tồn tại lúc chụp nên không thuộc Batch, trả về danh sách rỗng.
+
+    Mốc loại bỏ phải là `cutoff - 1s`, không phải `cutoff`: Order tạo trong giây
+    cuối cùng của lịch sử nằm giữa hai mốc đó, lọt qua cửa rồi làm `status_at` ném
+    lỗi "chưa tồn tại". Xác suất mỗi Order là 1/86.400 nên ở 4.000 Order/ngày hầu
+    như không gặp, nhưng ở 852.099 Order/ngày thì trung bình ~10 Order mỗi lần chạy,
+    tức lần chạy 100 GB gần như chắc chắn chết.
     """
-    cutoff = config.cutoff
-    if order.created_at >= cutoff:
+    as_of = config.cutoff - timedelta(seconds=1)
+    if order.created_at > as_of:
         return []
 
-    last_change = order.status_at(cutoff - timedelta(seconds=1))
+    last_change = order.status_at(as_of)
     primary_day = day_of(config, last_change.at)
     placements = [ExportPlacement(primary_day, end_of_day(config, primary_day), PRIMARY)]
 

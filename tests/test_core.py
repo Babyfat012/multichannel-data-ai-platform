@@ -31,7 +31,9 @@ def test_a_day_does_not_depend_on_previous_days(tiny_config):
     """Sinh ngày 5 trực tiếp hay sau khi đã sinh ngày 1 đến 4 đều ra cùng kết quả."""
     warm = Simulator(tiny_config)
     for day in range(1, 5):
-        warm.simulate_day(day)
+        # Phải duyệt hết: `simulate_day` là generator, không duyệt thì không sinh gì
+        # và test trở thành rỗng ruột.
+        assert list(warm.simulate_day(day))
     assert _fingerprint(warm.simulate_day(5)) == _fingerprint(Simulator(tiny_config).simulate_day(5))
 
 
