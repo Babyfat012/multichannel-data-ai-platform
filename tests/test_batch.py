@@ -15,8 +15,8 @@ def test_batch_writes_expected_layout_and_manifest(tiny_config):
     manifest = BatchRun(tiny_config).run()
     root = Path(tiny_config.storage.output_root)
 
-    amazon_parts = sorted(root.glob("source-exports/channel=amazon/dataset=orders/export_date=*/part-00000.jsonl"))
-    walmart_parts = sorted(root.glob("pg-load/walmart.orders/export_date=*/part-00000.jsonl"))
+    amazon_parts = sorted(root.glob("source-exports/channel=amazon/dataset=orders/export_date=*/part-sim*.jsonl"))
+    walmart_parts = sorted(root.glob("pg-load/walmart.orders/export_date=*/part-sim*.jsonl"))
     assert amazon_parts and walmart_parts
     assert json.loads((root / "run_manifest.json").read_text()) == manifest
 
@@ -30,7 +30,7 @@ def test_amazon_partitions_before_switch_use_v0_and_after_use_new_schema(tiny_co
     BatchRun(tiny_config).run()
     root = Path(tiny_config.storage.output_root)
     switch_date = tiny_config.day_start(tiny_config.offline_problems.amazon_orders_api_switch_day).date().isoformat()
-    for part in root.glob("source-exports/channel=amazon/dataset=orders/export_date=*/part-00000.jsonl"):
+    for part in root.glob("source-exports/channel=amazon/dataset=orders/export_date=*/part-sim*.jsonl"):
         export_date = part.parent.name.removeprefix("export_date=")
         first = json.loads(part.read_text().splitlines()[0])
         expected_key = "AmazonOrderId" if export_date < switch_date else "orderId"
@@ -38,19 +38,24 @@ def test_amazon_partitions_before_switch_use_v0_and_after_use_new_schema(tiny_co
 
 
 def test_no_labels_yet_when_history_is_shorter_than_window(tiny_config):
-    """12 ngày lịch sử ngắn hơn cửa sổ 30 ngày, nên chưa dòng nào biết nhãn."""
+    """12 ngày lịch sử ngắn hơn cửa sổ 30 ngày, nên chưa dòng nào biết nhãn.
+
+    Ngày không có nhãn thì không tạo file Parquet nào, nên ở đây cả thư mục vắng.
+    Thứ nói "ngày đó đã xong" là tem, không phải sự có mặt của file.
+    """
     BatchRun(tiny_config).run()
-    table = pq.read_table(Path(tiny_config.storage.output_root) / "ground-truth/labels/labels.parquet")
-    assert table.num_rows == 0
-    assert str(table.schema.field("label").type) == "int8"
+    assert not sorted(Path(tiny_config.storage.output_root).glob("ground-truth/labels/*.parquet"))
 
 
 def test_labels_only_include_lines_known_before_cutoff(tiny_config):
     scale = dataclasses.replace(tiny_config.scale, days_history=40, orders_per_day=20)
     config = dataclasses.replace(tiny_config, scale=scale)
     BatchRun(config).run()
-    table = pq.read_table(Path(config.storage.output_root) / "ground-truth/labels/labels.parquet")
+    table = pq.read_table(Path(config.storage.output_root) / "ground-truth/labels")
     assert table.num_rows > 0
+    # Kiểu int8 đến từ `LABELS_SCHEMA`; không truyền schema thì pyarrow đoán kiểu và
+    # một ngày không nhãn nào sẽ thành kiểu `null`, làm Spark đọc lệch kiểu cột.
+    assert str(table.schema.field("label").type) == "int8"
     assert set(table.column("label").to_pylist()) <= {0, 1}
     assert max(table.column("label_available_at").to_pylist()) <= config.cutoff
 
@@ -89,8 +94,8 @@ def test_unique_keys_equals_primary_placements_so_the_key_set_is_unneeded(tiny_c
     key_fields = {"amazon.orders": ("AmazonOrderId", "orderId"), "walmart.orders": ("purchase_order_id",)}
 
     for dataset, pattern in [
-        ("amazon.orders", "source-exports/channel=amazon/dataset=orders/export_date=*/part-00000.jsonl"),
-        ("walmart.orders", "pg-load/walmart.orders/export_date=*/part-00000.jsonl"),
+        ("amazon.orders", "source-exports/channel=amazon/dataset=orders/export_date=*/part-sim*.jsonl"),
+        ("walmart.orders", "pg-load/walmart.orders/export_date=*/part-sim*.jsonl"),
     ]:
         summary = manifest["datasets"][dataset]
         keys = {
@@ -102,14 +107,22 @@ def test_unique_keys_equals_primary_placements_so_the_key_set_is_unneeded(tiny_c
         assert len(keys) == summary["unique_keys"], dataset
 
 
-def test_ground_truth_files_have_one_row_group_per_simulated_day_with_rows(tiny_config):
-    """Nhãn và ánh xạ khóa được ghi dần, nên RAM theo một ngày chứ theo cả lần chạy."""
+def test_ground_truth_is_one_parquet_file_per_simulated_day_with_rows(tiny_config):
+    """Nhãn và ánh xạ khóa ghi dần nên RAM theo một ngày, và mỗi ngày đóng file riêng.
+
+    Một file cho cả lần chạy là thứ không thể chạy tiếp được: footer Parquet chỉ ghi
+    lúc đóng, nên bị cắt giữa đường là mất trắng cả file dù 90% dòng đã trên đĩa.
+    Một file mỗi ngày thì ngày nào đóng xong là đọc được ngay.
+    """
     BatchRun(tiny_config).run()
     root = Path(tiny_config.storage.output_root)
 
-    line_keys = pq.ParquetFile(root / "ground-truth/order_line_keys/amazon.parquet")
-    assert 1 < line_keys.num_row_groups <= tiny_config.scale.days_history
-    assert line_keys.metadata.num_rows > 0
+    parts = sorted(root.glob("ground-truth/order_line_keys/amazon/part-sim*.parquet"))
+    assert 1 < len(parts) <= tiny_config.scale.days_history
+    for part in parts:
+        meta = pq.ParquetFile(part)
+        assert meta.num_row_groups == 1, part.name
+        assert meta.metadata.num_rows > 0, part.name
 
 
 def test_manifest_bytes_match_the_real_size_of_the_export_files(tiny_config):
@@ -122,8 +135,8 @@ def test_manifest_bytes_match_the_real_size_of_the_export_files(tiny_config):
     manifest = BatchRun(tiny_config).run()
     root = Path(tiny_config.storage.output_root)
     patterns = {
-        "amazon.orders": "source-exports/channel=amazon/dataset=orders/export_date=*/part-00000.jsonl",
-        "walmart.orders": "pg-load/walmart.orders/export_date=*/part-00000.jsonl",
+        "amazon.orders": "source-exports/channel=amazon/dataset=orders/export_date=*/part-sim*.jsonl",
+        "walmart.orders": "pg-load/walmart.orders/export_date=*/part-sim*.jsonl",
         "seller.skus": "pg-load/seller.skus/part-00000.jsonl",
     }
     for dataset, pattern in patterns.items():

@@ -168,6 +168,58 @@ Các phần sau cần bảng dim có lịch sử (SCD2) và quan hệ dim–fact
 - **PostgreSQL** (giả lập hệ thống của phòng ban khác): mỗi nguồn một schema, gồm `walmart.orders`, `walmart.returns`, `shopee.orders`, `shopee.returns`, `seller.skus`. Bảng đơn giữ body API trong một cột `JSONB` cạnh vài cột khóa, như một hệ thống lưu lại response API. Bảng đơn không có khóa chính, vì bản trùng phải còn nguyên để pipeline phía sau dedup. Tiền tố `raw_` để dành cho tầng Bronze, không dùng ở hệ thống nguồn.
 - **Kafka**: mỗi Channel một topic. Key là mã Order để các event của cùng một Order vào cùng partition. Value là payload gốc của Channel (ví dụ body webhook TikTok Shop).
 
+### Tên file trong một thư mục `export_date=`
+
+Mỗi thư mục `export_date=` chứa **nhiều** file, mỗi file của một ngày mô phỏng:
+
+```
+source-exports/channel=amazon/dataset=orders/export_date=2026-03-14/
+    part-sim00039.jsonl      ← dòng do ngày mô phỏng 39 ghi
+    part-sim00040.jsonl
+    ...
+```
+
+Vì sao không dùng một file dùng chung: một Order được export vào ngày nó **đổi
+trạng thái lần cuối**, muộn hơn ngày tạo tới khoảng 20 ngày (đo được tối đa 18 trên
+736.129 Order; trần cứng từ hằng số vòng đời là `handling` ≤ 3 + `transit` ≤ 6 +
+`completed` ≤ 7 = 16 ngày, cộng `overlap_days` = 3 cho bản trùng). Nên một file dùng
+chung phải mở suốt ~20 ngày mô phỏng và nhận dòng từ cả 20 ngày đó — và lúc ấy không
+có thời điểm nào nói được "ngày d đã xong và nằm trọn trên đĩa".
+
+Phân vùng không đổi: thư mục vẫn là ngày export, nên Spark, Iceberg, Trino và
+`generator/report.py` nhận đúng tập dòng như khi mỗi thư mục chỉ có một file.
+
+### Chạy tiếp sau khi bị cắt
+
+Lần chạy đạt ngưỡng 100 GB mất khoảng 3,2 giờ trên một core, nên nó phải chịu được
+việc bị tắt giữa đường.
+
+| Thành phần | Vai trò |
+|---|---|
+| `_checkpoint/day-NNNNN.json` | Vừa là dấu "ngày NNNNN đã xong", vừa chứa mọi bộ đếm dồn tới hết ngày đó. Gộp một file nên dấu và số không lệch nhịp |
+| `part-simNNNNN.*` | File do ngày NNNNN ghi. Không có dấu của ngày NNNNN thì mấy file này là ghi dở |
+
+Thứ tự ghi là điều kiện sống còn:
+
+```
+đóng file  →  fsync (ép xuống đĩa thật)  →  MỚI ghi dấu (ghi tạm rồi đổi tên)
+```
+
+Làm ngược lại thì mất điện có thể để lại dấu nói "ngày d xong" trong khi file ngày d
+thiếu đuôi; lần chạy sau tin dấu, bỏ qua ngày d, và dữ liệu thiếu **mà manifest vẫn
+cộng ra số đẹp, không lỗi nào báo**.
+
+Lúc khởi động: tìm `d` lớn nhất mà dấu của mọi ngày `1..d` đều có (không lấy số lớn
+nhất tìm được — một dấu đứng lẻ sau khoảng trống không chứng minh được gì), nạp bộ
+đếm từ dấu đó, xóa mọi `part-sim` của ngày `> d`, rồi chạy từ `d+1`. Cờ `--restart`
+bỏ qua dấu và sinh lại từ ngày 1.
+
+Điều này đúng được vì mỗi ngày mô phỏng rút số ngẫu nhiên riêng theo
+`(seed, "batch_exports", day)` và không đọc trạng thái ngày trước
+(`tests/test_core.py::test_a_day_does_not_depend_on_previous_days`), nên ngày `d` cho
+ra cùng dữ liệu dù chạy từ ngày 1 hay nhảy vào từ ngày `d`. `tests/test_batch_resume.py`
+khóa lời hứa đó bằng cách so từng byte giữa một lần chạy liền mạch và một lần bị cắt.
+
 ## 9. Buyer, tiền tệ và thời gian
 
 - Lõi biết buyer đầy đủ (mã, quốc gia, mã bưu chính). Renderer chỉ lộ những gì Channel lộ thật:
@@ -637,6 +689,10 @@ Tỷ lệ trùng = 1 - count(distinct khóa) / count(*). Dedup giữ bản cập
 #### Bảng `volume`
 
 Dung lượng sau khi lưu, theo nơi lưu và định dạng.
+
+Số `files` dưới đây đo trước khi mỗi ngày mô phỏng có file riêng; nay mỗi thư mục
+`export_date=` có nhiều file part nên số file lớn hơn khoảng một bậc, còn `size_mb`
+gần như không đổi. Chạy lại `uv run python -m generator report` để lấy số mới.
 
 | dataset | storage | format | files | size_mb |
 |---|---|---|---|---|

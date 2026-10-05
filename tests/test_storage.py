@@ -1,6 +1,6 @@
 """Test lớp ghi: các bảo đảm của bút ghi dần mà phần Batch dựa vào.
 
-Bốn bảo đảm này là lý do `BatchRun` dám bỏ bộ đệm bản ghi. Nếu một cái vỡ thì
+Các bảo đảm này là lý do `BatchRun` dám bỏ bộ đệm bản ghi và dám tin vào tem. Nếu một cái vỡ thì
 đầu ra ở quy mô 100 GB hỏng sau nhiều giờ chạy, nên chúng được khóa ở đây chứ
 không chỉ kiểm qua một lần chạy Batch nhỏ.
 """
@@ -99,3 +99,49 @@ def test_parquet_writer_closes_the_file_when_the_body_raises(tmp_path):
             raise RuntimeError("ngày mô phỏng lỗi")
 
     assert pq.read_table(tmp_path / "t.parquet").column("n").to_pylist() == [1]
+
+
+def test_write_json_atomic_leaves_no_temporary_file_behind(tmp_path):
+    """Ghi tem xong thì không còn `.tmp` nào, vì tem được đổi tên vào chỗ chứ không chép."""
+    store = OutputStore(str(tmp_path))
+    store.write_json_atomic("_checkpoint/day-00003.json", {"rows": 7})
+
+    assert store.read_json("_checkpoint/day-00003.json") == {"rows": 7}
+    assert not list(tmp_path.rglob("*.tmp"))
+
+
+def test_write_json_atomic_replaces_an_existing_file_completely(tmp_path):
+    """Tem mới đè hẳn tem cũ, không để lại đuôi của nội dung dài hơn trước đó.
+
+    `BatchRun` ghi lại tem của cùng một ngày khi chạy lại, và tem cũ có thể dài hơn
+    tem mới. Nếu phép đè chỉ ghi lên đầu file thì phần đuôi cũ còn lại và JSON vỡ.
+    """
+    store = OutputStore(str(tmp_path))
+    store.write_json_atomic("_checkpoint/day-00001.json", {"long": "x" * 500})
+    store.write_json_atomic("_checkpoint/day-00001.json", {"n": 1})
+
+    assert store.read_json("_checkpoint/day-00001.json") == {"n": 1}
+
+
+def test_write_json_atomic_keeps_floats_exact_through_a_round_trip(tmp_path):
+    """Số thực đi qua tem rồi về phải y nguyên, vì tổng giảm giá được cộng dồn qua tem.
+
+    `amazon_discount_sum` là `float` cộng dồn suốt lần chạy. Lệch một bit ở đây thì
+    manifest của lần chạy bị cắt khác lần chạy liền mạch, và phép so byte sẽ đổ —
+    nên test này nói rõ vì sao nó không đổ.
+    """
+    store = OutputStore(str(tmp_path))
+    value = 1234.5678901234567
+    store.write_json_atomic("x.json", {"discount_sum": value})
+
+    assert store.read_json("x.json")["discount_sum"] == value
+
+
+def test_remove_is_quiet_when_the_file_is_already_gone(tmp_path):
+    """Dọn file của ngày bị cắt phải chịu được việc file đã không còn ở đó."""
+    store = OutputStore(str(tmp_path))
+    store.write_json_atomic("a.json", {})
+    store.remove("a.json")
+    store.remove("a.json")
+
+    assert store.glob("a.json") == []

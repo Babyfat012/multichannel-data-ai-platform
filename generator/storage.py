@@ -3,18 +3,40 @@
 fsspec cho cùng một cách mở file với mọi nơi lưu: `./out/a.json` hay
 `s3://bucket/a.json` đều dùng `fs.open(...)`. Nhờ vậy code sinh dữ liệu
 không cần biết đang ghi vào đâu, chỉ cần đổi `storage.output_root` trong cấu hình.
+
+Về độ bền (durability): `write` của Python chỉ đưa dữ liệu vào bộ nhớ đệm của hệ
+điều hành, chưa chắc xuống đĩa. Mất điện lúc đó là mất phần chưa xuống. Nên mọi
+chỗ ghi mà sau đó có thứ khác dựa vào ("đã ghi xong") đều gọi `_fsync`, và
+`write_json_atomic` dùng ghi-tạm-rồi-đổi-tên để không bao giờ để lại file ghi dở.
+Trên object store thì không có khái niệm này: dữ liệu bền ngay khi `close` tải xong,
+nên `_fsync` trả về False và đó là đúng, không phải lỗi.
 """
 
 from __future__ import annotations
 
 import io
 import json
+import os
 from contextlib import contextmanager
 from typing import Any, Iterable, Iterator
 
 import fsspec
 import pyarrow as pa
 import pyarrow.parquet as pq
+
+
+def _fsync(handle: Any) -> bool:
+    """Ép hệ điều hành ghi nội dung của `handle` xuống đĩa thật, ngay.
+
+    Trả về True nếu làm được. File trên object store không có `fileno()` nên trả
+    về False — ở đó độ bền đến từ lúc `close` tải xong, không từ `fsync`.
+    """
+    try:
+        handle.flush()
+        os.fsync(handle.fileno())
+    except (AttributeError, OSError, ValueError, io.UnsupportedOperation):
+        return False
+    return True
 
 
 class JsonlAppender:
@@ -36,7 +58,13 @@ class JsonlAppender:
         return len(data)
 
     def close(self) -> tuple[int, int]:
-        """Đóng file, trả về `(số dòng, số byte)` đã ghi."""
+        """Ép dữ liệu xuống đĩa rồi đóng file, trả về `(số dòng, số byte)` đã ghi.
+
+        `fsync` trước khi đóng vì bên gọi dùng lúc đóng làm mốc "ngày này xong rồi"
+        và ghi một dấu hiệu bền ngay sau đó. Không `fsync` thì mất điện có thể để
+        lại dấu hiệu "xong" mà file thì thiếu đuôi — mất dữ liệu mà không ai báo.
+        """
+        _fsync(self._handle)
         self._handle.close()
         return self.rows, self.bytes
 
@@ -182,6 +210,65 @@ class OutputStore:
         with self.fs.open(full, "wb") as sink:
             with pq.ParquetWriter(sink, schema) as writer:
                 yield ParquetAppender(writer, schema)
+            # Sau khối `with` của ParquetWriter là lúc footer đã nằm trong `sink`;
+            # `fsync` ở đây để file đọc được sau khi mất điện, cùng lý do như
+            # `JsonlAppender.close`.
+            _fsync(sink)
+
+    def write_json_atomic(self, relative: str, obj: Any) -> int:
+        """Ghi JSON theo kiểu "ghi tạm rồi đổi tên": không bao giờ để lại file ghi dở.
+
+        Ghi thẳng vào `relative` có một khoảng thời gian file đã tồn tại nhưng nội
+        dung còn thiếu. Ai đọc đúng lúc đó sẽ thấy JSON vỡ — hoặc tệ hơn, thấy một
+        file hợp lệ nhưng thiếu dữ liệu. Đổi tên thì khác: hệ thống file làm nó xong
+        hẳn hoặc không làm, không có trạng thái giữa. Nên `relative` chỉ hiện ra khi
+        nội dung đã đầy đủ và đã nằm trên đĩa.
+
+        Thứ tự bắt buộc: ghi tạm -> `fsync` file tạm -> đổi tên -> `fsync` thư mục
+        cha. Thiếu bước cuối thì cái tên mới có thể chưa bền dù nội dung đã bền.
+        """
+        data = json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
+        full = self.path(relative)
+        parent = full.rsplit("/", 1)[0]
+        self.fs.makedirs(parent, exist_ok=True)
+        tmp = f"{full}.tmp"
+        with self.fs.open(tmp, "wb") as f:
+            f.write(data)
+            _fsync(f)
+        if self._is_local:
+            os.replace(tmp, full)
+        else:
+            self.fs.mv(tmp, full)
+        self._fsync_dir(parent)
+        return len(data)
+
+    def read_json(self, relative: str) -> Any:
+        """Đọc một file JSON đã ghi."""
+        with self.fs.open(self.path(relative), "rt", encoding="utf-8") as f:
+            return json.load(f)
+
+    def remove(self, relative: str) -> None:
+        """Xóa một file. Không có file thì coi như xong, không ném lỗi."""
+        try:
+            self.fs.rm_file(self.path(relative))
+        except FileNotFoundError:
+            pass
+
+    @property
+    def _is_local(self) -> bool:
+        """True khi đang ghi vào thư mục local, nơi `os.replace` dùng được."""
+        protocol = self.fs.protocol
+        return "file" in (protocol if isinstance(protocol, tuple) else (protocol,))
+
+    def _fsync_dir(self, path: str) -> None:
+        """Ép thư mục xuống đĩa, để cái tên vừa đổi cũng bền. Bỏ qua nếu không local."""
+        if not self._is_local:
+            return
+        fd = os.open(path, os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
 
     def glob(self, pattern: str) -> list[str]:
         """Các đường dẫn tương đối (so với gốc) khớp `pattern`, đã sắp xếp."""

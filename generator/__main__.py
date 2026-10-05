@@ -28,6 +28,8 @@ def main() -> None:
     batch = sub.add_parser("batch", help="Sinh dữ liệu Batch (lịch sử tới cutoff)")
     batch.add_argument("--config", required=True, help="Đường dẫn file cấu hình YAML")
     batch.add_argument("--output", help="Ghi đè storage.output_root trong cấu hình")
+    batch.add_argument("--restart", action="store_true",
+                       help="Bỏ qua tem của lần chạy cũ và sinh lại từ ngày 1 (mặc định là chạy tiếp)")
 
     load = sub.add_parser("load-postgres", help="Nạp pg-load/ của một lần chạy vào PostgreSQL")
     load.add_argument("--source", required=True, help="Gốc đầu ra của lần chạy (thư mục hoặc s3://...)")
@@ -72,7 +74,7 @@ def _run_batch(args: argparse.Namespace) -> None:
     config = load_config(args.config)
     if args.output:
         config = dataclasses.replace(config, storage=dataclasses.replace(config.storage, output_root=args.output))
-    manifest = BatchRun(config).run()
+    manifest = BatchRun(config).run(restart=args.restart)
     print(json.dumps({k: manifest[k] for k in ("datasets", "labels")}, indent=2, ensure_ascii=False))
     print(f"Ghi tại {config.storage.output_root}")
 
