@@ -13,4 +13,12 @@ __pycache__/
 
 # Ghi chú bàn giao giữa các phiên, bí mật của Docker Compose
 HANDOFF.md
+HANDOFF.*.md
 .env
+
+# Việc cá nhân: kế hoạch coursework, ghi chú học tập, cấu hình Claude
+docs/plan.md
+edai-k11-cw/
+.vibe-wise/
+.claude/
+.pytest_cache/

@@ -38,67 +38,45 @@ Chi tiết xem [docs/Domain.md](docs/Domain.md).
 
 ## 2. Kiến trúc tổng thể
 
-Sơ đồ triển khai cấp cao của module data engineering. Mỗi hộp là một **deployable unit**. Các thành phần không thể triển khai độc lập (như thư viện Delta Lake) không xuất hiện trên sơ đồ. Mũi tên đi theo chiều dữ liệu, nhãn trên mũi tên là dữ liệu truyền đi. Riêng mũi tên "gọi" không truyền dữ liệu (trigger, thao tác của người dùng) đi từ bên gọi tới bên được gọi.
+![Sơ đồ triển khai nền tảng dữ liệu FSDS](docs/diagrams/architecture.png)
 
-```mermaid
-flowchart LR
-    DE(["Data Engineer"])
+Sơ đồ triển khai cấp cao của module data engineering. Mỗi hộp là một **deployable
+unit** — thứ chạy được thành một container riêng. Thư viện không triển khai độc lập
+được (Iceberg là format bảng, không phải service) không xuất hiện trên sơ đồ.
 
-    subgraph SRC["Hệ thống nguồn (mô phỏng các Channel)"]
-        GEN["Data Generator<br/>(container job)"]
-        PGSRC[("PostgreSQL<br/>Source DB")]
-    end
+Cách đọc sơ đồ:
 
-    KAFKA["Kafka"]
-    FLINK["Flink<br/>(streaming job)"]
-    SPARK["Spark<br/>(batch jobs)"]
-    AIRFLOW["Airflow"]
+- **Nhãn trên mũi tên là dữ liệu truyền đi**, không phải tên thao tác.
+- **Luồng Batch đánh số `B1→B6`, luồng Stream đánh số `S1→S3`** theo đúng thứ tự
+  chạy. Đọc lần lượt theo số là đi hết một vòng dữ liệu.
+- **Hai mũi tên nét đứt không phải luồng dữ liệu**: một là điều phối (Airflow submit
+  job cho Spark), một là lineage (Airflow đẩy metadata sang DataHub).
+- Khung `DOCKER COMPOSE · FSDS` bao quanh phần tự dựng bằng Compose. Hộp ngoài khung
+  là hệ thống bên ngoài (Channel) hoặc công cụ chạy trên máy (DBeaver).
 
-    subgraph LAKE["Lakehouse"]
-        MINIO[("MinIO<br/>source-exports | bronze | silver | gold")]
-    end
+Một chỗ đã đơn giản hoá, cần biết khi đọc: **PostgreSQL vẽ một lần** bên phải với
+subtitle `warehouse · dept · catalog` vì nó kiêm ba vai. Vai "hệ thống phòng ban
+khác" chỉ được gọi tên chứ không vẽ mũi tên riêng sang Spark — trong sơ đồ, Spark
+lấy dữ liệu nguồn qua MinIO (`B2`).
 
-    PGWH[("PostgreSQL<br/>Data Warehouse")]
-    DATAHUB["DataHub"]
-
-    GEN -->|"B1: đơn và trả hàng Walmart, Shopee; danh mục SKU"| PGSRC
-    GEN -->|"B2: file export Amazon, TikTok Shop, Shopify; Listing; tỷ giá"| MINIO
-    AIRFLOW -->|"B3: submit job DP1, DP2, DP3"| SPARK
-    PGSRC -->|"B4: dòng dữ liệu thô"| SPARK
-    MINIO -->|"B5: file export và bảng bronze/silver"| SPARK
-    SPARK -->|"B6: bảng raw_, stg_, dim_, fact_, feat_ (Delta)"| MINIO
-    SPARK -->|"B7: bảng gold cho phân tích"| PGWH
-
-    GEN -->|"S1: event trạng thái đơn và trả hàng (có burst, trễ, trùng)"| KAFKA
-    KAFKA -->|"S2: event thô"| FLINK
-    FLINK -->|"S3: event đã dedup và tổng hợp theo cửa sổ"| MINIO
-
-    AIRFLOW -.->|"G1: lineage, kết quả validate, data contract"| DATAHUB
-
-    DE -->|"O1: chạy và theo dõi pipeline"| AIRFLOW
-    DE -->|"O2: xem lineage và data contract"| DATAHUB
-
-    linkStyle 0,1,2,3,4,5,6 stroke:#1f77b4,stroke-width:2px
-    linkStyle 7,8,9 stroke:#2ca02c,stroke-width:2px
-    linkStyle 10 stroke:#ff7f0e,stroke-width:2px
-    linkStyle 11,12 stroke:#9467bd,stroke-width:2px
-```
-
-**Chú giải**: xanh dương = luồng batch (B), xanh lá = luồng streaming (S), cam nét đứt = luồng governance (G), tím = luồng người dùng (O). Mỗi luồng đánh số riêng.
+Bản vector để phóng to hoặc đưa vào slide: [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg).
+Bản dựng gốc: [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html).
 
 ### Deployable units
 
 | Unit | Vai trò |
 |---|---|
-| Data Generator | Sinh dữ liệu giả lập theo cấu hình, ghi vào Source DB, MinIO và Kafka |
-| PostgreSQL (Source DB) | Mô phỏng hệ thống của một bộ phận khác, nơi dữ liệu nằm trước khi kéo về Bronze |
+| Data Generator | Sinh dữ liệu giả lập theo cấu hình, ghi vào MinIO, PostgreSQL và Kafka |
+| MinIO | Object storage của lakehouse — bảng Iceberg ba tầng Bronze, Silver, Gold |
+| REST Catalog (Lakekeeper) | Giữ con trỏ tới snapshot Iceberg hiện hành; Spark, Flink và Trino đều đi qua đây |
 | Kafka | Bus cho luồng event trạng thái đơn và trả hàng |
+| Spark | Xử lý batch: skew, high cardinality, schema evolution, dedup |
 | Flink | Xử lý streaming: dedup, late arrival, burst, window |
-| Spark | Xử lý batch: các job cho DP1, DP2, DP3 |
-| Airflow | Điều phối pipeline, giữ connection và variable dùng chung |
-| MinIO | Object storage của lakehouse (Bronze, Silver, Gold) |
-| PostgreSQL (Data Warehouse) | Kho dữ liệu cho phân tích, có index |
+| Trino | Query liên nguồn — một câu SQL đọc được cả lakehouse lẫn PostgreSQL |
+| Airflow | Điều phối pipeline theo nhịp write → audit → publish |
+| PostgreSQL | Kiêm ba vai: data warehouse (có index), DB phòng ban khác, backend của catalog |
 | DataHub | Metadata, lineage và data contract |
+| DBeaver | Công cụ chạy trên máy, nối Trino để xem schema và ERD của cả ba tầng |
 
 ### Các pipeline
 
@@ -116,7 +94,9 @@ flowchart LR
 | Batch | Apache Spark | Xử lý skew, high cardinality, schema evolution |
 | Streaming | Apache Kafka, Apache Flink | Xử lý burst, late arrival, duplicate, window |
 | Điều phối | Apache Airflow | |
-| Lakehouse | MinIO + Delta Lake | Compaction, z-order, partitioning |
+| Lakehouse | MinIO + Apache Iceberg | Compaction, z-order, partitioning. Chọn Iceberg thay Delta: [ADR-0003](docs/adr/0003-iceberg-va-rest-catalog-cho-lakehouse.md) |
+| Catalog | Lakekeeper (Iceberg REST) | Catalog cho cả Spark, Flink và Trino |
+| Query liên nguồn | Trino | Một cửa sổ SQL thấy cả lakehouse lẫn PostgreSQL |
 | Data Warehouse | PostgreSQL | Indexing |
 | Governance | DataHub | Lineage, validation, data contract |
 
@@ -192,6 +172,7 @@ Cấu trúc dự kiến. Thư mục nào chưa tồn tại sẽ được tạo k
 
 | Tài liệu | Nội dung |
 |---|---|
+| [docs/plan.md](docs/plan.md) | **Kế hoạch chốt**: kiến trúc lakehouse, sáu giai đoạn tới 100 điểm, ngân sách RAM đo được, đường lên cloud |
 | [docs/Domain.md](docs/Domain.md) | Business domain, thuật ngữ, bài toán dự đoán, vấn đề dữ liệu cần mô phỏng |
 | [docs/generator-design.md](docs/generator-design.md) | Thiết kế Data Generator: kiến trúc, đường thời gian Batch và Stream, vấn đề dữ liệu, nơi lưu, cấu hình, bằng chứng chất lượng |
 | [docs/channel-sources.md](docs/channel-sources.md) | Nguồn tài liệu và mức tin cậy của dạng dữ liệu từng Channel |
