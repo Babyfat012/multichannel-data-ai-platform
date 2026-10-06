@@ -2,6 +2,8 @@
 # (hệ thống của phòng ban khác). Chạy: cp .env.example .env && docker compose up -d
 # Thứ tự: minio, postgres -> minio-init (tạo bucket) -> generator-batch -> generator-load.
 # Stream (Kafka) nằm trong profile riêng: docker compose --profile stream up -d
+# Spark standalone (1 master + 2 worker) cũng ở profile riêng: docker compose --profile spark up -d
+# Lakekeeper (REST catalog cho Iceberg) nằm trong profile catalog và được profile spark kéo theo.
 
 x-generator: &generator
   build: .
@@ -11,6 +13,15 @@ x-generator: &generator
     AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
     AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
     FSSPEC_S3_ENDPOINT_URL: http://minio:9000
+
+# Spark: mọi service dùng chung một image. Thư mục spark_jobs/ được mount (chỉ đọc) vào
+# CẢ BA container ở CÙNG đường dẫn /opt/spark_jobs: sửa file trên host là thấy ngay, không build lại. Chạy bằng root để ghi được vào volume spill
+# (volume mới tạo thuộc root); đây là môi trường dev trên máy cá nhân.
+x-spark: &spark
+  image: apache/spark:3.5.3
+  profiles: [spark]
+  user: root
+  env_file: .env
 
 services:
   minio:
@@ -91,7 +102,81 @@ services:
     command: ["stream", "--config", "${GENERATOR_CONFIG}", "--sink", "kafka", "--bootstrap", "kafka:9092",
               "--speed", "${STREAM_SPEED:-1}", "--output", "s3://${MINIO_BUCKET}"]
 
+  # Lakekeeper: cuốn sổ "bảng Iceberg nào đang trỏ tới file metadata nào" cho Spark và Flink.
+  # Sổ nằm trong DB `lakekeeper` của container postgres có sẵn, tách khỏi DB `sources`
+  # (giả làm hệ thống phòng ban khác) để không trộn lẫn. File metadata thật nằm trên MinIO.
+  # Postgres chỉ tự tạo DB lần đầu, nên DB này phải tạo bằng một bước riêng (chạy lại được).
+  lakekeeper-db-init:
+    image: postgres:15
+    profiles: [catalog, spark]
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    entrypoint: >
+      sh -c "psql -h postgres -U ${POSTGRES_USER} -d ${POSTGRES_DB} -tAc
+      \"SELECT 1 FROM pg_database WHERE datname='lakekeeper'\" | grep -q 1
+      || psql -h postgres -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'CREATE DATABASE lakekeeper'"
+
+  lakekeeper-migrate: &lakekeeper
+    image: quay.io/lakekeeper/catalog:v0.13.6
+    profiles: [catalog, spark]
+    depends_on:
+      lakekeeper-db-init: {condition: service_completed_successfully}
+    environment: &lakekeeper-env
+      LAKEKEEPER__PG_DATABASE_URL_READ: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/lakekeeper
+      LAKEKEEPER__PG_DATABASE_URL_WRITE: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/lakekeeper
+      LAKEKEEPER__PG_ENCRYPTION_KEY: ${LAKEKEEPER_ENCRYPTION_KEY}
+    command: ["migrate"]
+
+  lakekeeper:
+    <<: *lakekeeper
+    depends_on:
+      lakekeeper-migrate: {condition: service_completed_successfully}
+    environment:
+      <<: *lakekeeper-env
+      LAKEKEEPER__BASE_URI: http://lakekeeper:8181
+    command: ["serve"]
+    ports: ["${LAKEKEEPER_PORT:-8181}:8181"]
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "/home/nonroot/lakekeeper", "healthcheck"]
+      interval: 5s
+      retries: 20
+
+  # Spark master chỉ điều phối nên rất nhẹ. Spark UI: http://localhost:8080
+  spark-master:
+    <<: *spark
+    depends_on:
+      lakekeeper: {condition: service_healthy}
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master",
+              "--host", "spark-master"]
+    ports: ["${SPARK_MASTER_PORT:-7077}:7077", "${SPARK_UI_PORT:-8080}:8080"]
+    volumes: [./spark_jobs:/opt/spark_jobs:ro]
+    mem_limit: 512m
+
+  # Worker làm việc thật. RAM worker là con số mình ĐẶT (SPARK_WORKER_MEMORY), thiếu thì
+  # Spark spill ra đĩa. mem_limit cao hơn một chút để chừa chỗ cho JVM overhead.
+  # SPARK_LOCAL_DIRS trỏ vào volume (nằm trên /), KHÔNG dùng /tmp vì /tmp là RAM.
+  spark-worker-1: &spark-worker
+    <<: *spark
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker",
+              "spark://spark-master:7077"]
+    depends_on: [spark-master]
+    environment:
+      SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY:-2g}
+      SPARK_WORKER_CORES: ${SPARK_WORKER_CORES:-2}
+      SPARK_LOCAL_DIRS: /spark-local
+    volumes: [spark-local-1:/spark-local, "./spark_jobs:/opt/spark_jobs:ro"]
+    mem_limit: ${SPARK_WORKER_MEM_LIMIT:-2560m}
+
+  spark-worker-2:
+    <<: *spark-worker
+    volumes: [spark-local-2:/spark-local, "./spark_jobs:/opt/spark_jobs:ro"]
+
 volumes:
+  spark-local-1:
+  spark-local-2:
   minio-data:
   postgres-data:
   kafka-data:
