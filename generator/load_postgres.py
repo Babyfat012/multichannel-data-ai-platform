@@ -13,6 +13,16 @@ hệ thống nguồn. Cột `export_date` lấy từ tên thư mục, để DP1 
 Mỗi lần chạy xóa sạch bảng rồi nạp lại trong cùng một transaction, nên chạy lại
 bao nhiêu lần cũng ra cùng kết quả. Dữ liệu vào bằng `COPY`, nhanh hơn nhiều so
 với `INSERT` từng dòng.
+
+`sample_days` cho nạp một tập ngày export rải đều thay vì cả dải. Hai lý do:
+
+  * Chạy thử rẻ. Nguồn thật là 13 GB / 180 ngày; 20 ngày rải đều chỉ ~1,4 GB. Volume
+    PostgreSQL nằm trên cùng phân vùng `/` với file nguồn, nên nạp cả dải là ăn chỗ hai
+    lần trên một phân vùng đang chật.
+  * Airflow (DP1) rồi cũng cần kéo theo từng ngày — cột `export_date` tồn tại sẵn cho
+    việc đó. Nên đây là việc phải làm, không phải cầu tạm cho một lần chạy thử.
+
+`seller.skus` không chia theo ngày nên cờ này không áp vào nó; xem `filter_to_sample_days`.
 """
 
 from __future__ import annotations
@@ -21,6 +31,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Callable, Iterator
 
+from generator.day_selection import filter_to_sample_days
 from generator.storage import OutputStore
 
 DDL = """
@@ -74,15 +85,23 @@ TABLES = (
 )
 
 
-def iter_rows(store: OutputStore, load: TableLoad) -> Iterator[tuple[Any, ...]]:
-    """Đọc mọi file của `load` dưới `store` và trả về từng dòng sẵn sàng cho `COPY`."""
-    for path in store.glob(load.pattern):
+def iter_rows(store: OutputStore, load: TableLoad, sample_days: int = 0) -> Iterator[tuple[Any, ...]]:
+    """Đọc file của `load` dưới `store` và trả về từng dòng sẵn sàng cho `COPY`.
+
+    `sample_days > 0` thì chỉ đọc file thuộc N ngày export rải đều. Mặc định 0 = đọc hết,
+    nên hành vi cũ không đổi.
+    """
+    for path in filter_to_sample_days(store.glob(load.pattern), sample_days):
         for record in store.read_jsonl(path):
             yield load.to_row(record, path)
 
 
-def load_postgres(source_root: str, dsn: str) -> dict[str, int]:
-    """Tạo bảng nếu chưa có, xóa dữ liệu cũ rồi nạp lại. Trả về số dòng theo bảng."""
+def load_postgres(source_root: str, dsn: str, sample_days: int = 0) -> dict[str, int]:
+    """Tạo bảng nếu chưa có, xóa dữ liệu cũ rồi nạp lại. Trả về số dòng theo bảng.
+
+    `sample_days > 0` chỉ nạp N ngày export rải đều. TRUNCATE vẫn xoá sạch bảng trước, nên
+    kết quả luôn là "đúng N ngày đó và không gì khác", chạy lại bao nhiêu lần cũng vậy.
+    """
     import psycopg  # nhập muộn để test phần đọc file không cần thư viện PostgreSQL
 
     store = OutputStore(source_root)
@@ -93,7 +112,7 @@ def load_postgres(source_root: str, dsn: str) -> dict[str, int]:
             cur.execute(f"TRUNCATE {load.table}")
             n = 0
             with cur.copy(f"COPY {load.table} ({', '.join(load.columns)}) FROM STDIN") as copy:
-                for row in iter_rows(store, load):
+                for row in iter_rows(store, load, sample_days):
                     copy.write_row(row)
                     n += 1
             counts[load.table] = n

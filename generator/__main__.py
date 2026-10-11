@@ -4,6 +4,7 @@ Ví dụ:
     uv run python -m generator batch --config configs/small.yaml
     uv run python -m generator batch --config configs/default.yaml --output s3://fsds
     uv run python -m generator load-postgres --source s3://fsds --dsn postgresql://fsds:fsds@localhost:5432/sources
+    uv run python -m generator load-postgres --source /data/raw --sample-days 20 --dsn postgresql://fsds:fsds@localhost:5432/sources
     uv run python -m generator report --source s3://fsds --dsn postgresql://fsds:fsds@localhost:5432/sources
     uv run python -m generator stream --config configs/small.yaml --sink file --speed 0
     uv run python -m generator stream --config configs/default.yaml --sink kafka --bootstrap localhost:9092
@@ -34,6 +35,11 @@ def main() -> None:
     load = sub.add_parser("load-postgres", help="Nạp pg-load/ của một lần chạy vào PostgreSQL")
     load.add_argument("--source", required=True, help="Gốc đầu ra của lần chạy (thư mục hoặc s3://...)")
     load.add_argument("--dsn", required=True, help="Chuỗi kết nối PostgreSQL")
+    load.add_argument("--sample-days", type=int, default=0,
+                      help="Chỉ nạp N ngày export RẢI ĐỀU thay vì cả dải. Rải đều (không "
+                           "phải N ngày cuối) vì dữ liệu lớn dần theo thời gian, lấy liền "
+                           "nhau ở cuối thì tập mẫu không đại diện. 0 = nạp hết. "
+                           "Bảng seller.skus không chia theo ngày nên luôn nạp đủ.")
 
     report = sub.add_parser("report", help="In báo cáo chất lượng dữ liệu của một lần chạy")
     report.add_argument("--source", required=True, help="Gốc đầu ra của lần chạy (thư mục hoặc s3://...)")
@@ -57,7 +63,7 @@ def main() -> None:
     elif args.mode == "load-postgres":
         from generator.load_postgres import load_postgres
 
-        print(json.dumps(load_postgres(args.source, args.dsn), indent=2))
+        print(json.dumps(load_postgres(args.source, args.dsn, args.sample_days), indent=2))
     else:
         from generator.report import QualityReport, render_markdown, render_text
 

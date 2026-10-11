@@ -31,7 +31,8 @@ def test_amazon_schema_switches_on_configured_day(tiny_config):
 
     # Đổi tên: cùng một đơn, khóa khác tên.
     assert old["AmazonOrderId"] == new["orderId"]
-    # Field mới chỉ có ở bản mới, field cũ chỉ có ở bản cũ.
+    # Không có field mới: cột chỉ có ở một dạng thì null ở dạng kia, vì tên khoá đã đổi
+    # (`proceeds` là `OrderTotal` đổi tên + lồng một cấp, không phải field mới).
     assert "proceeds" in new and "proceeds" not in old
     assert "IsPrime" in old and "IsPrime" not in new
     # Đổi cấu trúc và cách viết giá trị.

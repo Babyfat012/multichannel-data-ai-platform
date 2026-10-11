@@ -18,7 +18,10 @@ x-generator: &generator
 # CẢ BA container ở CÙNG đường dẫn /opt/spark_jobs: sửa file trên host là thấy ngay, không build lại. Chạy bằng root để ghi được vào volume spill
 # (volume mới tạo thuộc root); đây là môi trường dev trên máy cá nhân.
 x-spark: &spark
-  image: apache/spark:3.5.3
+  # Phải là biến thể java17: Iceberg 1.11.0 được build cho Java 17 (class file 61),
+  # image mặc định apache/spark:3.5.3 chạy Java 11 (đọc tối đa class 55) -> job chết
+  # ngay khi nạp iceberg-spark-runtime với UnsupportedClassVersionError.
+  image: apache/spark:3.5.3-java17
   profiles: [spark]
   user: root
   env_file: .env
@@ -152,7 +155,12 @@ services:
     command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master",
               "--host", "spark-master"]
     ports: ["${SPARK_MASTER_PORT:-7077}:7077", "${SPARK_UI_PORT:-8080}:8080"]
-    volumes: [./spark_jobs:/opt/spark_jobs:ro]
+    # /data/raw mount read-only: dữ liệu 93 GiB nằm ngoài volume Docker, không vừa MinIO
+    # trên / (chỉ còn ~42 GB). Spark đọc trực tiếp từ đĩa; bảng Iceberg vẫn ghi lên MinIO.
+    # ./out/spark-events: Spark UI chỉ sống khi job đang chạy. Ghi event log ra host
+    # để mở lại bằng History Server và chụp ảnh bằng chứng sau khi job đã xong.
+    volumes: [./spark_jobs:/opt/spark_jobs:ro, /data/raw:/data/raw:ro,
+              ./out/spark-events:/spark-events]
     mem_limit: 512m
 
   # Worker làm việc thật. RAM worker là con số mình ĐẶT (SPARK_WORKER_MEMORY), thiếu thì
@@ -167,12 +175,14 @@ services:
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY:-2g}
       SPARK_WORKER_CORES: ${SPARK_WORKER_CORES:-2}
       SPARK_LOCAL_DIRS: /spark-local
-    volumes: [spark-local-1:/spark-local, "./spark_jobs:/opt/spark_jobs:ro"]
+    volumes: [spark-local-1:/spark-local, "./spark_jobs:/opt/spark_jobs:ro",
+              "/data/raw:/data/raw:ro", "./out/spark-events:/spark-events"]
     mem_limit: ${SPARK_WORKER_MEM_LIMIT:-2560m}
 
   spark-worker-2:
     <<: *spark-worker
-    volumes: [spark-local-2:/spark-local, "./spark_jobs:/opt/spark_jobs:ro"]
+    volumes: [spark-local-2:/spark-local, "./spark_jobs:/opt/spark_jobs:ro",
+              "/data/raw:/data/raw:ro", "./out/spark-events:/spark-events"]
 
 volumes:
   spark-local-1:

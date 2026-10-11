@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nền tảng dữ liệu đa kênh phía Seller</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #eb6c36;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1280px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    svg { width: 100%; min-width: 1200px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">DP Integration · FSDS mini-coursework</p>
+    <h1>Nền tảng dữ liệu đa kênh phía Seller</h1>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1200 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="fsds-arch-title fsds-arch-desc">
+        <title id="fsds-arch-title">Nền tảng dữ liệu đa kênh phía Seller</title>
+        <desc id="fsds-arch-desc">Sơ đồ tích hợp nền tảng FSDS: nguồn Channel bên trái đẩy dữ liệu vào Kafka và MinIO, năm service trong Docker Compose xử lý ở giữa với Spark và Flink là hai engine trọng tâm, DBeaver và warehouse PostgreSQL tiêu thụ bên phải, DataHub phủ ngang bên dưới để bắt lineage.</desc>
+
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+          <marker id="arrow-sm" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto"><polygon points="0 0, 6 2.5, 0 5" fill="#4f5d75"/></marker>
+          <marker id="arrow-dim" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="rgba(45,49,66,0.45)"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+        <!-- ============ ZONE (drawn first, so labels may mask over it) ============ -->
+        <rect x="260" y="72" width="696" height="336" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.18)" stroke-width="1.2"/>
+        <rect x="286" y="66" width="188" height="12" fill="#f5f5f5"/>
+        <text x="292" y="76" font-family="'Geist Mono',monospace" font-size="8" font-weight="500" letter-spacing="0.16em" fill="#4f5d75">DOCKER COMPOSE · FSDS</text>
+
+        <!-- ============ CONNECTORS (all drawn before any node) ============ -->
+
+        <!-- 1 · Channel events → Kafka (secondary, top corridor) -->
+        <path d="M200,124 H224 Q232,124 232,132 V142 Q232,150 240,150 H592 Q600,150 600,158 V176"
+              fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <rect x="496" y="131" width="48" height="13" fill="#f5f5f5"/>
+        <text x="520" y="141" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" letter-spacing="0.08em" fill="#4f5d75">WEBHOOK</text>
+
+        <!-- 2 · Channel exports → MinIO (secondary) -->
+        <path d="M200,212 H236 Q244,212 244,220 V292 Q244,300 252,300 H276"
+              fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <rect x="206" y="193" width="28" height="13" fill="#f5f5f5"/>
+        <text x="220" y="203" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" letter-spacing="0.08em" fill="#4f5d75">FILES</text>
+
+        <!-- 3 · Kafka → Flink (primary — endpoint is focal) -->
+        <line x1="652" y1="212" x2="684" y2="212"
+              stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <rect x="654" y="188" width="28" height="13" fill="#f5f5f5"/>
+        <text x="668" y="198" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" letter-spacing="0.08em" fill="#eb6c36">EVENT</text>
+
+        <!-- 4 · Spark → MinIO, write (primary) -->
+        <line x1="328" y1="248" x2="328" y2="280"
+              stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <rect x="342" y="256" width="52" height="13" fill="#f5f5f5"/>
+        <text x="344" y="266" font-family="'Geist Mono',monospace" font-size="7" letter-spacing="0.06em" fill="#eb6c36">READ · WRITE</text>
+
+        <!-- 5 · MinIO → Spark, read (primary) -->
+
+
+        <!-- 6 · Spark → REST Catalog (primary) -->
+        <line x1="380" y1="212" x2="412" y2="212"
+              stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <rect x="381" y="188" width="30" height="13" fill="#f5f5f5"/>
+        <text x="396" y="198" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" letter-spacing="0.06em" fill="#eb6c36">COMMIT</text>
+
+        <!-- 7 · Flink → MinIO, write (primary) -->
+        <line x1="736" y1="248" x2="736" y2="280"
+              stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <rect x="750" y="256" width="32" height="13" fill="#f5f5f5"/>
+        <text x="752" y="266" font-family="'Geist Mono',monospace" font-size="7" letter-spacing="0.08em" fill="#eb6c36">WRITE</text>
+
+        <!-- 8 · MinIO → Trino (secondary) -->
+        <line x1="872" y1="280" x2="872" y2="248"
+              stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <rect x="886" y="256" width="44" height="13" fill="#f5f5f5"/>
+        <text x="888" y="266" font-family="'Geist Mono',monospace" font-size="7" letter-spacing="0.08em" fill="#4f5d75">ICEBERG</text>
+
+        <!-- 9 · Trino → DBeaver (primary — serve flow) -->
+        <path d="M924,200 H958 Q966,200 966,192 V132 Q966,124 974,124 H1000"
+              fill="none" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <rect x="978" y="166" width="30" height="13" fill="#f5f5f5"/>
+        <text x="980" y="176" font-family="'Geist Mono',monospace" font-size="7" letter-spacing="0.08em" fill="#eb6c36">JDBC</text>
+
+        <!-- 10 · MinIO → Warehouse, copy Gold (secondary) -->
+        <path d="M940,300 H972 Q980,300 980,292 V220 Q980,212 988,212 H1000"
+              fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <rect x="986" y="248" width="50" height="13" fill="#f5f5f5"/>
+        <text x="988" y="258" font-family="'Geist Mono',monospace" font-size="7" letter-spacing="0.06em" fill="#4f5d75">COPY GOLD</text>
+
+        <!-- 11 · Airflow → Spark (trigger — dashed, unlabelled, left gutter) -->
+        <path d="M276,362 H272 Q266,362 266,356 V306 A6,6 0 0,1 266,294 V236 Q266,230 272,230 H276"
+              fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-sm)"/>
+
+        <!-- 12 · DataHub → zone (auth / lineage) -->
+        <line x1="608" y1="460" x2="608" y2="412"
+              stroke="#eb6c36" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow-accent)"/>
+        <rect x="614" y="428" width="46" height="13" fill="#f5f5f5"/>
+        <text x="616" y="438" font-family="'Geist Mono',monospace" font-size="7" letter-spacing="0.08em" fill="#eb6c36">LINEAGE</text>
+
+
+        <!-- ===== Số thứ tự mũi tên: B = luồng Batch, S = luồng Stream ===== -->
+        <circle cx="288" cy="150" r="7.5" fill="#f5f5f5" stroke="#eb6c36" stroke-width="0.8"/>
+        <text x="288" y="152.6" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" font-weight="500" fill="#eb6c36">S1</text>
+        <circle cx="668" cy="212" r="7.5" fill="#f5f5f5" stroke="#eb6c36" stroke-width="0.8"/>
+        <text x="668" y="214.6" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" font-weight="500" fill="#eb6c36">S2</text>
+        <circle cx="736" cy="264" r="7.5" fill="#f5f5f5" stroke="#eb6c36" stroke-width="0.8"/>
+        <text x="736" y="266.6" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" font-weight="500" fill="#eb6c36">S3</text>
+        <circle cx="244" cy="250" r="7.5" fill="#f5f5f5" stroke="#4f5d75" stroke-width="0.8"/>
+        <text x="244" y="252.6" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" font-weight="500" fill="#4f5d75">B1</text>
+        <circle cx="328" cy="264" r="7.5" fill="#f5f5f5" stroke="#eb6c36" stroke-width="0.8"/>
+        <text x="328" y="266.6" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" font-weight="500" fill="#eb6c36">B2</text>
+        <circle cx="396" cy="212" r="7.5" fill="#f5f5f5" stroke="#eb6c36" stroke-width="0.8"/>
+        <text x="396" y="214.6" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" font-weight="500" fill="#eb6c36">B3</text>
+        <circle cx="872" cy="264" r="7.5" fill="#f5f5f5" stroke="#4f5d75" stroke-width="0.8"/>
+        <text x="872" y="266.6" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" font-weight="500" fill="#4f5d75">B4</text>
+        <circle cx="966" cy="160" r="7.5" fill="#f5f5f5" stroke="#eb6c36" stroke-width="0.8"/>
+        <text x="966" y="162.6" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" font-weight="500" fill="#eb6c36">B5</text>
+        <circle cx="968" cy="300" r="7.5" fill="#f5f5f5" stroke="#4f5d75" stroke-width="0.8"/>
+        <text x="968" y="302.6" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" font-weight="500" fill="#4f5d75">B6</text>
+
+        <!-- ============ SOURCES (left column, external) ============ -->
+        <rect x="40" y="92" width="160" height="64" rx="6" fill="rgba(79,93,117,0.06)" stroke="#7a8399" stroke-width="1"/>
+        <rect x="48" y="98" width="26" height="12" rx="2" fill="none" stroke="rgba(79,93,117,0.40)"/>
+        <text x="61" y="107" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.10em" fill="rgba(79,93,117,0.85)">EXT</text>
+        <g transform="translate(150,96) scale(0.83)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4a2 2 0 0 0 -2 2v3a2 3 0 0 1 -2 3a2 3 0 0 1 2 3v3a2 2 0 0 0 2 2" /> <path d="M17 4a2 2 0 0 1 2 2v3a2 3 0 0 0 2 3a2 3 0 0 0 -2 3v3a2 2 0 0 1 -2 2" /></svg></g>
+        <text x="120" y="132" text-anchor="middle" font-family="'Geist',sans-serif" font-size="11" font-weight="600" fill="#2d3142">Channel events</text>
+        <text x="120" y="145" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">webhook · notification</text>
+
+        <rect x="40" y="180" width="160" height="64" rx="6" fill="rgba(79,93,117,0.06)" stroke="#7a8399" stroke-width="1"/>
+        <rect x="48" y="186" width="26" height="12" rx="2" fill="none" stroke="rgba(79,93,117,0.40)"/>
+        <text x="61" y="195" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.10em" fill="rgba(79,93,117,0.85)">EXT</text>
+        <g transform="translate(150,184) scale(0.83)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4" /> <path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2" /></svg></g>
+        <text x="120" y="220" text-anchor="middle" font-family="'Geist',sans-serif" font-size="11" font-weight="600" fill="#2d3142">Channel exports</text>
+        <text x="120" y="233" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">Parquet · 5 Channel</text>
+
+        <!-- ============ PLATFORM ROW (5 nodes) ============ -->
+
+        <!-- n0 · Spark (FOCAL) -->
+        <rect x="276" y="176" width="104" height="72" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.2"/>
+        <rect x="284" y="182" width="34" height="12" rx="2" fill="none" stroke="rgba(235,108,54,0.40)"/>
+        <text x="301" y="191" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.10em" fill="rgba(235,108,54,0.85)">BATCH</text>
+        <g transform="translate(350,180) scale(0.83)" color="#eb6c36"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" /> <path d="M5 6a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" /> <path d="M15 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" /> <path d="M7 8l0 8" /> <path d="M7 8a4 4 0 0 0 4 4h4" /></svg></g>
+        <text x="328" y="220" text-anchor="middle" font-family="'Geist',sans-serif" font-size="11" font-weight="600" fill="#eb6c36">Spark</text>
+        <text x="328" y="233" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">1 master · 2 worker</text>
+
+        <!-- n1 · REST Catalog -->
+        <rect x="412" y="176" width="104" height="72" rx="6" fill="#ffffff" stroke="rgba(45,49,66,0.25)" stroke-width="1"/>
+        <rect x="420" y="182" width="40" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.30)"/>
+        <text x="440" y="191" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.10em" fill="rgba(45,49,66,0.70)">CATALOG</text>
+        <g transform="translate(486,180) scale(0.83)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" /> <path d="M21 21l-6 -6" /></svg></g>
+        <text x="464" y="220" text-anchor="middle" font-family="'Geist',sans-serif" font-size="11" font-weight="600" fill="#2d3142">REST Catalog</text>
+        <text x="464" y="233" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">Lakekeeper · CAS</text>
+
+        <!-- n2 · Kafka -->
+        <rect x="548" y="176" width="104" height="72" rx="6" fill="#ffffff" stroke="rgba(45,49,66,0.25)" stroke-width="1"/>
+        <rect x="556" y="182" width="36" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.30)"/>
+        <text x="574" y="191" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.10em" fill="rgba(45,49,66,0.70)">STREAM</text>
+        <g transform="translate(622,180) scale(0.83)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l-8 4l8 4l8 -4l-8 -4" /> <path d="M4 12l8 4l8 -4" /> <path d="M4 16l8 4l8 -4" /></svg></g>
+        <text x="600" y="220" text-anchor="middle" font-family="'Geist',sans-serif" font-size="11" font-weight="600" fill="#2d3142">Kafka</text>
+        <text x="600" y="233" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">2 topics · KRaft</text>
+
+        <!-- n3 · Flink (FOCAL) -->
+        <rect x="684" y="176" width="104" height="72" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.2"/>
+        <rect x="692" y="182" width="36" height="12" rx="2" fill="none" stroke="rgba(235,108,54,0.40)"/>
+        <text x="710" y="191" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.10em" fill="rgba(235,108,54,0.85)">STREAM</text>
+        <g transform="translate(758,180) scale(0.83)" color="#eb6c36"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" /> <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" /></svg></g>
+        <text x="736" y="220" text-anchor="middle" font-family="'Geist',sans-serif" font-size="11" font-weight="600" fill="#eb6c36">Flink</text>
+        <text x="736" y="233" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">watermark · window</text>
+
+        <!-- n4 · Trino -->
+        <rect x="820" y="176" width="104" height="72" rx="6" fill="#ffffff" stroke="rgba(45,49,66,0.25)" stroke-width="1"/>
+        <rect x="828" y="182" width="24" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.30)"/>
+        <text x="840" y="191" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.10em" fill="rgba(45,49,66,0.70)">SQL</text>
+        <g transform="translate(894,180) scale(0.83)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M14.124 16.8529a.1615.1615 0 1 1 .1576.1614.1577.1577 0 0 1-.1576-.1614zm-5.607-.1576a.1614.1614 0 1 0 0 .3228.1614.1614 0 0 0 0-.3228zm10.1341-.6648v1.9869c-.031.5788-.524 1.0237-1.1029.9954h-.3843a5.0596 5.0596 0 0 1-1.1298 1.7178.3192.3192 0 0 0 0 .465l.2382.2191a.3036.3036 0 0 1 .0385.4304c-1.126 1.3835-2.9669 2.1521-5.0498 2.1521a6.575 6.575 0 0 1-4.8192-1.8985c-.0029-.0032-.0059-.0063-.0087-.0096a.6302.6302 0 0 1 .0548-.8896c.137-.1265.1371-.3462 0-.4727a4.944 4.944 0 0 1-1.126-1.714h-.3497c-.5797.0284-1.0737-.416-1.1068-.9954v-1.9869c.0351-.5779.5286-1.02 1.1068-.9915h.2728a5.7648 5.7648 0 0 1 2.0791-3.0936c-.4227-1.0991-1.1529-3.2551-1.226-5.0075C6.0229 4.4705 6.2189.078 7.8253.001c1.6064-.0768 1.3719 4.0275 1.0991 6.6946a32.732 32.732 0 0 0-.123 4.4503 6.994 6.994 0 0 1 2.4826-.4304 7.2414 7.2414 0 0 1 1.7371.2075c.2614-1.2682.8762-3.574 2.0292-5.1958 1.6717-2.352 3.4357-4.7808 4.6116-4.1006 1.176.6802-.3074 3.1398-1.3297 4.4272-1.0222 1.2874-2.7862 3.2089-3.3742 4.2274-.2114.3843-.4304.8032-.5956 1.1529a5.7375 5.7375 0 0 1 2.9169 3.6125h.073v-2.3058a.3075.3075 0 0 0-.1806-.2844.9148.9148 0 0 1-.5573-.8148 1.0184 1.0184 0 0 1 .9045-.9044c.5593-.0598 1.061.3452 1.1208.9044a.9187.9187 0 0 1-.5534.8148.3074.3074 0 0 0-.1691.2844v2.1522a.3113.3113 0 0 0 .1691.2805.9724.9724 0 0 1 .5648.857zm-1.0222-3.9737a.4345.4345 0 0 0 .4612-.4151.4151.4151 0 1 0-.4612.4151zm-.4227 3.4779c.0978.4794.148.9672.1498 1.4565v.3651h.4113a.3228.3228 0 0 0 .3228-.319v-1.0069c-.0111-.2967-.2733-.5256-.5688-.4957h-.3151zm-3.7278-4.481.611.2383a36.6046 36.6046 0 0 1 2.3828-3.8661c1.2874-1.7255 2.3365-3.5817 1.8715-3.8699-.465-.2883-1.6179 1.2297-2.7708 3.109a34.8978 34.8978 0 0 0-2.0945 4.3887zm-4.0544.6726.0154 1.3335c-.0039.2007.1881.3587.3843.3152a6.4317 6.4317 0 0 1 1.4565-.1653 5.995 5.995 0 0 1 1.4527.1729c.1956.0398.3853-.1153.3843-.3151v-1.3412a.319.319 0 0 0-.2421-.3113 6.664 6.664 0 0 0-1.6026-.1845 6.7093 6.7093 0 0 0-1.6025.1845.3188.3188 0 0 0-.246.3113zm1.7063 6.8637v.3843a.6878.6878 0 0 1-.4996.269c-.3074 0-.538-.4189-.538-.4189a.073.073 0 0 0-.1-.0307l-.0024.0013a.0693.0693 0 0 0-.0245.0947c.0115.0231.2806.4957.6649.4957a.7144.7144 0 0 0 .3843-.1268.3267.3267 0 0 1 .3612 0 .8332.8332 0 0 0 .4727.1345.957.957 0 0 0 .6572-.4803.0692.0692 0 0 0-.0269-.0961.0692.0692 0 0 0-.0999.0269c0 .0231-.2191.3843-.5419.4074a.8036.8036 0 0 1-.5765-.269v-.3843a.3154.3154 0 0 1 .1268-.2537c.196-.1499.415-.3958.415-.4919a.538.538 0 0 0-.5764-.4189c-.3766 0-.6533.2498-.6533.4573 0 .1345.2536.3382.4227.4612a.3226.3226 0 0 1 .1346.2383zM7.783 11.6455l.5765-.3074c-.0192-1.126-.0346-3.1436 0-4.5425.0538-2.0368.1537-4.5732-.5226-4.5463S6.6877 4.2285 6.949 7.007a33.0562 33.0562 0 0 0 .834 4.6385zm-3.305 5.3919a.319.319 0 0 0 .319.319h.3997a3.046 3.046 0 0 1 0-.3651 7.546 7.546 0 0 1 .1461-1.4565c-.0493.0002-.34.0005-.3866-.0021a.4881.4881 0 0 0-.4781.4979v1.0068zm.9184 1.4718a5.3254 5.3254 0 0 1-.123-.5573.3228.3228 0 0 0-.319-.2728h-.4957c.0007.0163-.0015.34.0009.355a.5188.5188 0 0 0 .5526.4827l.3842-.0076zm10.1265 2.917-.0884-.0807a.3229.3229 0 0 0-.3843-.0269 6.9823 6.9823 0 0 1-3.8046 1.0068 6.995 6.995 0 0 1-3.7932-1.0068.3228.3228 0 0 0-.3843.0269l-.0884.0807a.3154.3154 0 0 0 0 .4573 6.0305 6.0305 0 0 0 4.2927 1.5988 6.0453 6.0453 0 0 0 4.2889-1.5988.315.315 0 0 0-.0384-.4573zm1.4488-4.4158c0-2.4557-1.1529-4.3273-3.0245-5.2266-.2081-.1022-.4673.0594-.465.2921v1.3297a.3269.3269 0 0 0 .2037.296c1.7332.7109 2.9284 2.1866 2.9284 3.8776 0 2.2712-2.1559 3.8085-5.3419 3.8085-3.1859 0-5.3419-1.5411-5.3419-3.8085 0-1.691 1.1952-3.1667 2.9284-3.8776a.319.319 0 0 0 .2037-.296v-1.322c.0048-.2315-.2536-.3963-.4612-.2921-1.887.8839-3.0399 2.767-3.0399 5.2073 0 2.9899 2.2866 4.996 5.7108 4.996 3.4282.0001 5.6994-2.0098 5.6994-4.9844zm-8.6084-.538h-.0038a.5842.5842 0 1 0 .0038 0zm5.1614.5919c.0063.3226.2615.5789.584.5725a.5842.5842 0 1 0-.584-.5725zm4.5692.6225h-.4996a.3227.3227 0 0 0-.3151.2728c-.0346.173-.0768.3766-.1268.5573.0163.0007.3861-.0014.4012.0009a.5188.5188 0 0 0 .5366-.5004l.0037-.3306z"/></svg></g>
+        <text x="872" y="220" text-anchor="middle" font-family="'Geist',sans-serif" font-size="11" font-weight="600" fill="#2d3142">Trino</text>
+        <text x="872" y="233" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">federated SQL</text>
+
+        <!-- ============ MinIO BAR ============ -->
+        <rect x="276" y="280" width="664" height="44" rx="4" fill="rgba(45,49,66,0.05)" stroke="rgba(45,49,66,0.32)" stroke-width="0.8"/>
+        <rect x="284" y="286" width="32" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.30)"/>
+        <text x="300" y="295" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.10em" fill="rgba(45,49,66,0.70)">STORE</text>
+        <g transform="translate(898,288) scale(0.83)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M13.2072.006c-.6216-.0478-1.2.1943-1.6211.582a2.15 2.15 0 0 0-.0938 3.0352l3.4082 3.5507a3.042 3.042 0 0 1-.664 4.6875l-.463.2383V7.2853a15.4198 15.4198 0 0 0-8.0174 10.4862v.0176l6.5487-3.3281v7.621L13.7794 24V13.6817l.8965-.4629a4.4432 4.4432 0 0 0 1.2207-7.0292l-3.371-3.5254a.7489.7489 0 0 1 .037-1.0547.7522.7522 0 0 1 1.0567.0371l.4668.4863-.006.0059 4.0704 4.2441a.0566.0566 0 0 0 .082 0 .06.06 0 0 0 0-.0703l-3.1406-5.1425-.1484.1425.1484-.1445C14.4945.3926 13.8287.0538 13.2072.006Zm-.9024 9.8652v2.9941l-4.1523 2.1484a13.9787 13.9787 0 0 1 2.7676-3.9277 14.1784 14.1784 0 0 1 1.3847-1.2148z"/></svg></g>
+        <text x="608" y="298" text-anchor="middle" font-family="'Geist',sans-serif" font-size="11" font-weight="600" fill="#2d3142">MinIO</text>
+        <text x="608" y="312" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">Iceberg lakehouse · bronze raw_ → silver stg_ → gold dim_ / fact_ / feat_</text>
+
+        <!-- ============ Airflow BAR ============ -->
+        <rect x="276" y="340" width="664" height="44" rx="4" fill="rgba(45,49,66,0.05)" stroke="rgba(45,49,66,0.32)" stroke-width="0.8"/>
+        <rect x="284" y="346" width="26" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.30)"/>
+        <text x="297" y="355" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.10em" fill="rgba(45,49,66,0.70)">DAG</text>
+        <g transform="translate(898,348) scale(0.83)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17.195 16.822l4.002-4.102C23.55 10.308 23.934 5.154 24 .43a.396.396 0 0 0-.246-.373.392.392 0 0 0-.437.09l-6.495 6.658-4.102-4.003C10.309.45 5.154.066.43 0H.423a.397.397 0 0 0-.277.683l6.658 6.494-4.003 4.103C.45 13.692.065 18.846 0 23.57a.398.398 0 0 0 .683.282l6.494-6.657 3.934 3.837.17.165c2.41 2.353 7.565 2.737 12.288 2.803h.006a.397.397 0 0 0 .277-.683l-6.657-6.495zm-.409-9.476c.04.115.05.24.031.344-.17.96-1.593 2.538-4.304 3.87a.597.597 0 0 0-.08-.079c1.432-3.155 1.828-5.61 1.175-7.322l3.058 2.984.12.203zm-.131 9.44a.73.73 0 0 1-.347.031c-.96-.171-2.537-1.594-3.87-4.307a.656.656 0 0 0 .08-.078l-.001.001c3.155 1.432 5.61 1.83 7.324 1.174l-2.969 3.043M23.568.392a.05.05 0 0 1 .052-.011c.018.006.03.024.029.043-.065 4.655-.437 9.726-2.703 12.05-1.53 1.565-4.326 1.419-8.283-.377.006-.037.021-.07.02-.108 0-.044-.017-.082-.026-.123 2.83-1.39 4.315-3.037 4.506-4.115.057-.322-.009-.542-.102-.688l6.507-6.67V.392zM.393.43A.045.045 0 0 1 .382.38C.39.36.403.343.425.35c4.655.065 9.727.438 12.05 2.703l.002.002c1.56 1.527 1.415 4.323-.379 8.28-.033-.005-.062-.02-.097-.02h-.008c-.045.001-.084.019-.126.027-1.39-2.83-3.037-4.314-4.115-4.506-.323-.057-.542.01-.688.103L.393.43zm11.94 11.563a.331.331 0 0 1-.327.335H12a.332.332 0 0 1-.004-.661c.172.016.333.144.335.326h.002zm-5.12 4.661a.722.722 0 0 1-.03-.345c.17-.96 1.595-2.54 4.309-3.873.013.016.019.035.033.05.013.012.03.017.044.028-1.434 3.158-1.83 5.613-1.177 7.326l-3.041-2.967m-.006-9.659a.735.735 0 0 1 .345-.031c.961.17 2.54 1.594 3.871 4.306a.597.597 0 0 0-.079.08c-2.167-.983-4.007-1.484-5.498-1.484-.68 0-1.289.103-1.825.308L7.128 7.35M.43 23.607c-.018.018-.038.015-.052.01-.019-.007-.028-.021-.028-.043.065-4.654.437-9.725 2.703-12.049 1.527-1.565 4.325-1.419 8.286.378-.006.035-.02.067-.02.104 0 .043.018.083.026.124-2.831 1.391-4.317 3.04-4.51 4.117-.057.322.01.542.103.688L.43 23.607zm23.144.042c-4.655-.065-9.726-.437-12.05-2.703l-.005-.006c-1.56-1.526-1.412-4.322.383-8.279.033.005.064.02.098.02h.009c.043 0 .08-.018.122-.027 1.39 2.832 3.036 4.317 4.115 4.51.083.014.16.021.23.021a.776.776 0 0 0 .45-.133l6.68 6.516c.02.02.016.04.01.052a.042.042 0 0 1-.042.029z"/></svg></g>
+        <text x="608" y="358" text-anchor="middle" font-family="'Geist',sans-serif" font-size="11" font-weight="600" fill="#2d3142">Airflow</text>
+        <text x="608" y="372" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">DP1 ingest · DP2 transform · DP3 feature — mỗi DAG: write → audit → publish</text>
+
+        <!-- ============ CONSUMERS (right column) ============ -->
+        <rect x="1000" y="92" width="160" height="64" rx="6" fill="rgba(79,93,117,0.06)" stroke="#7a8399" stroke-width="1"/>
+        <rect x="1008" y="98" width="26" height="12" rx="2" fill="none" stroke="rgba(79,93,117,0.40)"/>
+        <text x="1021" y="107" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.10em" fill="rgba(79,93,117,0.85)">OUT</text>
+        <g transform="translate(1110,96) scale(0.83)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5a1 1 0 0 1 1 -1h16a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1v-10" /> <path d="M7 20h10" /> <path d="M9 16v4" /> <path d="M15 16v4" /></svg></g>
+        <text x="1080" y="132" text-anchor="middle" font-family="'Geist',sans-serif" font-size="11" font-weight="600" fill="#2d3142">DBeaver</text>
+        <text x="1080" y="145" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">schema · ERD · all zones</text>
+
+        <rect x="1000" y="180" width="160" height="64" rx="6" fill="rgba(79,93,117,0.06)" stroke="#7a8399" stroke-width="1"/>
+        <rect x="1008" y="186" width="26" height="12" rx="2" fill="none" stroke="rgba(79,93,117,0.40)"/>
+        <text x="1021" y="195" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.10em" fill="rgba(79,93,117,0.85)">OUT</text>
+        <g transform="translate(1110,184) scale(0.83)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5594 14.7228a.5269.5269 0 0 0-.0563-.1191c-.139-.2632-.4768-.3418-1.0074-.2321-1.6533.3411-2.2935.1312-2.5256-.0191 1.342-2.0482 2.445-4.522 3.0411-6.8297.2714-1.0507.7982-3.5237.1222-4.7316a1.5641 1.5641 0 0 0-.1509-.235C21.6931.9086 19.8007.0248 17.5099.0005c-1.4947-.0158-2.7705.3461-3.1161.4794a9.449 9.449 0 0 0-.5159-.0816 8.044 8.044 0 0 0-1.3114-.1278c-1.1822-.0184-2.2038.2642-3.0498.8406-.8573-.3211-4.7888-1.645-7.2219.0788C.9359 2.1526.3086 3.8733.4302 6.3043c.0409.818.5069 3.334 1.2423 5.7436.4598 1.5065.9387 2.7019 1.4334 3.582.553.9942 1.1259 1.5933 1.7143 1.7895.4474.1491 1.1327.1441 1.8581-.7279.8012-.9635 1.5903-1.8258 1.9446-2.2069.4351.2355.9064.3625 1.39.3772a.0569.0569 0 0 0 .0004.0041 11.0312 11.0312 0 0 0-.2472.3054c-.3389.4302-.4094.5197-1.5002.7443-.3102.064-1.1344.2339-1.1464.8115-.0025.1224.0329.2309.0919.3268.2269.4231.9216.6097 1.015.6331 1.3345.3335 2.5044.092 3.3714-.6787-.017 2.231.0775 4.4174.3454 5.0874.2212.5529.7618 1.9045 2.4692 1.9043.2505 0 .5263-.0291.8296-.0941 1.7819-.3821 2.5557-1.1696 2.855-2.9059.1503-.8707.4016-2.8753.5388-4.1012.0169-.0703.0357-.1207.057-.1362.0007-.0005.0697-.0471.4272.0307a.3673.3673 0 0 0 .0443.0068l.2539.0223.0149.001c.8468.0384 1.9114-.1426 2.5312-.4308.6438-.2988 1.8057-1.0323 1.5951-1.6698zM2.371 11.8765c-.7435-2.4358-1.1779-4.8851-1.2123-5.5719-.1086-2.1714.4171-3.6829 1.5623-4.4927 1.8367-1.2986 4.8398-.5408 6.108-.13-.0032.0032-.0066.0061-.0098.0094-2.0238 2.044-1.9758 5.536-1.9708 5.7495-.0002.0823.0066.1989.0162.3593.0348.5873.0996 1.6804-.0735 2.9184-.1609 1.1504.1937 2.2764.9728 3.0892.0806.0841.1648.1631.2518.2374-.3468.3714-1.1004 1.1926-1.9025 2.1576-.5677.6825-.9597.5517-1.0886.5087-.3919-.1307-.813-.5871-1.2381-1.3223-.4796-.839-.9635-2.0317-1.4155-3.5126zm6.0072 5.0871c-.1711-.0428-.3271-.1132-.4322-.1772.0889-.0394.2374-.0902.4833-.1409 1.2833-.2641 1.4815-.4506 1.9143-1.0002.0992-.126.2116-.2687.3673-.4426a.3549.3549 0 0 0 .0737-.1298c.1708-.1513.2724-.1099.4369-.0417.156.0646.3078.26.3695.4752.0291.1016.0619.2945-.0452.4444-.9043 1.2658-2.2216 1.2494-3.1676 1.0128zm2.094-3.988-.0525.141c-.133.3566-.2567.6881-.3334 1.003-.6674-.0021-1.3168-.2872-1.8105-.8024-.6279-.6551-.9131-1.5664-.7825-2.5004.1828-1.3079.1153-2.4468.079-3.0586-.005-.0857-.0095-.1607-.0122-.2199.2957-.2621 1.6659-.9962 2.6429-.7724.4459.1022.7176.4057.8305.928.5846 2.7038.0774 3.8307-.3302 4.7363-.084.1866-.1633.3629-.2311.5454zm7.3637 4.5725c-.0169.1768-.0358.376-.0618.5959l-.146.4383a.3547.3547 0 0 0-.0182.1077c-.0059.4747-.054.6489-.115.8693-.0634.2292-.1353.4891-.1794 1.0575-.11 1.4143-.8782 2.2267-2.4172 2.5565-1.5155.3251-1.7843-.4968-2.0212-1.2217a6.5824 6.5824 0 0 0-.0769-.2266c-.2154-.5858-.1911-1.4119-.1574-2.5551.0165-.5612-.0249-1.9013-.3302-2.6462.0044-.2932.0106-.5909.019-.8918a.3529.3529 0 0 0-.0153-.1126 1.4927 1.4927 0 0 0-.0439-.208c-.1226-.4283-.4213-.7866-.7797-.9351-.1424-.059-.4038-.1672-.7178-.0869.067-.276.1831-.5875.309-.9249l.0529-.142c.0595-.16.134-.3257.213-.5012.4265-.9476 1.0106-2.2453.3766-5.1772-.2374-1.0981-1.0304-1.6343-2.2324-1.5098-.7207.0746-1.3799.3654-1.7088.5321a5.6716 5.6716 0 0 0-.1958.1041c.0918-1.1064.4386-3.1741 1.7357-4.4823a4.0306 4.0306 0 0 1 .3033-.276.3532.3532 0 0 0 .1447-.0644c.7524-.5706 1.6945-.8506 2.802-.8325.4091.0067.8017.0339 1.1742.081 1.939.3544 3.2439 1.4468 4.0359 2.3827.8143.9623 1.2552 1.9315 1.4312 2.4543-1.3232-.1346-2.2234.1268-2.6797.779-.9926 1.4189.543 4.1729 1.2811 5.4964.1353.2426.2522.4522.2889.5413.2403.5825.5515.9713.7787 1.2552.0696.087.1372.1714.1885.245-.4008.1155-1.1208.3825-1.0552 1.717-.0123.1563-.0423.4469-.0834.8148-.0461.2077-.0702.4603-.0994.7662zm.8905-1.6211c-.0405-.8316.2691-.9185.5967-1.0105a2.8566 2.8566 0 0 0 .135-.0406 1.202 1.202 0 0 0 .1342.103c.5703.3765 1.5823.4213 3.0068.1344-.2016.1769-.5189.3994-.9533.6011-.4098.1903-1.0957.333-1.7473.3636-.7197.0336-1.0859-.0807-1.1721-.151zm.5695-9.2712c-.0059.3508-.0542.6692-.1054 1.0017-.055.3576-.112.7274-.1264 1.1762-.0142.4368.0404.8909.0932 1.3301.1066.887.216 1.8003-.2075 2.7014a3.5272 3.5272 0 0 1-.1876-.3856c-.0527-.1276-.1669-.3326-.3251-.6162-.6156-1.1041-2.0574-3.6896-1.3193-4.7446.3795-.5427 1.3408-.5661 2.1781-.463zm.2284 7.0137a12.3762 12.3762 0 0 0-.0853-.1074l-.0355-.0444c.7262-1.1995.5842-2.3862.4578-3.4385-.0519-.4318-.1009-.8396-.0885-1.2226.0129-.4061.0666-.7543.1185-1.0911.0639-.415.1288-.8443.1109-1.3505.0134-.0531.0188-.1158.0118-.1902-.0457-.4855-.5999-1.938-1.7294-3.253-.6076-.7073-1.4896-1.4972-2.6889-2.0395.5251-.1066 1.2328-.2035 2.0244-.1859 2.0515.0456 3.6746.8135 4.8242 2.2824a.908.908 0 0 1 .0667.1002c.7231 1.3556-.2762 6.2751-2.9867 10.5405zm-8.8166-6.1162c-.025.1794-.3089.4225-.6211.4225a.5821.5821 0 0 1-.0809-.0056c-.1873-.026-.3765-.144-.5059-.3156-.0458-.0605-.1203-.178-.1055-.2844.0055-.0401.0261-.0985.0925-.1488.1182-.0894.3518-.1226.6096-.0867.3163.0441.6426.1938.6113.4186zm7.9305-.4114c.0111.0792-.049.201-.1531.3102-.0683.0717-.212.1961-.4079.2232a.5456.5456 0 0 1-.075.0052c-.2935 0-.5414-.2344-.5607-.3717-.024-.1765.2641-.3106.5611-.352.297-.0414.6111.0088.6356.1851z"/></svg></g>
+        <text x="1080" y="220" text-anchor="middle" font-family="'Geist',sans-serif" font-size="11" font-weight="600" fill="#2d3142">PostgreSQL</text>
+        <text x="1080" y="233" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">warehouse · dept · catalog</text>
+
+        <!-- ============ FOOTER · DataHub (governance, olive) ============ -->
+        <rect x="40" y="460" width="1120" height="56" rx="6" fill="rgba(122,140,71,0.06)" stroke="rgba(122,140,71,0.35)" stroke-width="0.8"/>
+        <rect x="56" y="470" width="26" height="12" rx="2" fill="none" stroke="rgba(122,140,71,0.40)"/>
+        <text x="69" y="479" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.10em" fill="rgba(122,140,71,0.85)">GOV</text>
+        <g transform="translate(96,476) scale(0.83)" color="#7a8c47"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" /> <path d="M21 21l-6 -6" /></svg></g>
+        <text x="600" y="484" text-anchor="middle" font-family="'Geist',sans-serif" font-size="11" font-weight="600" fill="#7a8c47">DataHub</text>
+        <text x="600" y="499" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">lineage · data validation · data contract — DP1, DP2, DP3</text>
+
+        <!-- ============ LEGEND (horizontal bottom strip) ============ -->
+        <line x1="40" y1="536" x2="1160" y2="536" stroke="rgba(45,49,66,0.12)" stroke-width="1"/>
+
+        <rect x="40" y="550" width="14" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.2"/>
+        <text x="60" y="559" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">Engine trọng tâm</text>
+        <rect x="186" y="550" width="14" height="10" rx="2" fill="#ffffff" stroke="rgba(45,49,66,0.25)" stroke-width="1"/>
+        <text x="206" y="559" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">Service trong Compose</text>
+        <rect x="364" y="550" width="14" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="rgba(45,49,66,0.32)" stroke-width="0.8"/>
+        <text x="384" y="559" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">Dùng chung toàn nền tảng</text>
+        <rect x="570" y="550" width="14" height="10" rx="2" fill="rgba(79,93,117,0.06)" stroke="#7a8399" stroke-width="1"/>
+        <text x="590" y="559" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">Ngoài nền tảng</text>
+        <rect x="716" y="550" width="14" height="10" rx="2" fill="rgba(122,140,71,0.06)" stroke="rgba(122,140,71,0.35)" stroke-width="0.8"/>
+        <text x="736" y="559" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">Quản trị dữ liệu</text>
+
+        <line x1="40" y1="580" x2="66" y2="580" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <text x="74" y="584" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">Luồng chạm Spark / Flink</text>
+        <line x1="264" y1="580" x2="290" y2="580" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="298" y="584" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">Luồng dữ liệu khác</text>
+        <line x1="452" y1="580" x2="478" y2="580" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-sm)"/>
+        <text x="486" y="584" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">Điều phối · lineage (không đánh số)</text>
+        <circle cx="768" cy="577" r="7.5" fill="#f5f5f5" stroke="#4f5d75" stroke-width="0.8"/>
+        <text x="768" y="579.6" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" font-weight="500" fill="#4f5d75">B1</text>
+        <text x="784" y="584" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">Thứ tự luồng Batch B1→B6</text>
+        <circle cx="972" cy="577" r="7.5" fill="#f5f5f5" stroke="#eb6c36" stroke-width="0.8"/>
+        <text x="972" y="579.6" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" font-weight="500" fill="#eb6c36">S1</text>
+        <text x="988" y="584" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">Thứ tự luồng Stream S1→S3</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>
