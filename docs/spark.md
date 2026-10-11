@@ -14,7 +14,10 @@ không đo lại, không suy đoán. Chỗ nào chưa có số thì ghi rõ "ch�
 **Bronze là gì** (theo `CONTEXT.md`): bản sao trung thực của dữ liệu Channel giao cho
 Seller. Nó chỉ đổi file sang định dạng cột và thêm cột kỹ thuật (Export Date, tên file
 nguồn, thời điểm nạp). Nó **không** sửa tên cột, **không** gộp schema, **không** bỏ bản
-trùng. Mỗi dạng schema của một Channel là một bảng riêng; bảng tầng này mang tiền tố `raw_`.
+trùng. Bronze có **một bảng mỗi KÊNH**, không phải một bảng mỗi dạng schema: hai dạng schema của
+Amazon (v0 và 2026-01-01) nằm chung một bảng vì Bronze **giữ nguyên chuỗi JSON**, không parse —
+không parse thì không phải chọn bộ tên cột nào. Việc quy tên khoá về một dạng thuộc **Silver**
+(xem `docs/silver.md`). Bảng tầng này mang tiền tố `raw_`.
 
 **Job này làm gì:** `spark_jobs/01_bronze_baseline.py` đọc các file JSONL export của
 Amazon nằm ở `/data/raw` (mount read-only vào container Spark), rồi ghi thành bảng Iceberg

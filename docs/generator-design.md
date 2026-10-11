@@ -357,7 +357,7 @@ Mỗi con số đo được đặt cạnh con số trong `run_manifest.json`.
 - Tình trạng REST và GraphQL của Shopify năm 2026.
 - Ước lượng dung lượng dữ liệu: đo từ lần chạy nhỏ đầu tiên rồi ngoại suy, không đoán trước.
 - Quy mô cho phần Spark: cấu hình mặc định chỉ ra khoảng 0,5 GB, Spark chạy vài giây nên khó thấy skew và mức cải thiện trên Spark UI. Khi làm Spark, thêm `configs/large.yaml` (tăng `scale.orders_per_day` lên khoảng 20.000 đến 40.000, tức 2,5 đến 5 GB), đo RAM của generator trước khi chạy, ưu tiên chạy trên cloud.
-- Thiết kế bảng theo từng tầng (`raw_`, `stg_`, `dim_`, `fact_`, `feat_`, SCD2) thuộc phần schema design, chưa làm.
+- Thiết kế bảng theo từng tầng (`raw_`, `stg_`, `dim_`, `fact_`, `feat_`, SCD2): Bronze đã xong (`raw_amazon_orders`, `raw_walmart_orders` có thật) và `stg_*` đã chốt ở [docs/silver.md](silver.md); `dim_`/`fact_`/`feat_`/SCD2 chưa làm.
 
 ## 14. Đối chiếu với rubric
 
