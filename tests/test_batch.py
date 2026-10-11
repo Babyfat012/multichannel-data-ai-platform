@@ -12,6 +12,7 @@ from generator.batch import BatchRun
 
 
 def test_batch_writes_expected_layout_and_manifest(tiny_config):
+    """Chứng minh Batch ghi đúng bố cục file (Amazon, Walmart) và `run_manifest.json` khớp số dòng, số file thật trên đĩa."""
     manifest = BatchRun(tiny_config).run()
     root = Path(tiny_config.storage.output_root)
 
@@ -27,6 +28,7 @@ def test_batch_writes_expected_layout_and_manifest(tiny_config):
 
 
 def test_amazon_partitions_before_switch_use_v0_and_after_use_new_schema(tiny_config):
+    """Chứng minh file Amazon trước ngày chuyển dùng khoá v0 (`AmazonOrderId`), từ ngày đó dùng khoá 2026 (`orderId`)."""
     BatchRun(tiny_config).run()
     root = Path(tiny_config.storage.output_root)
     switch_date = tiny_config.day_start(tiny_config.offline_problems.amazon_orders_api_switch_day).date().isoformat()
@@ -48,6 +50,7 @@ def test_no_labels_yet_when_history_is_shorter_than_window(tiny_config):
 
 
 def test_labels_only_include_lines_known_before_cutoff(tiny_config):
+    """Chứng minh bảng nhãn chỉ chứa Order Line đã biết nhãn trước cutoff, nhãn kiểu int8 và chỉ 0/1."""
     scale = dataclasses.replace(tiny_config.scale, days_history=40, orders_per_day=20)
     config = dataclasses.replace(tiny_config, scale=scale)
     BatchRun(config).run()
@@ -61,6 +64,7 @@ def test_labels_only_include_lines_known_before_cutoff(tiny_config):
 
 
 def test_same_config_produces_identical_files(tiny_config, tmp_path):
+    """Chứng minh cùng cấu hình sinh ra file giống y từng byte, kể cả khi ghi vào thư mục khác."""
     other = dataclasses.replace(tiny_config, storage=dataclasses.replace(tiny_config.storage,
                                                                          output_root=str(tmp_path / "again")))
     BatchRun(tiny_config).run()
@@ -72,6 +76,7 @@ def test_same_config_produces_identical_files(tiny_config, tmp_path):
 
 
 def test_seller_skus_cover_catalog_without_hidden_propensity(tiny_config):
+    """Chứng minh bảng SKU phủ đủ catalog, và không lộ cột `defect_propensity` (giá trị ẩn của lõi)."""
     manifest = BatchRun(tiny_config).run()
     part = Path(tiny_config.storage.output_root) / "pg-load/seller.skus/part-00000.jsonl"
     rows = [json.loads(line) for line in part.read_text().splitlines()]

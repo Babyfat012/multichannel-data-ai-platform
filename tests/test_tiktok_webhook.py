@@ -13,6 +13,7 @@ def _tiktok_orders(config, days=range(1, 6)):
 
 
 def test_webhook_envelope_matches_docs(tiny_config):
+    """Chứng minh envelope webhook type 1 đúng tài liệu: đủ khoá cấp ngoài, đủ khoá `data`, và `timestamp` bằng `update_time`."""
     renderer = TikTokOrderWebhookRenderer(tiny_config)
     order = _tiktok_orders(tiny_config)[0]
     msg = renderer.render_event(order, order.timeline[-1]).record
@@ -25,6 +26,7 @@ def test_webhook_envelope_matches_docs(tiny_config):
 
 
 def test_one_notification_id_per_status_change(tiny_config):
+    """Chứng minh mỗi lần đổi trạng thái có mã riêng, và vẽ lại cho ra đúng mã cũ (để dedup được)."""
     renderer = TikTokOrderWebhookRenderer(tiny_config)
     order = _tiktok_orders(tiny_config)[0]
     ids = [renderer.render_event(order, c).key for c in order.timeline]
@@ -34,6 +36,7 @@ def test_one_notification_id_per_status_change(tiny_config):
 
 
 def test_cancel_uses_webhook_spelling(tiny_config):
+    """Chứng minh trạng thái hủy dùng đúng cách viết của webhook (`CANCEL`, không phải `CANCELLED` như API)."""
     renderer = TikTokOrderWebhookRenderer(tiny_config)
     statuses = {renderer.render_event(o, c).record["data"]["order_status"]
                 for o in _tiktok_orders(tiny_config, days=range(1, 15)) for c in o.timeline

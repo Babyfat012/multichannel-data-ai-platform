@@ -16,6 +16,9 @@ HANDOFF.md
 HANDOFF.*.md
 .env
 
+# Brief giao việc nội bộ giữa các phiên agent, không thuộc tài liệu rubric
+.briefs/
+
 # Việc cá nhân: kế hoạch coursework, ghi chú học tập, cấu hình Claude
 docs/plan.md
 edai-k11-cw/

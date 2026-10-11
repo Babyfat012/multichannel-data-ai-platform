@@ -38,6 +38,7 @@ def test_jsonl_pool_keeps_files_interleaved_without_mixing_them(tmp_path):
             pool.write("b", "b.jsonl", {"n": -i})
 
     def read(name: str) -> list[int]:
+        """Giá trị cột `n` đọc lại từ một file JSONL, để so nội dung."""
         return [json.loads(line)["n"] for line in (tmp_path / name).read_text().splitlines()]
 
     assert read("a.jsonl") == [0, 1, 2]

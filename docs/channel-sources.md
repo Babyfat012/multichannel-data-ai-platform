@@ -36,7 +36,7 @@ Nguyên tắc: generator chỉ mô hình hóa field ở mức Cao hoặc Trung b
 - Trạng thái fulfillment: `PENDING_AVAILABILITY`, `PENDING`, `UNSHIPPED`, `PARTIALLY_SHIPPED`, `SHIPPED`, `CANCELLED`, `UNFULFILLABLE`.
 - Có `fulfillment.shipByWindow`, `fulfillment.deliverByWindow` (cửa sổ dự kiến), `packages`, `orderItems[].product` (ASIN, SKU), `proceeds`, `promotion`, `cancellation`.
 
-**Dùng cho schema evolution.** Hai model khác nhau đủ ba kiểu mà rubric muốn thấy: đổi tên (`AmazonOrderId` thành `orderId`, `PurchaseDate` thành `createdTime`, `LastUpdateDate` thành `lastUpdatedTime`), đổi cấu trúc và cách viết giá trị (`OrderStatus: Shipped` thành `fulfillment.status: SHIPPED`), và field mới không có ở v0 (`proceeds`). Ngày chuyển phiên bản trong generator là ngày tự chọn, không phải lịch ngừng hỗ trợ thật của Amazon (chưa xác minh lịch đó).
+**Dùng cho schema evolution.** Dạng 2026 **không có field mới** — mọi khoá của nó đều truy được về một khoá v0, chỉ đổi tên, lồng cấp, đổi kiểu hoặc bị bỏ. Đổi tên: `AmazonOrderId` thành `orderId`, `PurchaseDate` thành `createdTime`, `LastUpdateDate` thành `lastUpdatedTime`, và `OrderTotal` thành `proceeds.grandTotal` (lồng thêm một cấp). Đổi cấu trúc và cách viết giá trị: `OrderStatus: "Shipped"` thành `fulfillment.status: "SHIPPED"`. Đổi kiểu: `IsPrime` (bool) thành mảng `programs`. Bỏ khoá (chỉ có ở v0): `NumberOfItemsShipped`, `NumberOfItemsUnshipped`, `IsBusinessOrder`, `IsReplacementOrder`, `OrderItems[].QuantityShipped`. Ngày chuyển phiên bản trong generator là ngày tự chọn, không phải lịch ngừng hỗ trợ thật của Amazon (chưa xác minh lịch đó).
 
 **Notification.** Generator giả định Amazon gửi thông báo đổi trạng thái đơn và thông báo hay đến trễ. Payload và cách gửi chưa đọc từ tài liệu chính thức. Mức: **Thấp**, ghi là giả định.
 
@@ -91,6 +91,31 @@ Webhook trùng: có thảo luận cộng đồng về việc Shopify gọi webho
 - Giá trị trạng thái thấy trong bản mẫu: `REFUND_INITIATED`, `REFUND_COMPLETED`, `NOT_SHIPPED`, `COMPLETED`. Chưa có danh sách đầy đủ.
 
 Điều chỉnh so với thiết kế cũ: Walmart có cả webhook lẫn polling. Việc dùng polling cho Walmart là **lựa chọn thiết kế** của dự án, không phải giới hạn của Channel.
+
+### Ranh giới tin cậy: nguồn của Walmart là PostgreSQL, không phải file JSONL
+
+**a) Đường đi dữ liệu Walmart.** Dữ liệu Walmart đi qua ba chặng, mỗi chặng do một bên khác nhau giữ. Phân biệt được ba chặng là điều kiện để biết "nguồn" thật nằm ở đâu.
+
+```
+  file JSONL                 PostgreSQL                  Spark                  Bronze
+  /data/raw/pg-load/         walmart.orders              (đọc qua JDBC)         raw_walmart_orders
+  walmart.orders/            (DB phòng ban khác)                                (lakehouse.bronze,
+  export_date=*/             purchase_order_id,                                 Iceberg)
+  part-*.jsonl               raw_payload JSONB, fetched_at
+
+        └───── chặng ① ─────►┘       └───── chặng ② ─────►┘      └───── chặng ③ ─────►┘
+        generator load-postgres      Spark đọc, chỉ đọc về      Spark ghi ra Iceberg
+```
+
+- **Chặng ①** — `generator load-postgres` nạp file JSONL vào bảng `walmart.orders`. Đây là bước nạp vào DB của phòng ban khác, chỉ chạy một lần khi dựng nguồn.
+- **Chặng ②** — Spark đọc `walmart.orders` qua JDBC. Data team **chỉ đọc về**, không sở hữu và không sửa bảng.
+- **Chặng ③** — Spark ghi thành bảng Bronze `raw_walmart_orders` trên Iceberg. Đây là cái hệ thống sở hữu.
+
+**b) Nguồn thật là chặng nào và vì sao.** Nguồn thật là **`walmart.orders` trong PostgreSQL** — ranh giới nằm ngay giữa chặng ① và chặng ②. Lý do: PostgreSQL là **DB của một phòng ban khác**, data team **không sở hữu** nó, chỉ **đọc về**. File JSONL chỉ là phương tiện nạp vào DB đó. Vì không sở hữu, data team không được đổi cách nguồn lưu, nên **ranh giới tin cậy dừng ở PostgreSQL**, không phải ở file JSONL.
+
+**c) Hệ quả quan sát được.** Cột `raw_payload` khai kiểu `JSONB`, nên khi PostgreSQL lưu lại, chuỗi JSON bị chuẩn hoá: **thứ tự key gốc** (`purchaseOrderId`, `customerOrderId`, ...) **thành thứ tự alphabet** (`buyerId`, `isGuest`, `orderDate`, ...), và **thêm khoảng trắng sau dấu hai chấm**. **Không mất giá trị nào** — chỉ thứ tự key và khoảng trắng đổi, nội dung key/value giữ nguyên. Chuẩn JSON vốn **không quy định thứ tự key**, nên hai cách viết là cùng một JSON.
+
+**d) Vì sao đây KHÔNG phải lỗi.** Bronze chỉ chép đúng cái mà nguồn đang giữ. Với Amazon, nguồn là **file** nên chép **nguyên từng byte**. Với Walmart, nguồn là **PostgreSQL** nên chép đúng thứ PostgreSQL đưa ra, kể cả khi JSONB đã xếp lại key. Hai bên trông khác nhau vì **nguồn khác nhau**, không phải vì một nguồn làm sai.
 
 ## 5. TikTok Shop
 

@@ -23,6 +23,7 @@ def _with_duplicate_rate(config, rate):
 
 
 def test_without_duplicates_each_order_appears_once_at_last_update(tiny_config):
+    """Chứng minh `duplicate_rate=0` thì mỗi Order có đúng một bản chính, ở ngày export của lần đổi trạng thái cuối trước cutoff."""
     config = _with_duplicate_rate(tiny_config, 0.0)
     rng = rng_for(0, "test")
     for order in Simulator(config).simulate_day(10):
@@ -34,6 +35,7 @@ def test_without_duplicates_each_order_appears_once_at_last_update(tiny_config):
 
 
 def test_duplicates_are_identical_later_or_older_earlier(tiny_config):
+    """Chứng minh bản trùng hoặc giống hệt và đến muộn hơn, hoặc là bản cũ hơn đến sớm hơn, và luôn nằm trong phạm vi overlap."""
     config = _with_duplicate_rate(tiny_config, 0.4)
     rng = rng_for(0, "test")
     kinds = set()
@@ -55,6 +57,7 @@ def test_duplicates_are_identical_later_or_older_earlier(tiny_config):
 
 
 def test_orders_after_cutoff_are_not_in_batch(tiny_config):
+    """Chứng minh Order tạo sau cutoff không được xuất trong Batch."""
     after_cutoff_day = tiny_config.scale.days_history + 1
     rng = rng_for(0, "test")
     for order in Simulator(tiny_config).simulate_day(after_cutoff_day):

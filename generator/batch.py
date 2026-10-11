@@ -442,10 +442,12 @@ class BatchRun:
         normal_days = self.config.scale.days_history - self.sale_days
 
         def per_day(on_sale: bool) -> float:
+            """Số Order Amazon trung bình mỗi ngày của nhóm ngày sale hoặc ngày thường."""
             days = self.sale_days if on_sale else normal_days
             return round(self.amazon_orders[on_sale] / days, 1) if days else 0.0
 
         def mean_discount(on_sale: bool) -> float:
+            """Tỷ lệ giảm giá trung bình trên mỗi Order Line của nhóm."""
             lines = self.amazon_lines[on_sale]
             return round(self.amazon_discount_sum[on_sale] / lines, 4) if lines else 0.0
 

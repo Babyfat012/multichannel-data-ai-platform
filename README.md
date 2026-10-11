@@ -146,24 +146,26 @@ Image của generator được tối ưu từ **2,35 GB xuống 677 MB** (giảm
 
 ## 5. Repo Structure
 
-Cấu trúc dự kiến. Thư mục nào chưa tồn tại sẽ được tạo khi triển khai.
+Cấu trúc repo. Mục đánh dấu **(CHƯA có)** sẽ được tạo khi triển khai phần tương ứng; các mục còn lại đã có trong repo.
 
 ```
 .
 ├── README.md              # Tài liệu tổng quan này
 ├── docs/                  # Toàn bộ tài liệu chi tiết, kèm ảnh chụp minh họa
+│   ├── diagrams/          # Hình kiến trúc (html/svg/png) dùng trong tài liệu
+│   └── evidence/          # Ảnh chụp Spark UI làm bằng chứng tối ưu
 ├── generator/             # Data Generator: sinh dữ liệu batch và streaming theo cấu hình
 ├── configs/               # File cấu hình YAML của generator (small để thử, default đủ quy mô)
-├── notebooks/             # Notebook báo cáo chất lượng dữ liệu (output xóa trước khi commit)
-├── jobs/
-│   ├── spark/             # Các job Spark cho DP1, DP2, DP3
-│   └── flink/             # Job Flink xử lý luồng event
-├── dags/                  # Airflow DAG cho DP1, DP2, DP3
+├── scripts/               # Script vận hành: setup_lakekeeper.sh, run_bronze_evidence.sh
+├── spark_jobs/            # Các job Spark cho DP1, DP2, DP3
+├── flink_jobs/            # Job Flink xử lý luồng event (CHƯA có)
+├── notebooks/             # Notebook báo cáo chất lượng dữ liệu (CHƯA có; output xóa trước khi commit)
+├── dags/                  # Airflow DAG cho DP1, DP2, DP3 (CHƯA có)
+├── sql/                   # DDL cho bảng ở các zone và Data Warehouse (CHƯA có)
 ├── docker/                # Dockerfile phụ (bản chưa tối ưu để so dung lượng)
 ├── Dockerfile             # Image tối ưu của generator (multi-stage)
 ├── docker-compose.yml     # MinIO, PostgreSQL và các bước sinh, nạp dữ liệu
 ├── .env.example           # Mẫu biến môi trường cho Compose (mật khẩu, cổng)
-├── sql/                   # DDL cho bảng ở các zone và Data Warehouse
 ├── tests/                 # Unit test
 └── pyproject.toml         # Thư viện Python của dự án (quản lý bằng uv)
 ```
@@ -177,6 +179,7 @@ Cấu trúc dự kiến. Thư mục nào chưa tồn tại sẽ được tạo k
 | [docs/generator-design.md](docs/generator-design.md) | Thiết kế Data Generator: kiến trúc, đường thời gian Batch và Stream, vấn đề dữ liệu, nơi lưu, cấu hình, bằng chứng chất lượng |
 | [docs/channel-sources.md](docs/channel-sources.md) | Nguồn tài liệu và mức tin cậy của dạng dữ liệu từng Channel |
 | [docs/Docker.md](docs/Docker.md) | Docker Compose của môi trường nguồn, tối ưu dung lượng image generator |
+| [docs/spark.md](docs/spark.md) | Tối ưu Spark giai đoạn Bronze: baseline, chuỗi tối ưu, bằng chứng Spark UI |
 | [docs/data-quality-report-batch.md](docs/data-quality-report-batch.md) | Báo cáo chất lượng dữ liệu của generator phần Batch, đối chiếu từng dòng rubric với số đo và ảnh chụp |
 | [docs/data-quality-report-stream.md](docs/data-quality-report-stream.md) | Báo cáo phần Stream: trễ, lệch thứ tự, trùng, burst livestream, và số tin trong Kafka |
 

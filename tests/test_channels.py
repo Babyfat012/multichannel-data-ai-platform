@@ -20,6 +20,7 @@ def _orders_of(config, storefront_prefix, days=range(1, 4)):
 
 
 def test_amazon_schema_switches_on_configured_day(tiny_config):
+    """Chứng minh đúng ngày chuyển schema: cùng một đơn ra v0 trước ngày đó và 2026 từ ngày đó, với đổi tên, đổi cấu trúc và khoá chỉ có ở một bản."""
     renderer = AmazonOrdersRenderer(tiny_config)
     order = _orders_of(tiny_config, "amazon")[0]
     as_of = end_of_day(tiny_config, 8)
@@ -38,6 +39,7 @@ def test_amazon_schema_switches_on_configured_day(tiny_config):
 
 
 def test_amazon_ids_are_stable_and_well_formed(tiny_config):
+    """Chứng minh mã đơn Amazon ổn định qua hai lần dựng renderer và đúng định dạng 3-7-7."""
     renderer = AmazonOrdersRenderer(tiny_config)
     order = _orders_of(tiny_config, "amazon")[0]
     amazon_id = renderer.amazon_order_id(order)
@@ -46,6 +48,7 @@ def test_amazon_ids_are_stable_and_well_formed(tiny_config):
 
 
 def test_amazon_never_shows_delivered_and_only_mfn_has_delivery_window(tiny_config):
+    """Chứng minh Amazon không bao giờ hiện trạng thái 'đã giao', và chỉ đơn Seller tự giao (MFN) có cửa sổ giao dự kiến."""
     renderer = AmazonOrdersRenderer(tiny_config)
     for order in _orders_of(tiny_config, "amazon"):
         record = renderer.render(order, end_of_day(tiny_config, 12), export_day=1).record
@@ -55,6 +58,7 @@ def test_amazon_never_shows_delivered_and_only_mfn_has_delivery_window(tiny_conf
 
 
 def test_walmart_row_has_payload_and_fetched_at(tiny_config):
+    """Chứng minh bản ghi Walmart chỉ có 3 cột, khóa bằng `purchaseOrderId`, và payload mang trạng thái Delivered kèm tracking."""
     renderer = WalmartOrdersRenderer(tiny_config)
     delivered = [o for o in _orders_of(tiny_config, "walmart", days=range(1, 6)) if o.delivered_at]
     order = delivered[0]
@@ -75,5 +79,6 @@ def test_walmart_row_has_payload_and_fetched_at(tiny_config):
     ("USPS", r"94\d{20}"),
 ])
 def test_walmart_tracking_number_matches_carrier(tiny_config, carrier, pattern):
+    """Chứng minh mã vận đơn Walmart khớp định dạng của từng hãng vận chuyển."""
     renderer = WalmartOrdersRenderer(tiny_config)
     assert re.fullmatch(pattern, renderer.tracking_number(carrier, "1445238308495"))

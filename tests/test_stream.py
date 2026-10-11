@@ -32,6 +32,7 @@ def stream_config(tmp_path):
 
 
 def test_messages_arrive_in_order_and_inside_stream(stream_config):
+    """Chứng minh message đến đúng thứ tự thời gian, event nằm trong khoảng cutoff→stream_end, không đến trước khi xảy ra, và phủ đủ mọi topic."""
     msgs = list(stream_messages(stream_config))
     assert [m.arrive_at for m in msgs] == sorted(m.arrive_at for m in msgs)
     assert all(stream_config.cutoff <= m.event_time < stream_config.stream_end for m in msgs)
@@ -40,6 +41,7 @@ def test_messages_arrive_in_order_and_inside_stream(stream_config):
 
 
 def test_tiktok_duplicates_keep_notification_id(stream_config):
+    """Chứng minh bản trùng TikTok giữ nguyên payload và đến muộn hơn bản gốc, và tỷ lệ trùng khớp cấu hình."""
     tiktok = [m for m in stream_messages(stream_config) if m.topic == TOPICS["tiktok_shop"]]
     dups = [m for m in tiktok if m.is_duplicate]
     assert dups
@@ -52,6 +54,7 @@ def test_tiktok_duplicates_keep_notification_id(stream_config):
 
 
 def test_amazon_late_share_and_out_of_order(stream_config):
+    """Chứng minh Amazon không có bản trùng, tỷ lệ trễ quá 1 giờ khớp cấu hình, có message lệch thứ tự, và message mang `PublishTime`."""
     amazon = [m for m in stream_messages(stream_config) if m.topic == TOPICS["amazon"]]
     assert not any(m.is_duplicate for m in amazon)
     late = [m for m in amazon if m.arrive_at - m.event_time > timedelta(hours=1)]
@@ -62,6 +65,7 @@ def test_amazon_late_share_and_out_of_order(stream_config):
 
 
 def test_burst_matches_live_multiplier(stream_config, tmp_path):
+    """Chứng minh buổi livestream đẩy số Order TikTok mới lên đúng hệ số cấu hình, và sink ghi ra đúng dạng envelope."""
     manifest = run_stream(stream_config, FileSink(OutputStore(stream_config.storage.output_root)), speed=0)
     burst = manifest["burst"]
     assert burst["multiplier_truth"] == 6
@@ -72,11 +76,13 @@ def test_burst_matches_live_multiplier(stream_config, tmp_path):
 
 
 def test_same_seed_same_stream(stream_config):
+    """Chứng minh cùng seed sinh ra đúng cùng một luồng message (khóa và thời điểm đến)."""
     first = [(m.dedup_key, m.arrive_at) for m in stream_messages(stream_config)]
     assert first == [(m.dedup_key, m.arrive_at) for m in stream_messages(stream_config)]
 
 
 def test_pacing_slows_down_live_day(stream_config):
+    """Chứng minh nhịp phát đúng: mốc đầu bằng 0, ngày thường 60 giây/ngày, ngày live chậm gấp 5 lần."""
     start = stream_config.cutoff
     assert wall_offset(stream_config, start) == 0
     assert wall_offset(stream_config, stream_config.day_start(14)) == 60  # ngày 13 bình thường
@@ -85,6 +91,7 @@ def test_pacing_slows_down_live_day(stream_config):
 
 
 def test_live_day_must_be_in_stream():
+    """Chứng minh cấu hình đặt ngày livestream ngoài phần Stream bị từ chối."""
     with pytest.raises(ValueError, match="tiktok_live.day"):
         parse_config({"scale": {"days_history": 12, "days_stream": 6},
                       "offline_problems": {"amazon_orders_api_switch_day": 6},

@@ -101,7 +101,7 @@ Pipeline và feature chỉ thấy ngày Channel cho, còn nhãn dùng ngày th�
 |---|---|
 | **Skew** | Order theo Storefront: Amazon US 45%, TikTok Shop US 15%, Amazon UK 12%, Amazon DE 10%, Shopify 8%, Walmart US 7%, Shopee VN 3%. SKU theo phân phối Zipf, tham số chọn sao cho SKU bán chạy nhất chiếm khoảng 5% Order Line để job Spark có task chạy chậm rõ rệt. 8 danh mục có tỷ lệ trả khác nhau. Địa lý lệch: vài thành phố lớn chiếm phần lớn Order của mỗi Storefront. Prime Day làm một số ngày có lượng Order gấp nhiều lần |
 | **High cardinality** | Giữ 2.000 SKU. Cardinality cao đến từ `order_id` (khoảng 720 nghìn), `order_line_id` (hơn 1 triệu), `tracking_number` (khoảng 700 nghìn), mã buyer theo Channel (xem [mục 9](#9-buyer-tiền-tệ-và-thời-gian)) |
-| **Schema evolution** | Từ một ngày cố định, dữ liệu đơn Amazon chuyển từ model Orders v0 sang Orders 2026-01-01. Cả hai là model chính thức. Có đủ ba kiểu thay đổi: đổi tên (`AmazonOrderId` thành `orderId`, `PurchaseDate` thành `createdTime`), đổi cấu trúc (`OrderStatus` thành `fulfillment.status`, giá trị `Shipped` thành `SHIPPED`), và field mới (`proceeds`) nên các partition cũ bị null. Ngược lại, field của v0 không còn ở bản mới (ví dụ `IsPrime`, chuyển thành `programs`) bị null ở các partition mới |
+| **Schema evolution** | Từ một ngày cố định, dữ liệu đơn Amazon chuyển từ model Orders v0 sang Orders 2026-01-01. Cả hai là model chính thức. Dạng 2026 không có field mới — mọi khoá truy được về một khoá v0: đổi tên (`AmazonOrderId` thành `orderId`, `PurchaseDate` thành `createdTime`, `OrderTotal` thành `proceeds.grandTotal` lồng thêm một cấp), đổi cấu trúc (`OrderStatus` thành `fulfillment.status`, giá trị `Shipped` thành `SHIPPED`), đổi kiểu (`IsPrime` bool thành mảng `programs`; thông tin không mất vì mảng rỗng khi không Prime), và bỏ khoá (5 khoá chỉ có ở v0). Vì tên khoá đổi, cột chỉ có ở một dạng null ở dạng kia: `proceeds` null ở partition v0, `is_prime` null ở partition 2026, `programs` null ở partition v0 |
 | **Duplicate 2%** | Export chồng lấn ngày (ví dụ lấy lại 3 ngày gần nhất để bắt cập nhật, như report `GET_FLAT_FILE_ALL_ORDERS_DATA_BY_LAST_UPDATE_GENERAL` của Amazon). Có bản trùng y hệt và **bản sửa lại** (cùng khóa, thời điểm cập nhật mới hơn, trạng thái mới hơn). Dedup phải giữ bản mới nhất, không chỉ bỏ bản giống hệt |
 
 Cách đo tỷ lệ trùng: `1 - count(distinct khóa) / count(*)`. Khóa theo Channel: Amazon `AmazonOrderId` (từ khi đổi schema là `orderId`), TikTok Shop `id`, Shopify `id`, Walmart `purchaseOrderId`, Shopee `order_sn`. Cột thời điểm cập nhật dùng để chọn bản mới nhất: Amazon `LastUpdateDate`/`lastUpdatedTime`, TikTok Shop và Shopee `update_time`, Shopify `updated_at`, Walmart `fetched_at`.
@@ -322,7 +322,7 @@ Rubric yêu cầu ảnh chụp output tóm tắt chất lượng dữ liệu. Ph
 |---|---|
 | Skew distribution (city/category %) | Phần trăm Order theo thành phố, theo danh mục, theo Storefront, theo SKU top, theo ngày |
 | Cardinality | `approx_count_distinct` của `order_id`, `order_line_id`, `tracking_number`, mã buyer |
-| Schema evolution | Tỷ lệ null của field mới (`proceeds`) theo từng `export_date`, trước và sau ngày đổi schema |
+| Schema evolution | Tỷ lệ null của cột `proceeds` (chỉ có ở dạng 2026, do tên khoá đổi) theo từng `export_date`, trước và sau ngày đổi schema |
 | Duplicate trước và sau dedup | Tỷ lệ trùng theo công thức ở mục 5, trước và sau khi áp quy tắc dedup (giữ bản mới nhất theo khóa). Báo cáo tự tính cả hai để phần generator không phụ thuộc Spark. Job Spark sau này phải ra cùng con số |
 | Streaming burst/late/duplicate | Số message mỗi phút, phân phối `ingested_at - event_time`, tỷ lệ `tts_notification_id` lặp |
 | Data volume, format sau lưu | Dung lượng và số file theo nguồn, định dạng từng nguồn |
@@ -657,7 +657,7 @@ Số giá trị khác nhau: ước lượng HyperLogLog của DuckDB và số đ
 
 #### Bảng `schema_evolution`
 
-amazon.orders đổi schema từ export_date 2026-04-10: field mới null ở partition cũ và ngược lại.
+amazon.orders đổi schema từ export_date 2026-04-10: cột `proceeds` null ở partition cũ và các cột chỉ có ở v0 null ở partition mới — do tên khoá đổi, không phải vì có field mới.
 
 | period | export_dates | rows | pct_null_proceeds | pct_null_IsPrime | pct_null_AmazonOrderId |
 |---|---|---|---|---|---|

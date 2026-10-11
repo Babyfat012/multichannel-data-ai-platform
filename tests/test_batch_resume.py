@@ -36,6 +36,7 @@ def _run_with_cut(config, cut_at: int, *, stamp_first: bool) -> None:
     write_json_atomic = run.store.write_json_atomic
 
     def guarded(relative: str, obj):
+        """Chặn đúng lúc ghi tem của ngày bị cắt: ném lỗi TRƯỚC khi ghi (cắt bẩn) hoặc SAU khi ghi (cắt sạch)."""
         is_stamp_of_cut_day = relative == f"_checkpoint/day-{cut_at:05d}.json"
         if is_stamp_of_cut_day and not stamp_first:
             raise _Cut
@@ -158,6 +159,7 @@ def test_the_stamp_is_written_only_after_every_file_of_the_day_is_closed(tiny_co
     open_files_when_stamping = []
 
     def guarded(relative: str, obj):
+        """Ghi lại số file còn mở đúng lúc tem được ghi, để kiểm tem là việc cuối cùng của ngày."""
         if relative.startswith("_checkpoint/"):
             open_files_when_stamping.append(len(run.jsonl.keys()))
         return write_json_atomic(relative, obj)

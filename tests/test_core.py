@@ -23,6 +23,7 @@ def _fingerprint(orders):
 
 
 def test_same_seed_gives_same_orders(tiny_config):
+    """Chứng minh cùng seed sinh ra đúng cùng một tập Order (tái lập được)."""
     assert _fingerprint(Simulator(tiny_config).simulate_day(3)) == \
         _fingerprint(Simulator(tiny_config).simulate_day(3))
 
@@ -38,11 +39,13 @@ def test_a_day_does_not_depend_on_previous_days(tiny_config):
 
 
 def test_orders_are_created_inside_their_day(tiny_config):
+    """Chứng minh mọi Order của ngày d có `created_at` nằm trong ngày d, không rơi sang ngày khác."""
     for order in Simulator(tiny_config).simulate_day(4):
         assert tiny_config.day_start(4) <= order.created_at < tiny_config.day_start(5)
 
 
 def test_timeline_is_ordered_and_ends_in_completed_or_cancelled(tiny_config):
+    """Chứng minh timeline tăng dần theo thời gian, mở đầu bằng `PENDING_PAYMENT`, kết thúc ở `COMPLETED` hoặc `CANCELLED`."""
     for order in Simulator(tiny_config).simulate_day(2):
         times = [c.at for c in order.timeline]
         assert times == sorted(times)
@@ -51,6 +54,7 @@ def test_timeline_is_ordered_and_ends_in_completed_or_cancelled(tiny_config):
 
 
 def test_status_at_returns_latest_change_before_time(tiny_config):
+    """Chứng minh `status_at` trả về thay đổi mới nhất TRƯỚC mốc thời gian, và báo lỗi khi hỏi trước lúc tạo Order."""
     order = next(o for o in Simulator(tiny_config).simulate_day(1) if o.shipped_at is not None)
     assert order.status_at(order.shipped_at).status == SHIPPED
     assert order.status_at(order.shipped_at - timedelta(seconds=1)).status != SHIPPED
@@ -59,6 +63,7 @@ def test_status_at_returns_latest_change_before_time(tiny_config):
 
 
 def test_cancelled_orders_have_no_label_and_delivered_orders_do(tiny_config):
+    """Chứng minh Order chưa giao không có nhãn, còn Order đã giao có nhãn 0 hoặc 1."""
     orders = [o for day in range(1, 4) for o in Simulator(tiny_config).simulate_day(day)]
     for order in orders:
         for line in order.lines:
@@ -69,6 +74,7 @@ def test_cancelled_orders_have_no_label_and_delivered_orders_do(tiny_config):
 
 
 def test_label_is_one_only_when_return_is_within_window(tiny_config):
+    """Chứng minh nhãn bằng 1 đúng khi yêu cầu trả rơi trong cửa sổ 30 ngày kể từ ngày giao."""
     window = timedelta(days=tiny_config.labels.window_days)
     orders = [o for day in range(1, 6) for o in Simulator(tiny_config).simulate_day(day)]
     for order in orders:
@@ -88,6 +94,7 @@ def test_zipf_top_share_matches_design_target():
 
 
 def test_catalog_has_requested_size_and_unique_ids(tiny_config):
+    """Chứng minh catalog có đúng số SKU theo cấu hình và mã SKU không trùng."""
     catalog = build_catalog(tiny_config)
     assert len(catalog.skus) == tiny_config.scale.n_skus
     assert len(catalog.skus_by_id) == tiny_config.scale.n_skus
@@ -100,6 +107,7 @@ def test_catalog_has_requested_size_and_unique_ids(tiny_config):
     ("VN", "Hanoi", r"10\d{3}"),
 ])
 def test_postal_code_follows_country_format(country, city, pattern):
+    """Chứng minh mã bưu chính sinh ra khớp định dạng của từng quốc gia."""
     for suffix in (0, 248, 999):
         assert re.fullmatch(pattern, postal_code(country, city, suffix))
 
@@ -111,6 +119,7 @@ def _sale_config(tiny_config, **overrides):
 
 
 def test_sale_day_multiplies_amazon_orders_only(tiny_config):
+    """Chứng minh ngày sale chỉ nhân số Order Amazon, không đụng tới Channel khác."""
     sim = Simulator(_sale_config(tiny_config))
     sale = collections.Counter(o.storefront_id.split("_")[0] for o in sim.simulate_day(5))
     normal = collections.Counter(o.storefront_id.split("_")[0] for o in sim.simulate_day(8))
@@ -119,9 +128,11 @@ def test_sale_day_multiplies_amazon_orders_only(tiny_config):
 
 
 def test_sale_day_discounts_amazon_lines_deeper(tiny_config):
+    """Chứng minh ngày sale làm tỷ lệ Order Line Amazon được giảm giá cao hơn hẳn ngày thường."""
     sim = Simulator(_sale_config(tiny_config))
 
     def discounted_share(day):
+        """Tỷ lệ Order Line Amazon có giảm giá trong một ngày."""
         lines = [l for o in sim.simulate_day(day) if o.storefront_id.startswith("amazon") for l in o.lines]
         return sum(l.unit_discount > 0 for l in lines) / len(lines)
 

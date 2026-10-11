@@ -31,21 +31,32 @@ from generator.storage import OutputStore
 class Sink(Protocol):
     """Nơi nhận message."""
 
-    def send(self, msg: StreamMessage) -> None: ...
-    def close(self) -> None: ...
+    def send(self, msg: StreamMessage) -> None:
+        """Nhận một message và chuyển tới nơi lưu thật (Kafka hoặc file)."""
+        ...
+
+    def close(self) -> None:
+        """Xả hết message đang chờ và giải phóng tài nguyên của sink."""
+        ...
 
 
 class FileSink:
     """Ghi message ra file JSONL theo topic (giữ trong RAM rồi ghi một lần khi đóng)."""
 
     def __init__(self, store: OutputStore) -> None:
+        """Ghi nhớ nơi lưu và mở bộ đệm rỗng cho từng topic.
+
+        Gom trong RAM rồi ghi một lần lúc `close` để không mở lại file cho mỗi dòng.
+        """
         self.store = store
         self.rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
     def send(self, msg: StreamMessage) -> None:
+        """Xếp message vào bộ đệm của topic nó, chưa đụng tới đĩa."""
         self.rows[msg.topic].append({"arrive_at": msg.arrive_at.isoformat(), "key": msg.key, "value": msg.value})
 
     def close(self) -> None:
+        """Ghi mỗi topic thành một file JSONL `stream/<topic>/part-00000.jsonl`."""
         for topic, rows in self.rows.items():
             self.store.write_jsonl(f"stream/{topic}/part-00000.jsonl", rows)
 
@@ -54,15 +65,24 @@ class KafkaSink:
     """Gửi message vào Kafka qua `confluent-kafka`."""
 
     def __init__(self, bootstrap_servers: str) -> None:
+        """Tạo Producer tới `bootstrap_servers`.
+
+        `linger.ms=50` gom message trong 50ms thành lô, giảm số lần gửi mạng.
+        """
         from confluent_kafka import Producer
 
         self.producer = Producer({"bootstrap.servers": bootstrap_servers, "linger.ms": 50})
 
     def send(self, msg: StreamMessage) -> None:
+        """Đẩy message với khóa là mã đơn gốc để Kafka giữ thứ tự theo khóa.
+
+        `poll(0)` phục vụ callback gửi mà không chặn luồng phát.
+        """
         self.producer.produce(msg.topic, key=msg.key.encode(), value=json.dumps(msg.value).encode())
         self.producer.poll(0)
 
     def close(self) -> None:
+        """Chờ Producer xả hết message còn trong lô trước khi kết thúc."""
         self.producer.flush()
 
 
@@ -70,6 +90,7 @@ class StreamStats:
     """Đếm các số đo của Stream trong lúc phát."""
 
     def __init__(self, config: GeneratorConfig) -> None:
+        """Khởi các bộ đếm rỗng; mọi số đo dồn trong lúc phát rồi lấy ra một lần ở `summary`."""
         self.config = config
         self.rows: Counter = Counter()
         self.duplicates: Counter = Counter()
@@ -80,6 +101,7 @@ class StreamStats:
         self.new_tiktok_orders_by_hour: Counter = Counter()
 
     def add(self, msg: StreamMessage) -> None:
+        """Cập nhật số đo cho một message: dòng, khóa duy nhất, độ trễ, lệch thứ tự quá 1 giờ, và Order TikTok mới theo giờ."""
         t = msg.topic
         self.rows[t] += 1
         self.duplicates[t] += msg.is_duplicate
@@ -94,6 +116,11 @@ class StreamStats:
             self.new_tiktok_orders_by_hour[msg.event_time.replace(minute=0, second=0, microsecond=0)] += 1
 
     def summary(self, live_multiplier: float) -> dict[str, Any]:
+        """Gộp số đo từng topic thành dict ghi manifest.
+
+        Gồm tỷ lệ trùng, độ trễ trung vị, tỷ lệ trễ quá 1 giờ, số lệch thứ tự,
+        và hệ số burst của buổi live.
+        """
         topics = {}
         for t, rows in self.rows.items():
             delays = self.delays_min[t]
@@ -118,6 +145,7 @@ class StreamStats:
         hours = range(int(live.start_hour_utc), int(live.start_hour_utc + live.duration_hours))
 
         def per_hour(day: int) -> float:
+            """Số Order TikTok mới trung bình mỗi giờ trong khung giờ live của một ngày."""
             start = self.config.day_start(day)
             return sum(self.new_tiktok_orders_by_hour[start + timedelta(hours=h)] for h in hours) / len(hours)
 

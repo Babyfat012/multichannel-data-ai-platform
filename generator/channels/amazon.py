@@ -2,14 +2,15 @@
 
 Đây là chỗ tạo ra **schema evolution**. Ngày export nhỏ hơn
 `amazon_orders_api_switch_day` thì ghi theo v0, còn lại ghi theo 2026-01-01.
-Ba kiểu thay đổi rubric muốn thấy:
+Năm kiểu thay đổi rubric muốn thấy:
 
 | Kiểu | v0 | 2026-01-01 |
 |---|---|---|
-| Đổi tên | `AmazonOrderId`, `PurchaseDate`, `LastUpdateDate` | `orderId`, `createdTime`, `lastUpdatedTime` |
+| Đổi tên | `AmazonOrderId`, `PurchaseDate`, `LastUpdateDate`, `OrderTotal` | `orderId`, `createdTime`, `lastUpdatedTime`, `proceeds.grandTotal` (lồng thêm một cấp) |
 | Đổi cấu trúc và cách viết giá trị | `OrderStatus: "Shipped"` | `fulfillment.status: "SHIPPED"` |
-| Field mới | không có | `proceeds`, nên partition cũ bị null |
-| Field bỏ đi | `IsPrime` | chuyển thành danh sách `programs`, nên partition mới bị null |
+| Field mới | không có | không có — mọi field dạng 2026 đều truy được về một field v0 (đổi tên, lồng cấp, hoặc đổi kiểu) |
+| Field bỏ đi | `NumberOfItemsShipped`, `NumberOfItemsUnshipped`, `IsBusinessOrder`, `IsReplacementOrder`, `OrderItems[].QuantityShipped` | không có (đã bỏ) → partition 2026-01-01 bị null ở 5 khoá này |
+| Đổi kiểu | `IsPrime` (bool) | `programs` (mảng) → không mất thông tin (cả hai dạng đều cho biết đơn có Prime hay không), nhưng khi gộp schema thì **cả hai cột đều null**: cột `is_prime` null ở 81 ngày 2026, cột `programs` null ở 99 ngày v0 |
 
 Nguồn field: xem docs/channel-sources.md, mục 2. Tên field cấp đơn ở trên là mức Cao.
 Tên các field con do dự án tự đặt (giả định) gồm: `fulfillment.fulfilledBy`,
