@@ -4,8 +4,13 @@
 thiết kế đã chốt ở `docs/silver.md`:
 
   1. **Gộp hai dạng schema của Amazon** (rubric sheet `de`: handle schema evolution).
-     Tháng 1 Amazon giao dạng v0 tên khoá PascalCase (`AmazonOrderId`, `OrderStatus`);
-     từ 2026-01-01 đổi sang camelCase và lồng sâu hơn (`orderId`, `fulfillment.status`).
+     Amazon giao dạng v0 tên khoá PascalCase (`AmazonOrderId`, `OrderStatus`) cho tới
+     export day 99, rồi từ export day 100 = **2026-04-10** đổi sang camelCase và lồng sâu
+     hơn (`orderId`, `fulfillment.status`). Mốc đổi là cấu hình
+     `offline_problems.amazon_orders_api_switch_day: 100` (`configs/default.yaml:23`).
+     CHÚ Ý tên dễ gây nhầm: `"2026-01-01"` là TÊN phiên bản schema mới
+     (`generator/channels/amazon.py:48` `SCHEMA_2026 = "orders-2026-01-01"`), KHÔNG phải
+     ngày đổi. Dải 180 ngày chia 99 ngày v0 + 81 ngày dạng 2026.
      Bronze giữ nguyên chuỗi JSON nên cả hai dạng nằm chung một bảng, một cột `payload`.
      Job này parse hai dạng bằng HAI schema riêng rồi `unionByName` về một bộ cột.
 

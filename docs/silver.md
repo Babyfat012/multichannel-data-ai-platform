@@ -393,7 +393,7 @@ KHÔNG chống nhau: 6,95% tính theo số dòng của **toàn bộ 180 ngày**,
 ngày rải đều**, mà mẫu rải đều theo NGÀY nên nó lấy nhiều ngày cuối (ngày cuối nặng gấp ~254
 lần ngày đầu). Tỉ lệ thật trên 180 ngày **vẫn chưa đo** — cần chạy job trên bảng thật.
 
-### 10.3 Vì sao dedup bắt 0 bản trùng — và việc phải làm để chứng minh được 3 điểm đó
+### 10.3 Vì sao mẫu 20 ngày bắt 0 bản trùng
 
 **Không phải lỗi code.** Khoá dedup chạy đúng: 1.875.607 dòng cho 1.875.607 khoá phân biệt.
 
@@ -402,9 +402,18 @@ nhau **9-10 ngày** (2026-01-01, 01-10, 01-20, 01-29, 02-08, ...). Bản trùng 
 nằm trong khoảng **±3 ngày** (`overlap_days = 3`, mục 3.2). Ngày cách nhau 9 ngày thì **không
 thể** chứa cùng một đơn hai lần. Nên tỉ lệ trùng 0 là **đúng với dữ liệu này**.
 
-=> **Khoản mở số 1:** để có bằng chứng cho dòng rubric *another offline problem (duplicate
-2%)*, phải nạp Bronze từ các ngày **LIỀN NHAU** (ít nhất 7 ngày liền để phủ cửa sổ ±3), rồi
-chạy lại job Silver. Chưa làm: cần sinh/nạp lại Bronze, và `/` chỉ còn ~23 GB.
+=> Vì vậy phải nạp Bronze từ các ngày **LIỀN NHAU**. Việc đó **ĐÃ LÀM**, xem mục 10.6.
+
+Hệ quả cho công cụ: `spark_jobs/day_selection.py` nay có **hai** cách chọn ngày, và hai cách
+đó loại trừ nhau vì hai mục đích ngược nhau:
+
+| Hàm | Chọn gì | Để thấy |
+|---|---|---|
+| `pick_sample_days` | n ngày **rải đều** | **skew** — cần cả ngày bé lẫn ngày to trong một lần chạy |
+| `pick_window_days` | n ngày **liền nhau** | **bản trùng** — cần phủ cửa sổ `±3` ngày |
+
+`01_bronze_baseline.py` có cờ `--window-days N` và `--window-start YYYY-MM-DD`; truyền cả
+`--sample-days` lẫn `--window-days` thì job dừng với mã 2 chứ không tự chọn một cái.
 
 ### 10.4 Khoản mở số 2: cột partition của hai bảng Silver
 
@@ -424,3 +433,76 @@ Giá: dedup ghi lại partition của **mọi** ngày có đơn được cập n
 xoá, giống hệt điều đã gặp 7 lần ở tầng Bronze (`docs/spark.md` mục 5f). Bảng vẫn mất thật:
 `SHOW TABLES IN lakehouse.silver` trả về rỗng. Purge chạy **nền**, nên đĩa trả chậm vài chục
 giây. Chưa rõ nguyên nhân, chưa điều tra.
+
+---
+
+## 10.6 ĐÃ CHỨNG MINH: dedup trên 10 ngày liền nhau (2026-10-12)
+
+Cửa sổ chọn **2026-04-05 .. 2026-04-14**, không chọn bừa: `docs/silver.md` mục 3.2 đã đo
+rằng hai dạng schema chồng nhau ở `export_date` **2026-04-07..04-12**. Lấy cửa sổ trùm lên
+đó thì một lần chạy chứng minh được **cả hai** việc của job Silver.
+
+Dấu vết đổi schema nhìn thấy ngay ở dung lượng file nguồn: 04-05..04-09 mỗi ngày ~**475 MB**,
+rồi 04-10..04-14 tụt xuống ~**418 MB**. Dạng 2026 gọn hơn vì nó bỏ 5 khoá so với v0.
+
+**Mốc đổi schema là export day 100 = 2026-04-10**, đặt ở
+`offline_problems.amazon_orders_api_switch_day: 100` (`configs/default.yaml:23`,
+`generator/channels/amazon.py:85-89`). Dải 180 ngày chia **99 ngày v0 + 81 ngày dạng 2026**.
+Tên dễ gây nhầm, ghi ra để không ai đọc sai lần nữa: `"2026-01-01"` là **TÊN** phiên bản
+schema mới (`amazon.py:48` `SCHEMA_2026 = "orders-2026-01-01"`), **không phải ngày đổi**.
+Chỗ dung lượng tụt 475 -> 418 MB đúng tại 04-10 là bằng chứng độc lập cho mốc đó.
+
+```bash
+bash scripts/run_silver.sh dup        # chạy cả hai bước; hoặc từng bước:
+spark-submit ... 01_bronze_baseline.py --window-days 10 --window-start 2026-04-05 \
+    --aqe on --table raw_amazon_orders_dup
+spark-submit ... 02_silver_amazon.py \
+    --source-table raw_amazon_orders_dup --table stg_amazon_order_lines_dup
+```
+
+### Số đo
+| | Số |
+|---|---|
+| Bronze: đơn nạp vào (10 ngày) | 5.827.514 — 19,6s |
+| Silver: Order Line trước dedup | 8.449.302 |
+| Silver: Order Line sau dedup | 8.314.312 |
+| **bản trùng đã bỏ** | **134.990** |
+| **tỉ lệ trùng đo được** | **1,5976%** — 136,7s |
+| dạng v0 / dạng 2026 trước dedup | 4.222.964 / 4.226.338 |
+
+### Ba câu trong tài liệu, nay có SỐ chứ không còn là lập luận
+
+**1. "Dedup không làm được trong từng partition" (mục 3.2).**
+Nhóm 134.990 khoá trùng theo số `export_date` phân biệt: **100% nằm ở ĐÚNG 2 ngày khác nhau**,
+không một khoá nào có hai bản trong cùng một ngày. Nên dedup giới hạn trong một partition bắt
+được đúng 0 bản — không phải ước lượng, là số đếm.
+
+**2. "Parse TRƯỚC, dedup SAU" (mục 3.2) — đây là bằng chứng mạnh nhất.**
+Trong 134.990 khoá trùng:
+  * **34.080 khoá VẮT QUA HAI DẠNG** — một bản là v0, một bản là 2026;
+  * 100.910 khoá chỉ nằm trong một dạng.
+Với 34.080 khoá đó, trước khi parse thì khoá của hai bản mang **tên khác nhau**
+(`AmazonOrderId` so với `orderId`), nên dedup chạy trước parse **không nhận ra đó là cùng một
+Order**. Số 34.080 lớn hơn con số 23.487 ghi ở mục 3.2 vì cửa sổ ở đây (10 ngày) rộng hơn cửa
+sổ đo lần trước (04-07..04-12).
+
+**3. Tie-break `export_date` lớn nhất (mục 3.1) — có dòng thật minh hoạ.**
+Khoá `111-2589375-9860289` / `21318856472150` có hai bản:
+
+| dạng | `channel_status` | `last_updated_time` | `export_date` |
+|---|---|---|---|
+| v0 | `Shipped` | 2026-04-07 21:22:54 | 2026-04-07 |
+| 2026 | `SHIPPED` | 2026-04-07 21:22:54 | **2026-04-10** |
+
+Hai bản **cùng `last_updated_time`** — tức tie-break chính HOÀ, đúng tình huống mục 3.1 đã
+lường trước. Bảng Silver giữ bản `export_date = 2026-04-10`, tức bản có `export_date` lớn
+nhất. Luật chạy đúng trên dữ liệu thật.
+
+### Vì sao 1,5976% mà không phải 1,98% như manifest của generator
+Không phải sai số đo, mà là **hiệu ứng rìa cửa sổ**, và nó tính ra được: một Order xuất ở ngày
+D cũng xuất lại ở D+1..D+3 (`overlap_days = 3`). Với các Order xuất gần rìa phải của cửa sổ
+(04-12..04-14), bản trùng của chúng rơi ra NGOÀI cửa sổ nên không đếm được. Mất khoảng 3 trong
+10 ngày tính theo một phía => còn lại khoảng 80% số cặp trùng, và 1,98% × 0,8 ≈ **1,58%**,
+khớp số đo 1,5976%.
+=> Muốn đo tỉ lệ trùng ĐÚNG bằng manifest thì phải nạp cả 180 ngày. **Chưa đo.** Số 1,5976%
+là cận dưới, và nó đủ để chứng minh dedup làm việc.

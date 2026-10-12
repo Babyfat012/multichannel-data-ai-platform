@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from spark_jobs.day_selection import pick_sample_days
+from spark_jobs.day_selection import pick_sample_days, pick_window_days
 
 # 180 ngày giống thật: 2026-01-01 .. 2026-06-29.
 DAYS = [f"d{i:03d}" for i in range(180)]
@@ -60,3 +60,53 @@ def test_n_bang_1_lay_ngay_lon_nhat():
 def test_moi_ngay_duoc_chon_la_ngay_co_that(n):
     """Hàm chỉ được chọn lại từ danh sách đầu vào, không tự sinh ngày mới."""
     assert set(pick_sample_days(DAYS, n)) <= set(DAYS)
+
+
+class TestPickWindowDays:
+    """Chọn ngày LIỀN NHAU — mục đích ngược với `pick_sample_days`.
+
+    Bản trùng của generator nằm trong khoảng `overlap_days = 3`, nên hai ngày cách nhau
+    9-10 ngày không bao giờ chứa cùng một Order. Đã đo: 20 ngày rải đều cho dedup bắt được
+    đúng 0 bản trùng (`docs/silver.md` mục 10.3). Vì vậy phải có cách chọn ngày liền nhau.
+    """
+
+    DAYS = [f"2026-01-{d:02d}" for d in range(1, 21)]
+
+    def test_lien_nhau_tu_ngay_chi_dinh(self):
+        got = pick_window_days(self.DAYS, 3, start="2026-01-05")
+        assert got == ["2026-01-05", "2026-01-06", "2026-01-07"]
+
+    def test_khong_chi_dinh_thi_lay_GIUA_dai(self):
+        """Lấy giữa vì hai đầu dải là ca biên: đầu ngày quá bé, cuối ngày quá to."""
+        got = pick_window_days(self.DAYS, 4)
+        assert got == ["2026-01-09", "2026-01-10", "2026-01-11", "2026-01-12"]
+
+    def test_cac_ngay_tra_ve_LIEN_TUC_khong_ho(self):
+        got = pick_window_days(self.DAYS, 7, start="2026-01-02")
+        idx = [self.DAYS.index(d) for d in got]
+        assert idx == list(range(idx[0], idx[0] + 7))
+
+    def test_cham_cuoi_dai_thi_lui_lai_cho_du_n(self):
+        """Yêu cầu 5 ngày từ ngày thứ 18 chỉ còn 3 ngày — phải lùi để vẫn đủ 5."""
+        got = pick_window_days(self.DAYS, 5, start="2026-01-18")
+        assert len(got) == 5
+        assert got[-1] == "2026-01-20"
+
+    def test_n_lon_hon_ca_dai_thi_lay_het(self):
+        assert pick_window_days(self.DAYS, 99) == self.DAYS
+
+    def test_n_bang_khong_thi_rong(self):
+        assert pick_window_days(self.DAYS, 0) == []
+
+    def test_ngay_bat_dau_sai_thi_NEM_LOI(self):
+        """Ném chứ không lặng lẽ chọn ngày gần nhất.
+
+        Gõ sai ngày rồi chạy 20 phút ra bảng không như mong đợi thì tệ hơn là dừng ngay.
+        """
+        with pytest.raises(ValueError, match="không có trong danh sách"):
+            pick_window_days(self.DAYS, 3, start="2026-99-99")
+
+    def test_khac_han_pick_sample_days_tren_cung_dau_vao(self):
+        """Hai hàm cùng n mà ra hai tập khác nhau — đó chính là lý do có hai hàm."""
+        n = 5
+        assert pick_window_days(self.DAYS, n) != pick_sample_days(self.DAYS, n)

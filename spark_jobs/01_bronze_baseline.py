@@ -42,7 +42,7 @@ from pyspark.sql import functions as F
 
 # spark-submit đưa thư mục của file script vào sys.path, nên import phẳng là đủ.
 # day_selection.py cố tình KHÔNG import pyspark để test được trên máy host.
-from day_selection import pick_sample_days
+from day_selection import pick_sample_days, pick_window_days
 
 # Thư mục export của Amazon bên trong container Spark (mount read-only từ /data/raw).
 # Dưới nó là export_date=YYYY-MM-DD/part-*.jsonl -> Spark tự nhận `export_date` là cột
@@ -72,6 +72,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Chỉ nạp N ngày RẢI ĐỀU trên toàn dải thay vì cả 180 ngày. Rải đều (không "
         "phải N ngày cuối) vì các ngày cuối to gần bằng nhau, lấy liền nhau sẽ KHÔNG "
         "thấy skew. 0 = nạp hết.",
+    )
+    p.add_argument(
+        "--window-days",
+        type=int,
+        default=0,
+        help="Chỉ nạp N ngày LIỀN NHAU thay vì rải đều. Dùng khi cần chứng minh BẢN TRÙNG: "
+        "generator xuất lại một Order trong khoảng overlap_days=3, nên ngày rải đều "
+        "(cách nhau 9-10 ngày) không bao giờ chứa cùng một Order và dedup bắt được 0 bản. "
+        "Đặt >= 7 để phủ cửa sổ ±3. Loại trừ với --sample-days. 0 = không dùng.",
+    )
+    p.add_argument(
+        "--window-start",
+        default=None,
+        help="Ngày bắt đầu cửa sổ liền nhau (YYYY-MM-DD). Để trống thì lấy cửa sổ ở GIỮA "
+        "dải. Chỉ có nghĩa khi đi cùng --window-days.",
     )
     p.add_argument(
         "--aqe",
@@ -219,11 +234,19 @@ def main(argv: list[str] | None = None) -> int:
         if not all_days:
             print(f"KHÔNG tìm thấy export_date=* nào dưới {args.source}", file=sys.stderr)
             return 1
-        days = (
-            None
-            if args.sample_days <= 0
-            else pick_sample_days(all_days, args.sample_days)
-        )
+        if args.sample_days > 0 and args.window_days > 0:
+            print(
+                "--sample-days và --window-days loại trừ nhau: một cái rải đều để thấy "
+                "skew, một cái liền nhau để thấy bản trùng. Chọn MỘT.",
+                file=sys.stderr,
+            )
+            return 2
+        if args.window_days > 0:
+            days = pick_window_days(all_days, args.window_days, args.window_start)
+        elif args.sample_days > 0:
+            days = pick_sample_days(all_days, args.sample_days)
+        else:
+            days = None
 
         print(f"run_id          = {run_id}")
         print(f"bảng đích       = {CATALOG}.{NAMESPACE}.{args.table}")
@@ -231,7 +254,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ngày có trên đĩa= {len(all_days)}")
         print(f"ngày sẽ nạp     = {len(days) if days else len(all_days)}")
         if days:
-            print(f"  -> {days[0]} ... {days[-1]} (rải đều)")
+            cach = "liền nhau" if args.window_days > 0 else "rải đều"
+            print(f"  -> {days[0]} ... {days[-1]} ({cach})")
 
         started = time.monotonic()
         df = add_provenance(read_raw(spark, args.source, days), run_id)
