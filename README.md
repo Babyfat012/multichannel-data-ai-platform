@@ -180,7 +180,7 @@ Cấu trúc repo. Mục đánh dấu **(CHƯA có)** sẽ được tạo khi tri
 | [docs/channel-sources.md](docs/channel-sources.md) | Nguồn tài liệu và mức tin cậy của dạng dữ liệu từng Channel |
 | [docs/Docker.md](docs/Docker.md) | Docker Compose của môi trường nguồn, tối ưu dung lượng image generator |
 | [docs/spark.md](docs/spark.md) | Tối ưu Spark giai đoạn Bronze: baseline, chuỗi tối ưu, bằng chứng Spark UI |
-| [docs/silver.md](docs/silver.md) | Thiết kế tầng Silver: hai bảng `stg_*` theo kênh, độ hạt Order Line, khoá dedup, kiểu dữ liệu, và các chỗ chưa quyết |
+| [docs/silver.md](docs/silver.md) | Thiết kế tầng Silver: hai bảng `stg_*` theo kênh, độ hạt Order Line, khoá dedup, kiểu dữ liệu, và một hệ quả còn mở thuộc Gold |
 | [docs/data-quality-report-batch.md](docs/data-quality-report-batch.md) | Báo cáo chất lượng dữ liệu của generator phần Batch, đối chiếu từng dòng rubric với số đo và ảnh chụp |
 | [docs/data-quality-report-stream.md](docs/data-quality-report-stream.md) | Báo cáo phần Stream: trễ, lệch thứ tự, trùng, burst livestream, và số tin trong Kafka |
 

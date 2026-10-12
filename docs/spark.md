@@ -74,7 +74,27 @@ Vì sao nguồn của Walmart là PostgreSQL (không phải file JSONL), và vì
 - giữa 2026-03-22 = **495 MB**
 - lớn nhất 2026-06-29 = **1,64 GB**
 
-Ngày lớn nhất lệch **224 lần** ngày nhỏ nhất. Đây chính là dòng rubric *skew*.
+Ngày lớn nhất lệch **224 lần** ngày nhỏ nhất theo **dung lượng file nguồn**. Đây chính là dòng
+rubric *skew*.
+
+**Đọc con số 224 cho đúng.** Nó đo dung lượng file JSONL nguồn, không đo tải của một task. Đo
+trên chính bảng Iceberg đã ghi (metadata `raw_amazon_orders.partitions`, 180 ngày,
+108.248.563 dòng, 187 file, 8.525.005.070 byte) thì hình dạng nhẹ hơn hẳn:
+
+| Thước đo | Số |
+|---|---|
+| dòng/ngày nhỏ nhất (2026-01-01) | 8.530 |
+| dòng/ngày trung vị | 582.228 |
+| dòng/ngày lớn nhất (2026-06-29) | 2.173.164 |
+| **max / trung vị** | **3,73 lần** |
+| max / min | 254,8 lần |
+| ngày nặng nhất chiếm | **2,01%** tổng dòng |
+| 5 ngày nặng nhất chiếm | 7,18% tổng dòng |
+| byte/ngày max / trung vị | 3,56 lần (khớp thước đo dòng) |
+
+Số làm một task chậm là **3,73**, không phải 224. Trên 180 ngày, skew là **nhẹ-vừa**. Nó lộ rõ ở
+**mẫu 20 ngày rải đều** vì mẫu đó kéo giãn đúng dải 8.530..2.173.164. Tải cũng **tăng dần theo
+thời gian** (10 ngày đầu 8.530..400.384; 5 ngày cuối 999.062..2.173.164).
 
 **Small-file là vấn đề phía ĐỌC.** 1.064 / 3.316 file nhỏ hơn 1 MB. Vì vậy đuôi file tí hon
 là chi phí lúc **đọc**, không phải lúc ghi — điều này quyết định lựa chọn ở mục 5e.
@@ -117,6 +137,18 @@ Chạy **cùng 20 ngày rải đều** (có cả ngày bé lẫn ngày to), ch�
 Kết quả **ngược kỳ vọng**: bật AQE **chậm hơn** (72,3s → 81,7s) và task chậm nhất **tệ hơn**
 (18,7s → 23,6s). Giả định ban đầu bị số đo bác bỏ.
 
+> **Hạ giọng phần so sánh THỜI GIAN TỔNG (đo 2026-10-12).** Chạy **đúng một cấu hình ba lần**
+> trong cùng môi trường cho 55,9 / 63,2 / 64,8s — tức **nhiễu 8,9s trên nền 61,3s = 14,5%**
+> (n=3, chỉ là cỡ độ lớn, không phải khoảng tin cậy). Cặp 72,3 / 81,7 chênh 9,4s = **13%**, với
+> **n=1 mỗi bên**. Chênh nhỏ hơn nhiễu, nên bảng trên **không đủ** để kết luận "AQE làm chậm hơn"
+> ở mức thời gian tổng. Muốn kết luận đó thì phải chạy lại mỗi bên nhiều lần — **chưa làm**.
+>
+> **Phần KHÔNG bị nhiễu ảnh hưởng và vẫn đứng vững**, vì là số đếm và phân bố chứ không phải bấm
+> giờ: AQE gộp **200 task → 8 task**; chỉ **19/200 task có dữ liệu** (181 task rỗng); task nặng
+> nhất ôm đúng **2.173.164 dòng** và **384,5 MiB** shuffle read — ba số này giống hệt nhau qua cả
+> lần `lan1` và cả ba lần chạy đối chứng. Kết luận ở mục (c) dưới đây dựa trên các số này, nên nó
+> không bị lung lay.
+
 ### c. Vì sao AQE không chữa được skew của job này
 AQE giỏi hai việc: (a) gộp nhiều task bé, và (b) **cắt skew trong JOIN**. Job này **không có
 JOIN**. Chỗ nghẽn là một task phải ghi trọn một partition 1,64 GB — AQE **không chia việc ghi
@@ -134,11 +166,102 @@ nặng thêm (đúng như cột "số task" cho thấy: 200 → 8).
 ### e. Quyết định: GIỮ `hash` (chốt 2026-10-11)
 Đây là câu hỏi treo ở `HANDOFF.bronze.md` mục 5, đã chốt: **giữ `hash`, không chạy lại**.
 
+**`hash` là mặc định NGẦM, không phải giá trị ghi trong bảng (đo 2026-10-12).**
+`SHOW TBLPROPERTIES lakehouse.bronze.raw_amazon_orders` **không có** dòng
+`write.distribution-mode` (chỉ có `write.parquet.compression-codec=zstd`). Nên "giữ `hash`" nghĩa
+là **giữ nguyên mặc định của Iceberg cho bảng có partition** — trong repo không có dòng cấu hình
+nào để chỉ vào. Bảng thử nghiệm đặt qua `spark.sql.catalog.lakehouse.table-default.write.distribution-mode`
+thì thuộc tính **có xuất hiện** trong `SHOW TBLPROPERTIES`, nên cách đặt đó áp được.
+
 Lý do: ở quy mô 180 ngày, skew **vẫn còn** (ảnh `06`: median 33s, max 1,1 phút ≈ gấp 2 lần
 median) **nhưng không chặn được việc** — job vẫn xong và ghi đủ dòng. Đổi sang `none` sẽ
 đổi một cái nghẽn có kiểm soát lấy **nhiều file nhỏ hơn**, mà small-file vốn đã là vấn đề
 phía đọc (1.064/3.316 file < 1 MB, mục 3). Giữ `hash` giữ đúng 1 file/partition, đổi lại
 chấp nhận ngày to ghi trong một task. Đây là đánh đổi có lý do, không phải bỏ qua skew.
+
+### f. Ba phương pháp đã thử, và bảng trước/sau (đo 2026-10-12)
+
+Phần (e) chốt giữ `hash` bằng **lập luận**. Phần này đo bằng **số**: ba phương pháp, mỗi phương
+pháp một lần chạy riêng, cùng 20 ngày mẫu (`pick_sample_days` tất định nên cùng dữ liệu), AQE tắt,
+ghi vào bảng thử rồi xoá. Không bảng thật nào bị ghi vào, không đổi mặc định của job.
+
+**Baseline phải đo lại, vì môi trường đã khác.** Baseline cũ 72,3s chạy driver trên `spark-master`;
+ba phương pháp chạy driver trên `worker-1` (`--driver-memory 600m`, vì `spark-master` 512 MB bị
+OOM kill). Nên đã chạy **đối chứng**: đúng cấu hình baseline trong môi trường mới, **ba lần**.
+
+| Lần chạy | "XONG sau" |
+|---|---|
+| đối chứng 1 | 55,9s |
+| đối chứng 2 | 63,2s |
+| đối chứng 3 | 64,8s |
+| **trung bình = baseline mới** | **61,3s** |
+| dao động giữa ba lần giống hệt nhau | **8,9s = 14,5%** |
+
+Mọi so sánh dưới đây dùng **61,3s**. Hàng 72,3s vẫn giữ ở mục (b) nhưng phải đọc kèm nhãn "môi
+trường cũ, driver ở `spark-master`".
+
+**Bảng trước/sau.** Với mỗi phương pháp, `SHOW TBLPROPERTIES` của bảng thử đã được kiểm **trước
+khi đọc số**, để chắc cấu hình thật sự áp vào bảng — không kiểm thì mọi số đều có thể là số của
+`hash`.
+
+| | Thời gian | So baseline 61,3s | Dòng ở task nặng nhất | Task lâu nhất | Số file | Chữa skew? |
+|---|---|---|---|---|---|---|
+| **đối chứng** (`hash`, shuffle 200) | 61,3s | — | 2.173.164 | 11,0-12,8s | 20 | — |
+| **(a)** `shuffle.partitions` 200 → 24 | 70,9s | +9,6s, **sát nhiễu → chưa chắc** | **2.173.164** | 22,3s | 20 | **KHÔNG** |
+| **(b)** `distribution-mode=none` | **48,4s** (44,6 / 52,2) | **−12,9s = −21%, KHÁC THẬT** | **181.050** | 6,1s | **309** | **CÓ**, ở mức task |
+| **(c)** `distribution-mode=range` | 79,4s | **+18,1s = +30%, KHÁC THẬT** | **2.173.164** | 10,7s | 20 | **KHÔNG** |
+
+"KHÁC THẬT" nghĩa là hai dải số **không chồng nhau**: lần (b) chậm nhất (52,2s) vẫn nhanh hơn lần
+đối chứng nhanh nhất (55,9s). Đó là cách đọc đúng khi n nhỏ, chắc hơn so trung bình với trung bình.
+
+**Vì sao từng phương pháp ra như vậy:**
+- **(a)** chỉ đổi số task sau shuffle. Khoá phân phối vẫn là `export_date`, nên task nặng nhất vẫn
+  ôm **đúng** 2.173.164 dòng — không đổi một dòng nào. Nó chỉ bớt task rỗng (200 → 24, trong đó 16
+  có dữ liệu), nên trung vị task tăng từ 0,01s lên 4,18s mà đỉnh không giảm. Giả định nêu **trước**
+  khi chạy là "không chữa được", và số đo xác nhận.
+- **(b)** bỏ shuffle hẳn: còn **một** stage đọc-và-ghi, 114 task, **cả 114 đều có dữ liệu**,
+  shuffle read = 0. Vì không ai gom một ngày về một task nữa, dòng ở task nặng nhất rơi từ
+  2.173.164 xuống 181.050 (**12 lần**).
+- **(c)** không chữa được, và lý do đáng nhớ: `range` chẻ theo **ranh giới dải** của khoá, nhưng
+  khoá ở đây là `export_date` và **một ngày là một giá trị** — không chẻ nhỏ hơn được. Nên nó trả
+  thêm chi phí hai stage lấy mẫu (13,6s + 24,7s) mà dòng/task max vẫn đúng 2.173.164.
+
+**Giá của (b), và phần đã đo được của giá đó.** (b) ra **309 file** thay vì 20 (**15,5 lần**),
+file trung vị 1,45 MiB thay vì 44,5 MiB, số file mỗi partition lệch 1..23. Tức skew không mất đi
+mà **chuyển dạng**: từ "một task ôm hết" sang "số file mỗi partition lệch". Mục 3 đã chốt
+small-file là chi phí phía **đọc**, nên đã đo luôn chi phí đó:
+
+`SELECT count(*), sum(length(payload)), count(distinct export_date)` — một truy vấn cho cả ba
+bảng, chạy **hai lần** mỗi bảng trong cùng phiên Spark. Cả ba trả kết quả y hệt (12.627.457 dòng /
+10.058.940.405 ký tự / 20 ngày), nên ba bảng chứa đúng cùng dữ liệu.
+
+| Bảng | Số file | Lần 1 | Lần 2 |
+|---|---|---|---|
+| đối chứng (`hash`) | 20 | 25,34s | 18,40s |
+| (c) `range` | 20 | 24,02s | 15,90s |
+| (b) `none` | **309** | 27,86s | 19,10s |
+
+Hai bảng **cùng 20 file** đã lệch nhau 1,3-2,5s, và lần 1 luôn chậm hơn lần 2 khoảng 7-8s ở cả ba
+bảng (hiệu ứng cache). Bảng 309 file chậm hơn +2,5..3,8s (lần 1) và +0,7..3,2s (lần 2) —
+**nằm trong nhiễu của chính phép đo**. Kết luận trung thực: ở 20 ngày / 12,6 triệu dòng, chi phí
+đọc thêm của 15,5 lần nhiều file **chưa tách được khỏi nhiễu**; hướng chênh là chậm hơn một chút,
+không đủ để khẳng định. **Không** kết luận "309 file không tốn gì".
+
+**Ba giới hạn của phép đo đọc, ghi ra để không ai đọc quá:** (1) truy vấn quét **toàn bảng**,
+không lọc partition; (2) **chưa đo** truy vấn có lọc, là dạng truy vấn mà small-file thường đau
+nhất; (3) **chưa đo** ở 180 ngày, nơi số file sẽ lớn hơn khoảng 9 lần.
+
+**Quyết định (e) giữ `hash` vẫn chưa đổi**, nhưng lý do của nó đã yếu đi một phần: (e) dựa vào
+"đổi sang `none` sẽ đổi lấy nhiều file nhỏ, mà small-file là vấn đề phía đọc", và chi phí đọc đó
+đo ở 20 ngày thì chưa tách được khỏi nhiễu. Chưa đo ở 180 ngày nên chưa có cơ sở đổi quyết định.
+Số nằm đây để lần sau xem lại không phải đo lại từ đầu.
+
+**Giới hạn đã biết, không liên quan tới số đo.** `DROP TABLE ... PURGE` in lỗi Lakekeeper
+`BadRequestException: Table does not exist or user does not have permission to view it at
+location ...metadata.json` **sau khi** xoá, lặp cả 7 lần drop. Mỗi lần bảng vẫn mất thật (biến
+khỏi `SHOW TABLES` và khỏi MinIO), và `raw_amazon_orders` vẫn đúng 187 file / 8.525.005.070 byte
+qua toàn bộ loạt thí nghiệm. Purge chạy **nền**: MinIO sạch sau khoảng 20-25s. Chưa rõ nguyên nhân,
+chưa điều tra.
 
 ---
 
@@ -243,6 +366,19 @@ bash scripts/run_bronze_evidence.sh lan3   # 180 ngày, AQE on  → bảng thậ
 bash scripts/run_bronze_evidence.sh lan1   # 20 ngày, AQE off  → ảnh skew
 bash scripts/run_bronze_evidence.sh lan2   # 20 ngày, AQE on   → ảnh so sánh
 ```
+
+**Chạy lại loạt thí nghiệm skew của mục 5f** (mỗi lần ghi một bảng thử, đo xong thì `DROP TABLE
+... PURGE`; đừng để hai bảng thử cùng tồn tại, mỗi bảng ~945 MiB):
+```bash
+bash scripts/run_bronze_evidence.sh skew_0   # đối chứng: cấu hình baseline, môi trường mới
+bash scripts/run_bronze_evidence.sh skew_a   # shuffle.partitions 24
+bash scripts/run_bronze_evidence.sh skew_b   # distribution-mode=none
+bash scripts/run_bronze_evidence.sh skew_c   # distribution-mode=range
+```
+Bốn đích này **không** nằm trong `tatca`, và **không** ghi vào hai bảng thật. Mỗi lần
+`spark-submit` để lại ~108 MB jar trong `/opt/spark/work` của **mỗi** worker — chạy nhiều thì
+thư mục đó phình, xoá được vì chỉ chứa jar tải lại được cộng `stderr`/`stdout`
+(**đừng** chạm `out/spark-events`, đó mới là bằng chứng).
 
 > **ĐỪNG chạy `docker compose --profile spark up -d` trần.** Nó khởi động luôn service
 > default-profile `generator-batch` và bắt đầu sinh lại 100 GB vào MinIO trên `/`. Luôn nêu

@@ -2,7 +2,7 @@
 
 Tài liệu này ghi lại **thiết kế đã chốt** của tầng Silver: hai bảng `stg_*` theo kênh, độ
 hạt Order Line, khoá dedup, kiểu dữ liệu, và cách xử lý khác biệt giữa hai dạng schema của
-Amazon. Cập nhật **2026-10-11**.
+Amazon. Cập nhật **2026-10-12**.
 
 Mọi số ở đây lấy từ một dòng code (ghi `file.py:dòng`) hoặc ghi rõ **"đã đo"** / **"chưa đo"**.
 Chỗ nào chưa đo thì không suy đoán.
@@ -13,7 +13,7 @@ Chỗ nào chưa đo thì không suy đoán.
 
 - Đây là **thiết kế đã chốt, CHƯA có code**. Chưa có `spark_jobs/02_silver_*.py` nào.
 - Tài liệu tả *quyết định, lý do, và giá* — không phải hướng dẫn chạy.
-- Mục 8 liệt kê đủ **3 chỗ chưa quyết**; tài liệu cố ý **không** tự chọn.
+- Mục 8 ghi **ba khoản cuối đã chốt** (2026-10-12). Mục 9 nêu **một** hệ quả còn mở, thuộc Gold.
 - Đọc kèm: `CONTEXT.md` (định nghĩa Bronze/Silver/Gold), `docs/spark.md` (Bronze đã xong).
 
 ---
@@ -250,16 +250,86 @@ giao vẫn là `Shipped`). Walmart có `Delivered` thật kèm `statusDate`, **n
 
 ---
 
-## 8. Chưa quyết
+## 8. Ba khoản cuối: ĐÃ QUYẾT (2026-10-12)
 
-Ba khoản dưới đây **chưa quyết**. Tài liệu ghi ra để không ai tưởng đã chốt.
+Ba khoản này từng nằm ở mục "chưa quyết". Đã chốt, kèm lý do và giá.
 
-1. **Giữ hay bỏ các cột chỉ Walmart có:** `buyer_id`, `is_guest`, `customer_email_id`,
-   `order_type`.
-2. **Tên cột cho thời điểm giao của Walmart.** Chưa đặt tên (`delivered_at`/`delivered_time` hay
-   tên khác) vì `COMPLETED` cũng được ghi là `Delivered`
-   (`generator/channels/walmart.py:38-39`), nên với đơn completed thì `statusDate` là lúc **hoàn
-   tất**, không phải lúc giao.
-3. **`fulfilled_by` so với `fulfillment_method`.** `CONTEXT.md` định nghĩa Fulfillment Method
-   theo **Order Line**, nhưng nguồn Amazon chỉ cho ở mức **Order**. Chưa quyết dùng tên nào và
-   đặt ở mức nào.
+### 8.1 Bốn cột chỉ Walmart có: giữ 2, bỏ 2
+
+**Chốt (người dùng chọn):** giữ `buyer_id`, `is_guest`. Bỏ `customer_email_id`, `order_type`.
+
+**Lý do bỏ:**
+- `order_type` **luôn là `"REGULAR"`** — hardcode ở `generator/channels/walmart.py:119`, cả repo
+  không có giá trị thứ hai. Một cột một giá trị không mang tin nào.
+- `customer_email_id` là email đã băm (`walmart.py:114`), trùng vai *danh tính* với `buyer_id`
+  mà thêm một cột dữ liệu cá nhân phải canh.
+
+**Giá của việc bỏ: KHÔNG mất dữ liệu.** Bronze giữ `raw_payload` nguyên văn, hai khoá đó vẫn ở
+đó. Muốn dùng lại thì sửa job Silver và chạy lại từ Bronze — mất **công**, không mất **dữ liệu**.
+
+**Giá của việc GIỮ — phần dễ bỏ sót:**
+- `is_guest` **không mang tín hiệu nào về Return Label trong dữ liệu này**: `generator/core/returns.py`
+  không đọc `buyer` (grep: không một dòng). Đưa nó lên bảng feature thì model vẫn có thể bắt được
+  tương quan ngẫu nhiên — một cột *trông như* có ích mà thật ra là nhiễu. Phải ghi rõ ở tầng
+  feature, không để người sau tưởng nó là feature đã kiểm.
+- `buyer_id` giữ làm **khoá nối**, **không** làm feature (đề xuất của planner, chưa có code để
+  cưỡng chế). Nó là mã 12 chữ số băm (`native_code(..., 12)`, không gian 10^12) — độ hạt gần như
+  một-dòng-một-giá-trị. Dùng trực tiếp làm feature là rò rỉ danh tính chứ không phải học quy luật.
+
+### 8.2 Thời điểm giao của Walmart: cột tên `status_changed_at`, KHÔNG đặt `delivered_at`
+
+**Chốt:** `stg_walmart_order_lines` có cột `status_changed_at` (timestamp UTC) lấy từ `statusDate`.
+Silver **không** tạo cột `delivered_at`.
+
+**Lý do:** `generator/channels/walmart.py:34-39` ánh xạ **cả `DELIVERED` lẫn `COMPLETED`** thành
+cùng một chữ `"Delivered"`, và `statusDate` là thời điểm của **lần đổi trạng thái gần nhất**
+(`walmart.py:77,107` — `epoch_millis(change.at)`). Nên với một đơn đã completed, `statusDate` là
+lúc **hoàn tất**, không phải lúc **giao**, và từ payload **không phân biệt được hai trường hợp**.
+`CONTEXT.md:65` định nghĩa **Delivered At** là "thời điểm Order Line thực sự được giao" và là
+**mốc bắt đầu cửa sổ 30 ngày** của Return Label. Một cột mang tên đó mà chứa thời điểm hoàn tất
+sẽ làm lệch nhãn một cách **im lặng** — không ai thấy lỗi, chỉ thấy nhãn sai. Nên cột ở Silver
+mang tên đúng cái nó là.
+
+**Giá:** `delivered_at` chưa có ở Silver; Gold phải tự dựng. Và chú ý một hệ quả đã biết của khoá
+dedup đã chốt ở mục 3.1 (giữ bản `last_updated_time` mới nhất): nó sẽ giữ thời điểm **hoàn tất**
+và bỏ thời điểm **giao**. Nên Gold không dựng được `delivered_at` từ Silver một mình — xem mục 9.
+
+### 8.3 Tên và mức của Fulfillment Method
+
+**Chốt:** tên cột `fulfillment_method`, đặt ở **mức Order**, lặp lại trên mọi Order Line của cùng
+Order. Chỉ `stg_amazon_order_lines` có cột này; `stg_walmart_order_lines` **không có**.
+
+**Lý do tên:** `CONTEXT.md:55-57` đã chọn **Fulfillment Method** làm từ vựng dự án, kèm
+`_Avoid_: Shipping type, logistics mode`. Không dùng `fulfilled_by` vì đó là **tên khoá gốc** của
+Amazon dạng 2026 (`generator/channels/amazon.py:178`) — lấy tên gốc đặt cho cột chuẩn sẽ lẫn hai
+tầng, đúng cái lỗi mục 6 đã tránh bằng cách tách hai cột trạng thái.
+
+**Lý do mức:** `CONTEXT.md:55` định nghĩa theo Order Line, nhưng dữ liệu **không có ở mức đó**:
+`generator/core/model.py:102` đặt `fulfillment` trên class `Order` (`model.py:88`), còn class
+`OrderLine` (`model.py:60`) không có field này. Amazon công bố ở mức Order ở cả hai dạng
+(`amazon.py:135` `FulfillmentChannel`, `amazon.py:178` `fulfillment.fulfilledBy`). Walmart:
+grep `fulfill` trong `generator/channels/walmart.py` ra **rỗng** — kênh này không công bố gì.
+
+**Giá:**
+- Cột nằm ở độ hạt Order Line nhưng giá trị chỉ đúng ở mức Order, nên nó **không tả được** một
+  Order có hai Order Line khác bên giao. Generator hiện **không sinh** trường hợp đó, nên hôm nay
+  không mất gì; nếu sau này sinh thì phải đổi cả cột này và chỗ đọc nó.
+- `stg_walmart_order_lines` thiếu cột, nên bảng Gold gộp hai kênh phải chấp nhận **null cho
+  Walmart** — và null ở đây nghĩa là "kênh không công bố", không phải "chưa biết".
+
+---
+
+## 9. Hệ quả còn mở, thuộc tầng Gold
+
+Mục 8.2 đóng xong phần Silver nhưng mở ra đúng **một** câu, và nó thuộc Gold chứ không thuộc
+Silver, nên tài liệu này không tự chốt:
+
+**Dựng `delivered_at` của Walmart từ đâu?** Khoá dedup ở mục 3.1 giữ bản mới nhất, nên Silver chỉ
+còn thời điểm hoàn tất. Hai đường đi được, cả hai **chưa đo**:
+1. Lấy từ Bronze — `raw_walmart_orders` giữ mọi bản đã xuất, nên lần **đầu tiên** một Order Line
+   xuất hiện với trạng thái gốc `"Delivered"` chính là lúc giao (vì `DELIVERED` xảy ra trước
+   `COMPLETED` trong `generator/core/model.py` timeline).
+2. Cho Silver giữ thêm một cột thời điểm giao sớm nhất, tính lúc dedup.
+
+Đường 1 giữ Silver gọn nhưng buộc Gold đọc Bronze. Đường 2 giữ Gold gọn nhưng thêm việc cho Silver
+và phá nguyên tắc "Silver chỉ làm sạch, không tổng hợp". Chưa chọn.

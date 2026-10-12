@@ -21,7 +21,24 @@
 #   uv run python -m generator load-postgres --source /data/raw --sample-days 20 \
 #     --dsn postgresql://<user>:<pass>@localhost:5432/sources
 #
-# Dùng:  bash scripts/run_bronze_evidence.sh [lan1|lan2|lan3|wal1|wal16|wal|tatca]
+# Brief 02 (handle skew) có bộ ba riêng, KHÔNG nằm trong `tatca`. Cả ba chạy CÙNG 20 ngày
+# mẫu, AQE TẮT như baseline lan1 (72,3s), chỉ đổi cấu hình — job 01_bronze_baseline.py
+# giữ nguyên. Mỗi lần ghi vào một bảng thử `raw_amazon_orders_skew_*`, đo xong thì DROP:
+#   skew_0 — ĐỐI CHỨNG: đúng cấu hình baseline lan1 (shuffle 200, AQE tắt), nhưng trong CÙNG
+#            môi trường với skew_a/b/c (driver ở worker-1). Đã chạy 3 lần để đo dao động giữa
+#            các lần giống hệt nhau: 55,9 / 63,2 / 64,8s => nhiễu 8,9s (14,5%).
+#            Baseline của mọi so sánh = trung bình ba lần này = 61,3s.
+#   skew_a — spark.sql.shuffle.partitions 200 -> 24. Giả thuyết: KHÔNG chữa skew (ngày to
+#            nhất vẫn dồn một task), chỉ bớt task rỗng.
+#   skew_b — write.distribution-mode=none. Giả thuyết: bỏ shuffle nên nhanh hơn, đổi lại
+#            nhiều file nhỏ hơn.
+#   skew_c — write.distribution-mode=range. Giả thuyết: cân tải tốt hơn hash, nhưng một
+#            export_date đơn lẻ vẫn không chia được.
+# Driver chạy ở worker-1 (limit 2,5 GB) với --driver-memory 600m, vì spark-master chỉ 512 MB
+# và bị Docker kill OOM. `table-default.*` là thuộc tính catalog Iceberg: áp cho bảng MỚI
+# tạo, nên chỉ bảng thử bị đổi, mặc định của job và hai bảng thật không đổi.
+#
+# Dùng:  bash scripts/run_bronze_evidence.sh [lan1|lan2|lan3|wal1|wal16|wal|tatca|skew_0|skew_a|skew_b|skew_c]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -44,6 +61,7 @@ submit() {
   docker exec "$MASTER_CONTAINER" /opt/spark/bin/spark-submit \
     --master spark://spark-master:7077 \
     --packages "$ALL_PKGS" \
+    ${EXTRA_SUBMIT_ARGS:-} \
     "/opt/spark_jobs/$job" "$@" > "$log" 2>&1
   grep -E "^run_id|^bảng (đích|nguồn)|^AQE|^ngày sẽ nạp|^chia theo|^số kết nối|^XONG|^Số dòng" \
     "$log" || tail -5 "$log"
@@ -73,8 +91,34 @@ case "$WHICH" in
     submit "wal-that-16ket-noi" 01b_bronze_walmart.py \
       --num-partitions 16 --table raw_walmart_orders
     ;;&
-  lan1|lan2|lan3|wal1|wal16|wal|tatca) ;;
-  *) echo "Tham số phải là lan1 | lan2 | lan3 | wal1 | wal16 | wal | tatca" >&2; exit 2 ;;
+  skew_0)
+    # Brief 02, đối chứng: cấu hình y hệt lan1 (shuffle 200 mặc định, AQE tắt), môi trường của skew_a/b/c.
+    MASTER_CONTAINER=fsds-spark-worker-1-1 EXTRA_SUBMIT_ARGS="--driver-memory 600m" \
+      submit "skew_0-doichung" 01_bronze_baseline.py \
+        --sample-days 20 --aqe off --table raw_amazon_orders_skew_0
+    ;;
+  skew_a)
+    # Brief 02, phương pháp a: giảm số partition shuffle 200 -> 24 (chỉ đổi cờ có sẵn của job).
+    MASTER_CONTAINER=fsds-spark-worker-1-1 EXTRA_SUBMIT_ARGS="--driver-memory 600m" \
+      submit "skew_a-shuffle24" 01_bronze_baseline.py \
+        --sample-days 20 --aqe off --shuffle-partitions 24 --table raw_amazon_orders_skew_a
+    ;;
+  skew_b)
+    # Brief 02, phương pháp b: write.distribution-mode=none cho bảng thử (không shuffle trước khi ghi).
+    MASTER_CONTAINER=fsds-spark-worker-1-1 \
+      EXTRA_SUBMIT_ARGS="--driver-memory 600m --conf spark.sql.catalog.lakehouse.table-default.write.distribution-mode=none" \
+      submit "skew_b-dist-none" 01_bronze_baseline.py \
+        --sample-days 20 --aqe off --table raw_amazon_orders_skew_b
+    ;;
+  skew_c)
+    # Brief 02, phương pháp c: write.distribution-mode=range cho bảng thử.
+    MASTER_CONTAINER=fsds-spark-worker-1-1 \
+      EXTRA_SUBMIT_ARGS="--driver-memory 600m --conf spark.sql.catalog.lakehouse.table-default.write.distribution-mode=range" \
+      submit "skew_c-dist-range" 01_bronze_baseline.py \
+        --sample-days 20 --aqe off --table raw_amazon_orders_skew_c
+    ;;
+  lan1|lan2|lan3|wal1|wal16|wal|tatca|skew_0|skew_a|skew_b|skew_c) ;;
+  *) echo "Tham số phải là lan1 | lan2 | lan3 | wal1 | wal16 | wal | tatca | skew_0 | skew_a | skew_b | skew_c" >&2; exit 2 ;;
 esac
 
 printf '\n==> Event log đã thu: %s\n' "$(ls -1 out/spark-events 2>/dev/null | wc -l) file"
