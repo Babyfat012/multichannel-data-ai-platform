@@ -11,9 +11,12 @@ Chỗ nào chưa đo thì không suy đoán.
 
 ## 1. Phạm vi tài liệu
 
-- Đây là **thiết kế đã chốt, CHƯA có code**. Chưa có `spark_jobs/02_silver_*.py` nào.
+- Thiết kế đã chốt, và **code đã có**: `spark_jobs/02_silver_amazon.py`,
+  `spark_jobs/02_silver_walmart.py`. Bảng ánh xạ tách ra `spark_jobs/silver_mapping.py`
+  (không import pyspark nên test được trên máy host). Mục 10 ghi số đo lần chạy thật.
 - Tài liệu tả *quyết định, lý do, và giá* — không phải hướng dẫn chạy.
 - Mục 8 ghi **ba khoản cuối đã chốt** (2026-10-12). Mục 9 nêu **một** hệ quả còn mở, thuộc Gold.
+- Mục 10 ghi **số đo lần chạy thật** và **hai khoản mới mở ra khi chạy**.
 - Đọc kèm: `CONTEXT.md` (định nghĩa Bronze/Silver/Gold), `docs/spark.md` (Bronze đã xong).
 
 ---
@@ -60,7 +63,7 @@ Label chấm ở mức Order Line.
 | Kênh | Khoá | Tie-break |
 |---|---|---|
 | Amazon | `(order_id, order_item_id)` | giữ `last_updated_time` lớn nhất |
-| Walmart | `(purchase_order_id, customer_order_id, line_number)` | `status_date` mới nhất |
+| Walmart | `(purchase_order_id, customer_order_id, line_number)` | `status_changed_at` mới nhất |
 
 **Chốt (khi tie-break hoà — provenance):** giữ bản có `export_date` **lớn nhất** (Walmart:
 `fetched_at` lớn nhất).
@@ -227,7 +230,8 @@ cách viết thì **đếm thiếu**, không báo lỗi. => **Cột gốc không
 **Một hệ quả của nguồn, ghi cho đủ:** Amazon **không bao giờ** ra `delivered`/`completed` (đã
 giao vẫn là `Shipped`). Walmart có `Delivered` thật kèm `statusDate`, **nhưng** `COMPLETED` cũng
 được ghi là `Delivered` (`generator/channels/walmart.py:38-39`) — nên với đơn completed,
-`statusDate` là lúc **hoàn tất**, không phải lúc giao. Vì vậy **chưa đặt tên** cột `delivered_at`.
+`statusDate` là lúc **hoàn tất**, không phải lúc giao. Vì vậy cột ở Silver mang tên
+`status_changed_at`, **không** phải `delivered_at` — xem mục 8.2.
 
 ---
 
@@ -333,3 +337,90 @@ còn thời điểm hoàn tất. Hai đường đi được, cả hai **chưa đ
 
 Đường 1 giữ Silver gọn nhưng buộc Gold đọc Bronze. Đường 2 giữ Gold gọn nhưng thêm việc cho Silver
 và phá nguyên tắc "Silver chỉ làm sạch, không tổng hợp". Chưa chọn.
+
+---
+
+## 10. Số đo lần chạy thật (2026-10-12)
+
+Chạy trên hai bảng Bronze NHỎ đã có sẵn, không đụng bảng thật. Hai bảng Silver thử nghiệm đã
+`DROP ... PURGE` sau khi đo.
+
+### 10.1 Walmart — `raw_walmart_orders_smoke` -> 1.875.607 Order Line
+
+| | Số |
+|---|---|
+| dòng Bronze (Order) | 1.293.525 |
+| Order Line ra | **1.875.607** |
+| khoá dedup phân biệt | **1.875.607** — không khoá nào trùng |
+| bản trùng bỏ được | **0** (lý do ở 10.3, KHÔNG phải lỗi) |
+| "XONG sau" | 43,3s |
+
+Ba chỗ dữ liệu **tự khớp nhau**, dùng làm kiểm tra chéo:
+- `tracking_number` và `ship_date_time` null **129.438** dòng, đúng bằng tổng số đơn chưa gửi
+  (`Created` 619 + `Acknowledged` 78.100 + `Cancelled` 50.719 = 129.438). Khớp không lệch một dòng.
+- `country` = `US` cho **cả** 1.875.607 dòng => phép ép `"USA"` -> `"US"` (mục 4.4) chạy.
+- `order_status` **0 null** => mọi chữ trạng thái nguồn đều có trong bảng ánh xạ.
+- Tiền: min 3,54 / max **1.139,64** — nằm dưới mức ~1.200 mà mục 4.1 tính ra TRƯỚC khi có code.
+  `decimal(14,2)` đúng cỡ, không phải đoán.
+
+### 10.2 Amazon — gộp hai dạng schema, có số chứng minh
+
+`raw_amazon_orders_sample` (20 ngày mẫu) -> **18.307.929** Order Line, "XONG sau" 383,3s.
+
+| | dạng v0 | dạng 2026 |
+|---|---|---|
+| Order Line | 8.191.939 | 10.115.990 |
+| chữ trạng thái gốc | `Shipped` · `Canceled` · `Unshipped` · `Pending` | `SHIPPED` · `CANCELLED` · `UNSHIPPED` · `PENDING` |
+| sau khi quy chuẩn | `shipped` · `cancelled` · `awaiting_shipment` · `pending_payment` | **đúng bốn giá trị đó** |
+| `fulfillment_method` | `AFN`/`MFN` -> `channel` 5.839.546 / `seller` 2.352.393 | `AMAZON`/`MERCHANT` -> `channel` 6.910.480 / `seller` 3.205.510 |
+| `is_prime` | bool sẵn có | suy từ mảng `programs`, ra bool |
+| `number_of_items_shipped` | null **0%** | null **100%** |
+| `number_of_items_unshipped` | null **0%** | null **100%** |
+| `quantity_shipped` | null **0%** | null **100%** |
+
+Đây chính là bằng chứng cho dòng rubric *handle schema evolution*: hai bộ chữ khác nhau của
+cùng bốn nghĩa đã về một bộ, và ba cột dạng 2026 không có thì null **tường minh** chứ không bị
+tính bù (mục 5).
+
+Kiểm chéo khác: `126,54 − 22,12 = 104,42` đúng bằng `line_net_amount` của dòng đó =>
+`line_gross_amount − line_discount_amount` tính đúng. Tiền dòng max **1.199,64**,
+`order_total_amount` max 2.125,07. 0 null ở `order_id`, `order_item_id`, `created_at`,
+`order_status`, `is_prime`, `line_net_amount`, `country`.
+
+**Tỉ lệ null của ba cột dạng 2026 — nay đã ĐO, nhưng chỉ trên mẫu:** 10.115.990 / 18.307.929
+= **55,3%** số dòng của mẫu 20 ngày. Mục 5 trước đó ghi "chưa đo, cận dưới ≥ 6,95%". Hai số
+KHÔNG chống nhau: 6,95% tính theo số dòng của **toàn bộ 180 ngày**, còn 55,3% là của **mẫu 20
+ngày rải đều**, mà mẫu rải đều theo NGÀY nên nó lấy nhiều ngày cuối (ngày cuối nặng gấp ~254
+lần ngày đầu). Tỉ lệ thật trên 180 ngày **vẫn chưa đo** — cần chạy job trên bảng thật.
+
+### 10.3 Vì sao dedup bắt 0 bản trùng — và việc phải làm để chứng minh được 3 điểm đó
+
+**Không phải lỗi code.** Khoá dedup chạy đúng: 1.875.607 dòng cho 1.875.607 khoá phân biệt.
+
+Nguyên nhân nằm ở **dữ liệu nguồn của hai bảng Bronze nhỏ**: 20 `export_date` trong đó cách
+nhau **9-10 ngày** (2026-01-01, 01-10, 01-20, 01-29, 02-08, ...). Bản trùng của generator luôn
+nằm trong khoảng **±3 ngày** (`overlap_days = 3`, mục 3.2). Ngày cách nhau 9 ngày thì **không
+thể** chứa cùng một đơn hai lần. Nên tỉ lệ trùng 0 là **đúng với dữ liệu này**.
+
+=> **Khoản mở số 1:** để có bằng chứng cho dòng rubric *another offline problem (duplicate
+2%)*, phải nạp Bronze từ các ngày **LIỀN NHAU** (ít nhất 7 ngày liền để phủ cửa sổ ±3), rồi
+chạy lại job Silver. Chưa làm: cần sinh/nạp lại Bronze, và `/` chỉ còn ~23 GB.
+
+### 10.4 Khoản mở số 2: cột partition của hai bảng Silver
+
+Hai job hiện ghi `partitionedBy(days(created_at))` — chia theo **ngày đặt hàng**. Đây là
+**đề xuất của planner**, tài liệu này chưa chốt, và đổi được rẻ cho tới khi chạy trên bảng thật.
+
+Lý do đề xuất: sau dedup thì `export_date` (Amazon) và `fetched_at` (Walmart) chỉ còn nghĩa
+"của bản thắng", không còn là một lát dữ liệu đầy đủ — chia theo chúng thì một đơn **nhảy
+partition** mỗi lần có bản mới. `days(created_at)` là partition ẩn của Iceberg: cột vẫn là
+`timestamp`, query lọc theo khoảng ngày đặt hàng chỉ đọc đúng lát cần. Hai bảng dùng **cùng**
+cột partition để Gold union chúng không phải đọc hai cách chia khác nhau.
+
+Giá: dedup ghi lại partition của **mọi** ngày có đơn được cập nhật, không chỉ ngày mới nhất.
+
+### 10.5 Giới hạn đã biết
+`DROP TABLE ... PURGE` in lỗi Lakekeeper `BadRequestException: Malformed request` **sau khi**
+xoá, giống hệt điều đã gặp 7 lần ở tầng Bronze (`docs/spark.md` mục 5f). Bảng vẫn mất thật:
+`SHOW TABLES IN lakehouse.silver` trả về rỗng. Purge chạy **nền**, nên đĩa trả chậm vài chục
+giây. Chưa rõ nguyên nhân, chưa điều tra.
