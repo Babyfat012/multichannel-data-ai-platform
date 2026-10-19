@@ -9,3 +9,7 @@ tests
 notebooks
 *.xlsx
 .env
+# Ghi chú làm việc/agent, không phải mã nguồn.
+.briefs
+.vibe-wise
+.claude
