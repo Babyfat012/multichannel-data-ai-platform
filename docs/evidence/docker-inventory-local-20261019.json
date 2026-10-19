@@ -1,0 +1,420 @@
+{
+  "compose_files": [
+    "docker-compose.yml"
+  ],
+  "profiles": [
+    "catalog",
+    "spark",
+    "airflow",
+    "stream",
+    "cdc",
+    "flink",
+    "query"
+  ],
+  "services": [
+    {
+      "service": "airflow",
+      "image": "fsds-airflow:2.10.5-spark3.5.3",
+      "dockerfile": "docker/Dockerfile.airflow",
+      "profiles": [
+        "airflow"
+      ],
+      "ports": [
+        {
+          "host_ip": "0.0.0.0",
+          "published": "8081",
+          "target": 8080
+        }
+      ],
+      "mem_limit": "6442450944",
+      "cpus": null,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:69bdb13bebc00cc60f1f22d699df7c6f2d5484bf3fc4749c67350e9eb8d73a33",
+        "size_bytes": 3131017118,
+        "created": "2026-10-14T21:11:11.132402767+07:00"
+      }
+    },
+    {
+      "service": "airflow-db-init",
+      "image": "postgres:15",
+      "dockerfile": null,
+      "profiles": [
+        "airflow"
+      ],
+      "ports": [],
+      "mem_limit": null,
+      "cpus": null,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:3b0d656f5fff31c7d8a64f500a703dcf3f35e98ce78f602831a73059a5e6a012",
+        "size_bytes": 627118814,
+        "created": "2026-06-24T01:34:00.340730997Z"
+      }
+    },
+    {
+      "service": "debezium-connect",
+      "image": "quay.io/debezium/connect:3.4",
+      "dockerfile": null,
+      "profiles": [
+        "cdc"
+      ],
+      "ports": [
+        {
+          "host_ip": "0.0.0.0",
+          "published": "8084",
+          "target": 8083
+        }
+      ],
+      "mem_limit": "1342177280",
+      "cpus": null,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:1376da3485e149e6dc76c855d212a65c24673e1925d8749f733183e5b7fdc22b",
+        "size_bytes": 2240738540,
+        "created": "2026-04-20T03:45:10.696094759Z"
+      }
+    },
+    {
+      "service": "flink-jobmanager",
+      "image": "fsds-flink:1.20.3-kafka3.4.0",
+      "dockerfile": "docker/Dockerfile.flink",
+      "profiles": [
+        "flink"
+      ],
+      "ports": [
+        {
+          "host_ip": "0.0.0.0",
+          "published": "8082",
+          "target": 8081
+        }
+      ],
+      "mem_limit": "1073741824",
+      "cpus": null,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:64ddd64e7ccc0d2ea4456a4f3df944d48481dabeed178152004a52f838f1b850",
+        "size_bytes": 1408772101,
+        "created": "2026-10-19T11:03:55.098413597+07:00"
+      }
+    },
+    {
+      "service": "flink-taskmanager",
+      "image": "fsds-flink:1.20.3-kafka3.4.0",
+      "dockerfile": null,
+      "profiles": [
+        "flink"
+      ],
+      "ports": [],
+      "mem_limit": "1342177280",
+      "cpus": null,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:64ddd64e7ccc0d2ea4456a4f3df944d48481dabeed178152004a52f838f1b850",
+        "size_bytes": 1408772101,
+        "created": "2026-10-19T11:03:55.098413597+07:00"
+      }
+    },
+    {
+      "service": "generator-batch",
+      "image": "data-generator:optimize",
+      "dockerfile": "Dockerfile",
+      "profiles": [],
+      "ports": [],
+      "mem_limit": null,
+      "cpus": null,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:bbb8c0fbfc9fb3214dcedaa34b5f296340ca6bcce7de2f27f4decdd4aedc88fc",
+        "size_bytes": 697573570,
+        "created": "2026-10-10T16:29:23.320259007+07:00"
+      }
+    },
+    {
+      "service": "generator-load",
+      "image": "data-generator:optimize",
+      "dockerfile": "Dockerfile",
+      "profiles": [],
+      "ports": [],
+      "mem_limit": null,
+      "cpus": null,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:bbb8c0fbfc9fb3214dcedaa34b5f296340ca6bcce7de2f27f4decdd4aedc88fc",
+        "size_bytes": 697573570,
+        "created": "2026-10-10T16:29:23.320259007+07:00"
+      }
+    },
+    {
+      "service": "generator-stream",
+      "image": "data-generator:optimize",
+      "dockerfile": "Dockerfile",
+      "profiles": [
+        "stream"
+      ],
+      "ports": [],
+      "mem_limit": null,
+      "cpus": null,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:bbb8c0fbfc9fb3214dcedaa34b5f296340ca6bcce7de2f27f4decdd4aedc88fc",
+        "size_bytes": 697573570,
+        "created": "2026-10-10T16:29:23.320259007+07:00"
+      }
+    },
+    {
+      "service": "kafka",
+      "image": "apache/kafka:3.9.1",
+      "dockerfile": null,
+      "profiles": [
+        "stream",
+        "cdc"
+      ],
+      "ports": [
+        {
+          "host_ip": "0.0.0.0",
+          "published": "9094",
+          "target": 9094
+        }
+      ],
+      "mem_limit": null,
+      "cpus": null,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:4ceccc577f03f51f6af8dbfda55194d0d892f4fa7913ffbded567ce3895622ed",
+        "size_bytes": 562654878,
+        "created": "2025-05-12T06:39:59.993614012Z"
+      }
+    },
+    {
+      "service": "kafka-ui",
+      "image": "kafbat/kafka-ui:v1.5.0",
+      "dockerfile": null,
+      "profiles": [
+        "cdc"
+      ],
+      "ports": [
+        {
+          "host_ip": "0.0.0.0",
+          "published": "8085",
+          "target": 8080
+        }
+      ],
+      "mem_limit": "671088640",
+      "cpus": null,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:7cda86a33344160309fdb65146332e4da65db81a945614f2fe32e210803f6fd1",
+        "size_bytes": 634783712,
+        "created": "2026-04-20T18:15:33.040612345Z"
+      }
+    },
+    {
+      "service": "lakekeeper",
+      "image": "quay.io/lakekeeper/catalog:v0.13.6",
+      "dockerfile": null,
+      "profiles": [
+        "catalog",
+        "spark",
+        "query"
+      ],
+      "ports": [
+        {
+          "host_ip": "0.0.0.0",
+          "published": "8181",
+          "target": 8181
+        }
+      ],
+      "mem_limit": "268435456",
+      "cpus": null,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:d6829722cac0d00dfc5665b0955766387b93ccadd8b1e70e679b49619bc30ea5",
+        "size_bytes": 246514580,
+        "created": "2026-09-22T09:58:59.632263753Z"
+      }
+    },
+    {
+      "service": "lakekeeper-db-init",
+      "image": "postgres:15",
+      "dockerfile": null,
+      "profiles": [
+        "catalog",
+        "spark",
+        "query"
+      ],
+      "ports": [],
+      "mem_limit": null,
+      "cpus": null,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:3b0d656f5fff31c7d8a64f500a703dcf3f35e98ce78f602831a73059a5e6a012",
+        "size_bytes": 627118814,
+        "created": "2026-06-24T01:34:00.340730997Z"
+      }
+    },
+    {
+      "service": "lakekeeper-migrate",
+      "image": "quay.io/lakekeeper/catalog:v0.13.6",
+      "dockerfile": null,
+      "profiles": [
+        "catalog",
+        "spark",
+        "query"
+      ],
+      "ports": [],
+      "mem_limit": null,
+      "cpus": null,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:d6829722cac0d00dfc5665b0955766387b93ccadd8b1e70e679b49619bc30ea5",
+        "size_bytes": 246514580,
+        "created": "2026-09-22T09:58:59.632263753Z"
+      }
+    },
+    {
+      "service": "minio",
+      "image": "quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z",
+      "dockerfile": null,
+      "profiles": [],
+      "ports": [
+        {
+          "host_ip": "0.0.0.0",
+          "published": "9000",
+          "target": 9000
+        },
+        {
+          "host_ip": "0.0.0.0",
+          "published": "9101",
+          "target": 9001
+        }
+      ],
+      "mem_limit": null,
+      "cpus": null,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "size_bytes": 240789018,
+        "created": "2025-09-07T18:42:37.017942402Z"
+      }
+    },
+    {
+      "service": "minio-init",
+      "image": "quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z",
+      "dockerfile": null,
+      "profiles": [],
+      "ports": [],
+      "mem_limit": null,
+      "cpus": null,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "size_bytes": 240789018,
+        "created": "2025-09-07T18:42:37.017942402Z"
+      }
+    },
+    {
+      "service": "postgres",
+      "image": "postgres:15",
+      "dockerfile": null,
+      "profiles": [],
+      "ports": [
+        {
+          "host_ip": "0.0.0.0",
+          "published": "5432",
+          "target": 5432
+        }
+      ],
+      "mem_limit": null,
+      "cpus": null,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:3b0d656f5fff31c7d8a64f500a703dcf3f35e98ce78f602831a73059a5e6a012",
+        "size_bytes": 627118814,
+        "created": "2026-06-24T01:34:00.340730997Z"
+      }
+    },
+    {
+      "service": "spark-master",
+      "image": "apache/spark:3.5.3-java17",
+      "dockerfile": null,
+      "profiles": [
+        "spark"
+      ],
+      "ports": [
+        {
+          "host_ip": "0.0.0.0",
+          "published": "7077",
+          "target": 7077
+        },
+        {
+          "host_ip": "0.0.0.0",
+          "published": "8080",
+          "target": 8080
+        }
+      ],
+      "mem_limit": "536870912",
+      "cpus": null,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:a1f2c9dcecb36c0f5c342be340b368883cfaa1d7ab23e6e222c8a93157b73a74",
+        "size_bytes": 1851523550,
+        "created": "2024-09-27T17:09:31.778585038Z"
+      }
+    },
+    {
+      "service": "spark-worker-1",
+      "image": "apache/spark:3.5.3-java17",
+      "dockerfile": null,
+      "profiles": [
+        "spark"
+      ],
+      "ports": [],
+      "mem_limit": "2684354560",
+      "cpus": null,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:a1f2c9dcecb36c0f5c342be340b368883cfaa1d7ab23e6e222c8a93157b73a74",
+        "size_bytes": 1851523550,
+        "created": "2024-09-27T17:09:31.778585038Z"
+      }
+    },
+    {
+      "service": "spark-worker-2",
+      "image": "apache/spark:3.5.3-java17",
+      "dockerfile": null,
+      "profiles": [
+        "spark"
+      ],
+      "ports": [],
+      "mem_limit": "2684354560",
+      "cpus": null,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:a1f2c9dcecb36c0f5c342be340b368883cfaa1d7ab23e6e222c8a93157b73a74",
+        "size_bytes": 1851523550,
+        "created": "2024-09-27T17:09:31.778585038Z"
+      }
+    },
+    {
+      "service": "trino",
+      "image": "trinodb/trino:483",
+      "dockerfile": null,
+      "profiles": [
+        "query"
+      ],
+      "ports": [
+        {
+          "host_ip": "0.0.0.0",
+          "published": "8083",
+          "target": 8080
+        }
+      ],
+      "mem_limit": "2147483648",
+      "cpus": null,
+      "image_inspect": {
+        "present": false
+      }
+    }
+  ]
+}

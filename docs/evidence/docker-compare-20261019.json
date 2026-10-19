@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-19",
+  "runner": "planner (local Docker)",
+  "command": "bash scripts/docker_compare_deps.sh out/docker-compare",
+  "images": {
+    "fsds-generator:naive": {
+      "id": "sha256:d9af23a28aed6c3430b958816df56a16c4930385685acf65d7c4166b80c9be0a",
+      "size_bytes": 2390286457
+    },
+    "fsds-generator:opt": {
+      "id": "sha256:00360a65a6a0559617bc716c5bc67f7f0cd8165079511ad501bc61e9b333581b",
+      "size_bytes": 698047304
+    }
+  },
+  "same_dependencies": true,
+  "packages": [
+    "aiobotocore==3.9.1",
+    "aiohappyeyeballs==2.7.1",
+    "aiohttp==3.14.3",
+    "aioitertools==0.13.0",
+    "aiosignal==1.4.0",
+    "attrs==26.1.0",
+    "botocore==1.43.75",
+    "confluent-kafka==2.15.1",
+    "duckdb==1.5.5",
+    "frozenlist==1.8.0",
+    "fsspec==2026.9.0",
+    "idna==3.20",
+    "jmespath==1.1.0",
+    "multidict==6.9.1",
+    "numpy==2.5.3",
+    "propcache==0.5.4",
+    "psycopg==3.3.6",
+    "psycopg-binary==3.3.6",
+    "pyarrow==25.0.1",
+    "python-dateutil==2.9.0.post0",
+    "pyyaml==6.0.3",
+    "s3fs==2026.9.0",
+    "six==1.17.0",
+    "typing-extensions==4.16.0",
+    "urllib3==2.8.0",
+    "wrapt==2.4.1",
+    "yarl==1.25.1"
+  ],
+  "inputs_sha256": {
+    "Dockerfile": "875604342bd20d632fbf4889f92206b3ca0dde53fd3686ed277d470dfdc1cde0",
+    "docker/Dockerfile.naive": "48493e5146bdde08e1ffa39afdbaa75a5211afa95a2f4d2766a4828b2db005f1",
+    "uv.lock": "cc2a1207de4ab991231095f1d5acae697c411848941161d66a59af0d225bae6c",
+    "requirements.lock": "90228e47ac7361f93c82f10117653c000128bd4276db55b32ac7d12fc29efbc8",
+    ".dockerignore": "211ef00fc6c60e398a307f1b0ad7860b957fab81ae6b442f9a593c7c9664ee69",
+    "pyproject.toml": "d4192ae02e027c2862fa8d7d8dc148fcba7666c10deb79ae2f7fa61d094de988"
+  }
+}

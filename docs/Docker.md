@@ -105,3 +105,26 @@ docker build -t data-generator:naive -f docker/Dockerfile.naive .
 docker build -t data-generator:optimize .
 docker images data-generator
 ```
+
+## 3. Đo lại 2026-10 — cùng bộ thư viện
+
+Phép đo ở mục 2 là **lịch sử**: khi đó `Dockerfile.naive` cài `pip install .` (không khóa phiên bản), nên câu "cùng
+thư viện, chỉ khác cách build" chưa được chứng minh. Từ 2026-10-19, image naive cài từ `requirements.lock` (xuất từ
+`uv.lock` bằng `scripts/export_requirements_lock.sh`, có hash) rồi `pip install --no-deps .`. `scripts/docker_compare_deps.sh`
+build cả hai từ cùng working tree, liệt kê package bằng `importlib.metadata` trong từng image và **fail nếu khác nhau**.
+
+| Image | Digest | Dung lượng |
+|---|---|---|
+| `fsds-generator:naive` | `sha256:d9af23a28aed…` | 2,39 GB |
+| `fsds-generator:opt` | `sha256:00360a65a6a0…` | 698 MB |
+
+Cùng **27 package** (bỏ pip/setuptools/wheel của base và chính project) ⇒ giảm **70,8 %** chỉ nhờ cách build (base slim,
+multi-stage, không giữ cache). Receipt: [`evidence/docker-compare-20261019.json`](evidence/docker-compare-20261019.json)
+(kèm sha256 của Dockerfile, lock file, `.dockerignore`). `.dockerignore` loại thêm `.briefs/`, `.vibe-wise/`, `.claude/`
+(ghi chú làm việc, không phải mã nguồn).
+
+## 4. Inventory image/service đang nộp
+
+`scripts/docker_inventory.py` đọc `docker compose config` và `docker image inspect` (không pull):
+[local, mọi profile](evidence/docker-inventory-local-20261019.json) — 20 service;
+[GCP overlay, profile catalog/spark/airflow](evidence/docker-inventory-gcp-20261019.json) — 9 service, mọi port bind `127.0.0.1`.

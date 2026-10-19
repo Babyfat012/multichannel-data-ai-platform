@@ -1,0 +1,199 @@
+{
+  "compose_files": [
+    "docker-compose.yml",
+    "docker-compose.gcp.yml"
+  ],
+  "profiles": [
+    "catalog",
+    "spark",
+    "airflow"
+  ],
+  "services": [
+    {
+      "service": "airflow",
+      "image": "fsds-airflow:2.10.5-spark3.5.3",
+      "dockerfile": "docker/Dockerfile.airflow",
+      "profiles": [
+        "airflow"
+      ],
+      "ports": [
+        {
+          "host_ip": "127.0.0.1",
+          "published": "8081",
+          "target": 8080
+        }
+      ],
+      "mem_limit": "6442450944",
+      "cpus": 2,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:69bdb13bebc00cc60f1f22d699df7c6f2d5484bf3fc4749c67350e9eb8d73a33",
+        "size_bytes": 3131017118,
+        "created": "2026-10-14T21:11:11.132402767+07:00"
+      }
+    },
+    {
+      "service": "airflow-db-init",
+      "image": "postgres:15",
+      "dockerfile": null,
+      "profiles": [
+        "airflow"
+      ],
+      "ports": [],
+      "mem_limit": "134217728",
+      "cpus": 0.1,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:3b0d656f5fff31c7d8a64f500a703dcf3f35e98ce78f602831a73059a5e6a012",
+        "size_bytes": 627118814,
+        "created": "2026-06-24T01:34:00.340730997Z"
+      }
+    },
+    {
+      "service": "lakekeeper",
+      "image": "quay.io/lakekeeper/catalog:v0.13.6",
+      "dockerfile": null,
+      "profiles": [
+        "catalog",
+        "spark",
+        "query"
+      ],
+      "ports": [
+        {
+          "host_ip": "127.0.0.1",
+          "published": "8181",
+          "target": 8181
+        }
+      ],
+      "mem_limit": "536870912",
+      "cpus": 0.25,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:d6829722cac0d00dfc5665b0955766387b93ccadd8b1e70e679b49619bc30ea5",
+        "size_bytes": 246514580,
+        "created": "2026-09-22T09:58:59.632263753Z"
+      }
+    },
+    {
+      "service": "lakekeeper-db-init",
+      "image": "postgres:15",
+      "dockerfile": null,
+      "profiles": [
+        "catalog",
+        "spark",
+        "query"
+      ],
+      "ports": [],
+      "mem_limit": "134217728",
+      "cpus": 0.1,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:3b0d656f5fff31c7d8a64f500a703dcf3f35e98ce78f602831a73059a5e6a012",
+        "size_bytes": 627118814,
+        "created": "2026-06-24T01:34:00.340730997Z"
+      }
+    },
+    {
+      "service": "lakekeeper-migrate",
+      "image": "quay.io/lakekeeper/catalog:v0.13.6",
+      "dockerfile": null,
+      "profiles": [
+        "catalog",
+        "spark",
+        "query"
+      ],
+      "ports": [],
+      "mem_limit": "268435456",
+      "cpus": 0.1,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:d6829722cac0d00dfc5665b0955766387b93ccadd8b1e70e679b49619bc30ea5",
+        "size_bytes": 246514580,
+        "created": "2026-09-22T09:58:59.632263753Z"
+      }
+    },
+    {
+      "service": "postgres",
+      "image": "postgres:15",
+      "dockerfile": null,
+      "profiles": [],
+      "ports": [
+        {
+          "host_ip": "127.0.0.1",
+          "published": "5432",
+          "target": 5432
+        }
+      ],
+      "mem_limit": "3221225472",
+      "cpus": 0.75,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:3b0d656f5fff31c7d8a64f500a703dcf3f35e98ce78f602831a73059a5e6a012",
+        "size_bytes": 627118814,
+        "created": "2026-06-24T01:34:00.340730997Z"
+      }
+    },
+    {
+      "service": "spark-master",
+      "image": "fsds-airflow:2.10.5-spark3.5.3",
+      "dockerfile": null,
+      "profiles": [
+        "spark"
+      ],
+      "ports": [
+        {
+          "host_ip": "127.0.0.1",
+          "published": "7077",
+          "target": 7077
+        },
+        {
+          "host_ip": "127.0.0.1",
+          "published": "8080",
+          "target": 8080
+        }
+      ],
+      "mem_limit": "536870912",
+      "cpus": 0.25,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:69bdb13bebc00cc60f1f22d699df7c6f2d5484bf3fc4749c67350e9eb8d73a33",
+        "size_bytes": 3131017118,
+        "created": "2026-10-14T21:11:11.132402767+07:00"
+      }
+    },
+    {
+      "service": "spark-worker-1",
+      "image": "fsds-airflow:2.10.5-spark3.5.3",
+      "dockerfile": null,
+      "profiles": [
+        "spark"
+      ],
+      "ports": [],
+      "mem_limit": "7516192768",
+      "cpus": 2,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:69bdb13bebc00cc60f1f22d699df7c6f2d5484bf3fc4749c67350e9eb8d73a33",
+        "size_bytes": 3131017118,
+        "created": "2026-10-14T21:11:11.132402767+07:00"
+      }
+    },
+    {
+      "service": "spark-worker-2",
+      "image": "fsds-airflow:2.10.5-spark3.5.3",
+      "dockerfile": null,
+      "profiles": [
+        "spark"
+      ],
+      "ports": [],
+      "mem_limit": "7516192768",
+      "cpus": 2,
+      "image_inspect": {
+        "present": true,
+        "id": "sha256:69bdb13bebc00cc60f1f22d699df7c6f2d5484bf3fc4749c67350e9eb8d73a33",
+        "size_bytes": 3131017118,
+        "created": "2026-10-14T21:11:11.132402767+07:00"
+      }
+    }
+  ]
+}
