@@ -25,6 +25,9 @@ x-spark: &spark
   profiles: [spark]
   user: root
   env_file: .env
+  environment:
+    AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+    AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
 
 services:
   minio:
@@ -49,6 +52,8 @@ services:
 
   postgres:
     image: postgres:15
+    # Debezium đọc thay đổi đã commit từ WAL; giữ tối đa bốn slot cho môi trường dev.
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_replication_slots=4", "-c", "max_wal_senders=4"]
     env_file: .env
     ports: ["${POSTGRES_PORT:-5432}:5432"]
     volumes: [postgres-data:/var/lib/postgresql/data]
@@ -75,7 +80,7 @@ services:
   # Trong mạng Compose dùng kafka:9092, từ máy host dùng localhost:${KAFKA_PORT}.
   kafka:
     image: apache/kafka:3.9.1
-    profiles: [stream]
+    profiles: [stream, cdc]
     ports: ["${KAFKA_PORT:-9094}:9094"]
     environment:
       KAFKA_NODE_ID: 1
@@ -111,19 +116,19 @@ services:
   # Postgres chỉ tự tạo DB lần đầu, nên DB này phải tạo bằng một bước riêng (chạy lại được).
   lakekeeper-db-init:
     image: postgres:15
-    profiles: [catalog, spark]
+    profiles: [catalog, spark, query]
     depends_on:
       postgres: {condition: service_healthy}
-    environment:
-      PGPASSWORD: ${POSTGRES_PASSWORD}
+    env_file: .env
     entrypoint: >
-      sh -c "psql -h postgres -U ${POSTGRES_USER} -d ${POSTGRES_DB} -tAc
+      sh -c "export PGPASSWORD=$$POSTGRES_PASSWORD
+      && psql -h postgres -U $$POSTGRES_USER -d $$POSTGRES_DB -tAc
       \"SELECT 1 FROM pg_database WHERE datname='lakekeeper'\" | grep -q 1
-      || psql -h postgres -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'CREATE DATABASE lakekeeper'"
+      || psql -h postgres -U $$POSTGRES_USER -d $$POSTGRES_DB -c 'CREATE DATABASE lakekeeper'"
 
   lakekeeper-migrate: &lakekeeper
     image: quay.io/lakekeeper/catalog:v0.13.6
-    profiles: [catalog, spark]
+    profiles: [catalog, spark, query]
     depends_on:
       lakekeeper-db-init: {condition: service_completed_successfully}
     environment: &lakekeeper-env
@@ -160,7 +165,11 @@ services:
     # ./out/spark-events: Spark UI chỉ sống khi job đang chạy. Ghi event log ra host
     # để mở lại bằng History Server và chụp ảnh bằng chứng sau khi job đã xong.
     volumes: [./spark_jobs:/opt/spark_jobs:ro, /data/raw:/data/raw:ro,
-              ./out/spark-events:/spark-events]
+              /data/raw/ground-truth:/data/ground-truth:ro,
+              ./out/ground-truth-bridge:/data/ground-truth-bridge:ro,
+              ./out/channels-small/source-exports:/data/channels-small/source-exports:ro,
+              ./out/spark-events:/spark-events,
+              "${FSDS_SOURCE_V2_DIR:-./out/source-v2-live}:/data/source-v2:ro"]
     mem_limit: 512m
 
   # Worker làm việc thật. RAM worker là con số mình ĐẶT (SPARK_WORKER_MEMORY), thiếu thì
@@ -176,13 +185,149 @@ services:
       SPARK_WORKER_CORES: ${SPARK_WORKER_CORES:-2}
       SPARK_LOCAL_DIRS: /spark-local
     volumes: [spark-local-1:/spark-local, "./spark_jobs:/opt/spark_jobs:ro",
-              "/data/raw:/data/raw:ro", "./out/spark-events:/spark-events"]
+              "/data/raw:/data/raw:ro", "/data/raw/ground-truth:/data/ground-truth:ro",
+              "./out/ground-truth-bridge:/data/ground-truth-bridge:ro",
+              "./out/channels-small/source-exports:/data/channels-small/source-exports:ro",
+              "./out/spark-events:/spark-events",
+              "${FSDS_SOURCE_V2_DIR:-./out/source-v2-live}:/data/source-v2:ro"]
     mem_limit: ${SPARK_WORKER_MEM_LIMIT:-2560m}
 
   spark-worker-2:
     <<: *spark-worker
     volumes: [spark-local-2:/spark-local, "./spark_jobs:/opt/spark_jobs:ro",
-              "/data/raw:/data/raw:ro", "./out/spark-events:/spark-events"]
+              "/data/raw:/data/raw:ro", "/data/raw/ground-truth:/data/ground-truth:ro",
+              "./out/ground-truth-bridge:/data/ground-truth-bridge:ro",
+              "./out/channels-small/source-exports:/data/channels-small/source-exports:ro",
+              "./out/spark-events:/spark-events",
+              "${FSDS_SOURCE_V2_DIR:-./out/source-v2-live}:/data/source-v2:ro"]
+
+  # Airflow dùng DB riêng trong PostgreSQL hiện có. Chỉ tạo DB, không đổi `sources`.
+  airflow-db-init:
+    image: postgres:15
+    profiles: [airflow]
+    depends_on:
+      postgres: {condition: service_healthy}
+    env_file: .env
+    entrypoint: >
+      sh -c "export PGPASSWORD=$$POSTGRES_PASSWORD
+      && psql -h postgres -U $$POSTGRES_USER -d $$POSTGRES_DB -tAc
+      \"SELECT 1 FROM pg_database WHERE datname='airflow'\" | grep -q 1
+      || psql -h postgres -U $$POSTGRES_USER -d $$POSTGRES_DB -c 'CREATE DATABASE airflow'"
+
+  # Một container dev chạy webserver + scheduler. SparkSubmitOperator sinh driver ở đây;
+  # không đặt driver trên spark-master (container đó chỉ có 512 MB).
+  airflow:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.airflow
+    image: fsds-airflow:2.10.5-spark3.5.3
+    profiles: [airflow]
+    user: "${AIRFLOW_UID:-1000}:0"
+    env_file: .env
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__PARALLELISM: "1"
+      AIRFLOW__CORE__FERNET_KEY_CMD: "cat /opt/airflow/.fernet_key"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/airflow
+      SPARK_LOCAL_HOSTNAME: airflow
+      FSDS_CONTRACTS_DIR: /opt/contracts
+    depends_on:
+      airflow-db-init: {condition: service_completed_successfully}
+    # `airflow standalone` để lại PID file trong volume sau khi container dừng.
+    # Nếu giữ PID cũ, lần khởi động sau webserver tự thoát dù scheduler vẫn chạy.
+    command: ["bash", "-c", "rm -f /opt/airflow/airflow-webserver.pid && exec airflow standalone"]
+    ports: ["${AIRFLOW_WEB_PORT:-8081}:8080"]
+    volumes: [airflow-data:/opt/airflow, ./out/receipts:/opt/airflow/receipts,
+              ./dags:/opt/airflow/dags:ro,
+              ./scripts:/opt/fsds/scripts:ro,
+              ./spark_jobs:/opt/spark_jobs:ro, ./contracts:/opt/contracts:ro, /data/raw:/data/raw:ro,
+              /data/raw/ground-truth:/data/ground-truth:ro,
+              ./out/ground-truth-bridge:/data/ground-truth-bridge:ro,
+              ./out/channels-small/source-exports:/data/channels-small/source-exports:ro,
+              ./out/spark-events:/spark-events,
+              "${FSDS_SOURCE_V2_DIR:-./out/source-v2-live}:/data/source-v2:ro"]
+    # 6g: driver Spark client mode của DAG v2 chạy trong container này với heap 3g.
+    mem_limit: 6g
+
+  # Flink SQL đọc Kafka đã phát để chứng minh watermark, state và Window.
+  # Bật riêng profile này sau khi DP1/DP2 kết thúc để giữ RAM cho TaskManager.
+  flink-jobmanager:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.flink
+    image: fsds-flink:1.20.3-kafka3.4.0
+    profiles: [flink]
+    command: jobmanager
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        jobmanager.memory.process.size: 768m
+        rest.address: flink-jobmanager
+    ports: ["${FLINK_UI_PORT:-8082}:8081"]
+    volumes: [./flink_jobs:/opt/flink/jobs:ro, ./out/flink:/opt/flink/output]
+    mem_limit: 1024m
+
+  flink-taskmanager:
+    image: fsds-flink:1.20.3-kafka3.4.0
+    profiles: [flink]
+    command: taskmanager
+    depends_on: [flink-jobmanager]
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.memory.process.size: 1024m
+        taskmanager.numberOfTaskSlots: 2
+    volumes: [./flink_jobs:/opt/flink/jobs:ro, ./out/flink:/opt/flink/output]
+    mem_limit: 1280m
+
+  # Trino federation: one SQL endpoint for Iceberg on MinIO and PostgreSQL.
+  # Run in the separate `query` profile to limit RAM contention with Spark and Flink.
+  trino:
+    image: trinodb/trino:483
+    profiles: [query]
+    depends_on:
+      lakekeeper: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+      minio: {condition: service_healthy}
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports: ["${TRINO_PORT:-8083}:8080"]
+    volumes: [./trino/catalog:/etc/trino/catalog:ro]
+    mem_limit: 2g
+
+  # CDC của bảng nguồn Walmart. Kafka Connect dùng các topic nội bộ riêng để giữ
+  # cấu hình và offset khi container khởi động lại.
+  debezium-connect:
+    image: quay.io/debezium/connect:3.4
+    profiles: [cdc]
+    depends_on:
+      kafka: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092
+      GROUP_ID: fsds-cdc-connect
+      CONFIG_STORAGE_TOPIC: fsds_cdc_connect_configs
+      OFFSET_STORAGE_TOPIC: fsds_cdc_connect_offsets
+      STATUS_STORAGE_TOPIC: fsds_cdc_connect_statuses
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx768m
+    ports: ["${DEBEZIUM_PORT:-8084}:8083"]
+    mem_limit: 1280m
+
+  # Giao diện xem topic Kafka (bao gồm topic CDC do Debezium ghi) để chụp bằng chứng.
+  kafka-ui:
+    image: kafbat/kafka-ui:v1.5.0
+    profiles: [cdc]
+    depends_on:
+      kafka: {condition: service_healthy}
+    environment:
+      KAFKA_CLUSTERS_0_NAME: fsds
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    ports: ["${KAFKA_UI_PORT:-8085}:8080"]
+    mem_limit: 640m
 
 volumes:
   spark-local-1:
@@ -190,3 +335,4 @@ volumes:
   minio-data:
   postgres-data:
   kafka-data:
+  airflow-data:
