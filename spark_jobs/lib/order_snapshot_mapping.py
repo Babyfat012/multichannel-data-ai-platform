@@ -1,6 +1,6 @@
 """Bảng ánh xạ của tầng Silver — cố tình KHÔNG import pyspark để test được trên máy host.
 
-Cùng thủ pháp với `day_selection.py`: mọi quyết định *nghiệp vụ* nào diễn tả được bằng
+Cùng thủ pháp với `lib/day_selection.py`: mọi quyết định *nghiệp vụ* nào diễn tả được bằng
 Python thuần thì để ở đây, còn file job chỉ còn phần Spark. Nhờ vậy `uv run pytest` kiểm
 được các bảng ánh xạ mà không cần dựng cụm Spark.
 

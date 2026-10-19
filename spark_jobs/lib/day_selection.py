@@ -1,6 +1,6 @@
 """Chọn tập ngày export để nạp — phần logic thuần, không phụ thuộc Spark.
 
-Tách khỏi `01_bronze_baseline.py` vì file job import `pyspark`, mà pyspark chỉ có trong
+Tách khỏi `bronze/ingest_amazon_order_snapshots.py` vì file job import `pyspark`, mà pyspark chỉ có trong
 container Spark. Tách ra thì `uv run pytest` trên máy host test được phần quyết định này.
 """
 
