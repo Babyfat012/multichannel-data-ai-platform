@@ -1,0 +1,10 @@
+# The published mysql:8.2 image resolves to an unusable local layer on this host
+# (/bin/bash is 0 bytes). MySQL 8.0 was verified to execute on x86_64.
+services:
+  mysql:
+    image: mysql:8.0
+  frontend-quickstart:
+    # v1.7.0.1 has zero-byte Play JARs on this host; this tag has intact JARs.
+    image: acryldata/datahub-frontend-react:v1.6.0.2
+    environment:
+      DATAHUB_APP_VERSION: v1.6.0.2
