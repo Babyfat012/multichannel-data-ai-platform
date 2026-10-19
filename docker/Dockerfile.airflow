@@ -1,0 +1,19 @@
+# Airflow chạy spark-submit ở client mode: container này chính là Spark driver.
+# PySpark phải cùng phiên bản với cụm Spark standalone; Java 17 đọc được jar Iceberg 1.11.
+FROM apache/airflow:2.10.5-python3.11
+
+USER root
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y openjdk-17-jre-headless \
+    && rm -rf /var/lib/apt/lists/*
+
+USER airflow
+RUN pip install --no-cache-dir \
+    "apache-airflow==2.10.5" \
+    "apache-airflow-providers-apache-spark==5.0.1" \
+    "pyspark==3.5.3" \
+    "psycopg2-binary==2.9.10"
+
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV SPARK_HOME=/home/airflow/.local/lib/python3.11/site-packages/pyspark
+ENV PATH="${SPARK_HOME}/bin:${PATH}"
