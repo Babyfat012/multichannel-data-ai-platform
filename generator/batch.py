@@ -27,6 +27,9 @@ mỗi ngày, tức ~33 GB ở quy mô 100 GB. Giữ sẵn ~14 file mở thì RAM
 Bố cục đầu ra (dưới `storage.output_root`):
 
     source-exports/channel=amazon/dataset=orders/export_date=YYYY-MM-DD/part-simNNNNN.jsonl
+    source-exports/channel=tiktok_shop/dataset=orders/export_date=YYYY-MM-DD/part-simNNNNN.jsonl
+    source-exports/channel=shopify/dataset=orders/export_date=YYYY-MM-DD/part-simNNNNN.jsonl
+    source-exports/channel=shopee/dataset=orders/export_date=YYYY-MM-DD/part-simNNNNN.jsonl
     pg-load/walmart.orders/export_date=YYYY-MM-DD/part-simNNNNN.jsonl
     pg-load/seller.skus/part-00000.jsonl
     ground-truth/labels/part-simNNNNN.parquet
@@ -66,6 +69,9 @@ import pyarrow as pa
 
 from generator.channels.amazon import SCHEMA_2026, AmazonOrdersRenderer
 from generator.channels.base import OBJECT_STORE, ChannelRenderer
+from generator.channels.shopee import ShopeeOrdersRenderer
+from generator.channels.shopify import ShopifyOrdersRenderer
+from generator.channels.tiktok_batch import TikTokOrdersRenderer
 from generator.channels.walmart import WalmartOrdersRenderer
 from generator.config import GeneratorConfig
 from generator.core.model import Order
@@ -73,9 +79,11 @@ from generator.core.rngs import rng_for
 from generator.core.simulate import Simulator
 from generator.core.storefronts import STOREFRONTS
 from generator.delivery.batch_exports import PRIMARY, plan_exports
+from generator.dataset_identity import build_dataset_identity
 from generator.storage import JsonlWriterPool, OutputStore
 
 CHECKPOINT_DIR = "_checkpoint"
+DATASET_IDENTITY_PATH = "_dataset_identity.json"
 # Mọi file do một ngày mô phỏng ghi ra, và tem của ngày đó. Dùng để dọn file ghi dở
 # của ngày bị cắt. Liệt kê tường minh thay vì `**/part-sim*` để không vô tình xóa
 # thứ gì khác nằm dưới `output_root`.
@@ -137,11 +145,14 @@ class BatchRun:
         self.config = config
         self.simulator = Simulator(config)
         self.store = OutputStore(config.storage.output_root)
-        # Channel chưa có renderer (TikTok Shop, Shopify, Shopee) vẫn được mô phỏng
-        # và có nhãn, chỉ chưa xuất dữ liệu gốc.
+        self.dataset_identity = build_dataset_identity(config)
+        # Mỗi Channel có renderer nguồn Batch. Nhãn thật vẫn ở ground truth riêng.
         self.renderers: dict[str, ChannelRenderer] = {
             "amazon": AmazonOrdersRenderer(config),
+            "tiktok_shop": TikTokOrdersRenderer(config),
+            "shopify": ShopifyOrdersRenderer(config),
             "walmart": WalmartOrdersRenderer(config),
+            "shopee": ShopeeOrdersRenderer(config),
         }
         # Không có bộ đệm bản ghi: `jsonl` giữ sẵn một file mở cho mỗi ngày export
         # đang chờ dòng mới, nên RAM không tỉ lệ với số đơn mỗi ngày.
@@ -176,10 +187,15 @@ class BatchRun:
         của ngày trước (xem `tests/test_core.py`), nên ngày d cho ra cùng dữ liệu dù
         chạy từ ngày 1 hay nhảy vào từ ngày d.
         """
+        self._check_resume_identity(restart)
         resume_from = 0 if restart else self._last_complete_day()
         if resume_from:
             self._restore(self.store.read_json(_checkpoint_relative(resume_from)))
         self._discard_days_after(resume_from)
+        if restart:
+            # A partial rebuild must not advertise the previous completed manifest.
+            self.store.remove("run_manifest.json")
+        self.store.write_json_atomic(DATASET_IDENTITY_PATH, self.dataset_identity)
         with self.store.jsonl_writers() as jsonl:
             self.jsonl = jsonl
             for day in range(resume_from + 1, self.config.scale.days_history + 1):
@@ -193,6 +209,40 @@ class BatchRun:
         manifest = self._manifest()
         self.store.write_json("run_manifest.json", manifest)
         return manifest
+
+    def _check_resume_identity(self, restart: bool) -> None:
+        """Reject incompatible or unversioned output before any mutation.
+
+        Explicit restart regenerates generator-owned data, retaining its existing
+        CLI meaning. Ordinary resume never adopts a legacy or changed world.
+        This guard assumes a single writer; it is not a distributed writer lock.
+        """
+        if restart:
+            return
+        if not self.store.exists(DATASET_IDENTITY_PATH):
+            owned = ("run_manifest.json", "pg-load/seller.skus/part-00000.jsonl")
+            if any(self.store.exists(path) for path in owned) or any(
+                self.store.glob(pattern) for pattern in DAY_OWNED_PATTERNS
+            ):
+                raise ValueError(
+                    "Output has no dataset identity; use a new output_root or "
+                    "explicit --restart to regenerate legacy data."
+                )
+            return
+        previous = self.store.read_json(DATASET_IDENTITY_PATH)
+        if previous != self.dataset_identity:
+            raise ValueError(
+                "Dataset identity mismatch (config/code/runtime changed); use a "
+                "new output_root or explicit --restart to regenerate."
+            )
+        version = self.dataset_identity["dataset_version"]
+        for path in self.store.glob(f"{CHECKPOINT_DIR}/day-*.json"):
+            if self.store.read_json(path).get("dataset_version") != version:
+                raise ValueError(f"Checkpoint dataset identity mismatch: {path}")
+        if self.store.exists("run_manifest.json") and (
+            self.store.read_json("run_manifest.json").get("dataset_version") != version
+        ):
+            raise ValueError("Manifest dataset identity mismatch")
 
     def _handle_order(self, order: Order, rng: np.random.Generator, sale_day: bool, sim_day: int) -> None:
         """Xử lý một Order: đặt vào ngày export, vẽ bản ghi, gom nhãn.
@@ -210,7 +260,13 @@ class BatchRun:
             return
         self.line_keys[renderer.channel].extend(
             {**keys, "storefront_id": order.storefront_id} for keys in renderer.line_keys(order))
-        for placement in plan_exports(order, self.config, rng):
+        # Amazon/Walmart giữ đúng dãy RNG của bản 100 GB đã đo. Renderer của
+        # Channel mới dùng RNG riêng theo Order; nếu dùng chung `rng` thì chỉ
+        # việc thêm Channel sẽ đổi vị trí duplicate của Amazon/Walmart về sau.
+        placement_rng = (rng if renderer.channel in ("amazon", "walmart") else
+                         rng_for(self.config.seed, "batch_exports_new_channel",
+                                 sim_day, renderer.channel, order.order_id))
+        for placement in plan_exports(order, self.config, placement_rng):
             rendered = renderer.render(order, placement.as_of, placement.export_day)
             key = (renderer.channel, placement.export_day, sim_day)
             self.jsonl.write(key, self._export_path(renderer, placement.export_day, sim_day), rendered.record)
@@ -369,6 +425,7 @@ class BatchRun:
         chuỗi; khóa số của các `Counter` nhãn ghi thành "0"/"1" rồi đổi lại khi nạp.
         """
         return {
+            "dataset_version": self.dataset_identity["dataset_version"],
             "datasets": {
                 name: {"rows": st.rows, "unique_keys": st.unique_keys,
                        "placements": dict(st.placements), "files": st.files, "bytes": st.bytes}
@@ -470,6 +527,8 @@ class BatchRun:
         positives = self.label_positives
         switch_day = self.config.offline_problems.amazon_orders_api_switch_day
         return {
+            "dataset_version": self.dataset_identity["dataset_version"],
+            "generator_sha256": self.dataset_identity["generator_sha256"],
             "config": self.config.to_dict(),
             "cutoff": self.config.cutoff.isoformat(),
             "orders_by_storefront": dict(self.orders_by_storefront),

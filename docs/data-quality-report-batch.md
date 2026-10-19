@@ -1,10 +1,29 @@
 # Báo cáo chất lượng dữ liệu của Data Generator (Batch)
 
-Báo cáo này đối chiếu từng dòng rubric "Implement Data Generator, Simulate offline data problems" với số đo thật. Phần Stream nằm ở [data-quality-report-stream.md](data-quality-report-stream.md). Bảng đầy đủ của lệnh `report` nằm ở [generator-design.md, mục Kết quả chạy](generator-design.md#kết-quả-chạy).
+Báo cáo này đối chiếu từng dòng rubric "Implement Data Generator, Simulate offline data problems" với số đo thật. Phần Stream nằm ở [data-quality-report-stream.md](data-quality-report-stream.md).
 
-## Lần chạy
+## Phạm vi 100 GB
 
-- Cấu hình: `configs/default.yaml` (seed 42, 2.000 SKU, 180 ngày từ 2026-01-01, 4.000 Order mỗi ngày).
+Lần chạy chính dùng `configs/scale-100gb.yaml`: giống `default.yaml` (seed 42, 2.000 SKU, 180 ngày từ 2026-01-01) nhưng `orders_per_day = 851.506`, ghi ra `/data/raw`. Lý do chọn 851.506 và đơn vị 100,0 GB thập phân nằm trong chú thích đầu file cấu hình.
+
+Ở phạm vi này chỉ ba nguồn có renderer: `amazon.orders`, `walmart.orders` và `seller.skus`. TikTok Shop, Shopify, Shopee nằm trong `not_rendered_yet` của manifest và được sinh ở nguồn nhỏ (xem mục cuối).
+
+`/data/raw/run_manifest.json` ghi:
+
+| Dataset | Dòng | Khóa khác nhau | Tỷ lệ trùng | File | Byte |
+|---|---:|---:|---:|---:|---:|
+| `amazon.orders` | 108.248.563 | 106.109.650 | 1,98% | 3.316 | 86.728.943.600 |
+| `walmart.orders` | 10.949.058 | 10.732.935 | 1,97% | 3.255 | 13.283.621.342 |
+| `seller.skus` | 2.000 | 2.000 | 0% | 1 | 225.470 |
+| **Tổng** | | | | | **100.012.790.412** |
+
+Tổng **100.012.790.412 byte = 100,01 GB** thập phân (93,14 GiB). Đây là byte thô trong manifest, đã được xác nhận khớp byte thật trên đĩa (`tests/test_batch.py`), không phải số `df` (vốn hiển thị GiB và lệch 7,4%).
+
+## Lần chạy nhỏ để đo chi tiết
+
+Các bảng phân tích sâu (skew theo thành phố/danh mục, cardinality, schema evolution theo ngày, danh sách SKU) được đo trên lần chạy `configs/default.yaml` (4.000 Order/ngày, Amazon ở MinIO, Walmart ở PostgreSQL) bằng lệnh `report`, vì lệnh này đọc lại toàn bộ dữ liệu và join với `seller.skus`. Phương pháp đo giống hệt ở quy mô 100 GB, chỉ con số tuyệt đối khác. Mỗi mục dưới ghi rõ nguồn số.
+
+- Cấu hình nhỏ: `configs/default.yaml` (seed 42, 2.000 SKU, 180 ngày từ 2026-01-01, 4.000 Order mỗi ngày).
 - Nơi lưu: Amazon ở MinIO (bucket `fsds`), Walmart và `seller.skus` ở PostgreSQL (database `sources`). Cách dựng xem [Docker.md](Docker.md).
 - Lệnh đo:
 
@@ -16,20 +35,20 @@ uv run python -m generator report --source s3://fsds \
     --dsn "postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:$POSTGRES_PORT/$POSTGRES_DB"
 ```
 
-Cột `_truth` là đáp án generator ghi trong `run_manifest.json`. Số đo đọc lại từ dữ liệu đã lưu, không lấy từ bộ nhớ của generator.
+Cột `_truth` là đáp án generator ghi trong `run_manifest.json`. Số đo đọc lại từ dữ liệu đã lưu, không lấy từ bộ nhớ của generator. Bảng đầy đủ của lệnh `report` nằm ở [generator-design.md, mục Kết quả chạy](generator-design.md#kết-quả-chạy).
 
 ## Tóm tắt theo rubric
 
-| Dòng rubric | Kết quả | Số đo chính |
+| Dòng rubric | Kết quả | Số đo chính (100 GB) |
 |---|---|---|
-| Simulate skew | Đạt | Thành phố lớn nhất chiếm 46 đến 49% Order mỗi Storefront. Apparel 17,7% Order Line, beauty 7,6%. SKU bán chạy nhất 5,4%. Hai ngày Prime Day gấp 3,7 lần trung vị |
-| Simulate high cardinality | Đạt | `amazon.orders`: 498.156 mã Order, 721.099 mã Order Line |
-| Simulate schema evolution | Đạt | `proceeds` null 100% trước export 2026-04-10 và 0% từ ngày đó. `IsPrime` ngược lại |
-| Simulate another offline problem (duplicate 2%) | Đạt | Trùng 1,98% (Amazon) và 1,99% (Walmart), khớp đáp án. Sau dedup còn 0% |
+| Simulate skew | Đạt | Prime Day 2026-04-30/05-01: 2.281.202 Order Amazon/ngày so với 570.490 ngày thường (×4,0), tỷ lệ trả 13,7% so với 11,4%. Chi tiết thành phố/danh mục đo ở lần chạy nhỏ |
+| Simulate high cardinality | Đạt | `amazon.orders`: 106.109.650 khóa Order khác nhau trên 108.248.563 dòng; `walmart.orders`: 10.732.935 khóa trên 10.949.058 dòng |
+| Simulate schema evolution | Đạt | `amazon.orders` đổi schema đúng ngày export 2026-04-10 (`proceeds` null 100% → 0%, `IsPrime` ngược lại) |
+| Simulate another offline problem (duplicate 2%) | Đạt | Trùng 1,98% (Amazon) và 1,97% (Walmart); phần lớn là bản cũ hơn cùng khóa, phải giữ bản mới nhất chứ không chỉ bỏ bản y hệt |
 | Using generator configuration | Đạt | Mọi tham số nằm trong `configs/*.yaml`, xem [mục 15](generator-design.md#các-khóa-cấu-hình-đang-dùng) |
-| Store data (MinIO, PostgreSQL) | Đạt | 388 MB JSON Lines trong 180 file ở MinIO. Bảng `walmart.orders` 74 MB ở PostgreSQL |
+| Store data (MinIO, PostgreSQL) | Đạt | 100,01 GB thô: `amazon.orders` 86,73 GB trong 3.316 file, `walmart.orders` 13,28 GB trong 3.255 file, `seller.skus` 0,23 MB |
 
-## Chi tiết từng vấn đề
+## Chi tiết từng vấn đề (đo trên lần chạy nhỏ)
 
 ### Skew
 
@@ -148,7 +167,7 @@ walmart.orders  51523        50499          1.99            0                 10
 
 Khoảng một nửa bản trùng của Amazon là bản cũ hơn, mang Order Status cũ. Vì vậy chỉ bỏ các dòng giống hệt nhau là không đủ, mà phải giữ bản cập nhật mới nhất theo khóa.
 
-### Nơi lưu
+### Nơi lưu (lần chạy nhỏ)
 
 ![MinIO console](images/batch/minio-bucket.png)
 
@@ -162,3 +181,20 @@ Khoảng một nửa bản trùng của Amazon là bản cũ hơn, mang Order St
 | `labels` | MinIO | Parquet | 1 | 13 MB |
 | `walmart.orders` | PostgreSQL | bảng, cột JSONB | | 74 MB |
 | `seller.skus` | PostgreSQL | bảng | | 0,3 MB |
+
+Ở phạm vi 100 GB, `/data/raw` giữ cùng định dạng nhưng chia nhiều file export hơn (3.316 file Amazon, 3.255 file Walmart) vì mỗi Export Date sinh một lô; `seller.skus` vẫn một file. Bảng `walmart.orders` trong PostgreSQL giữ nguồn của lần chạy nhỏ; bản 100 GB nằm ở `/data/raw` dưới dạng export để không phải nạp 13 GB vào database.
+
+## Ba Channel nguồn nhỏ
+
+`configs/scale-100gb.yaml` chưa render TikTok Shop, Shopify, Shopee (xem `not_rendered_yet`). Để ba Channel này có đủ Bronze/Silver/Gold mà không tốn 100 GB, dự án chạy thêm một nguồn nhỏ `configs/small.yaml` ghi ra `out/channels-small`: 50 SKU, 60 ngày lịch sử, 200 Order/ngày, seed 42. Lần này **cả năm Channel** đều có renderer (`not_rendered_yet` rỗng):
+
+| Dataset | Dòng | Khóa khác nhau | Tỷ lệ trùng | File |
+|---|---:|---:|---:|---:|
+| `amazon.orders` | 8.999 | 8.823 | 1,96% | 666 |
+| `tiktok_shop.orders` | 1.810 | 1.780 | 1,66% | 506 |
+| `shopify.orders` | 910 | 891 | 2,09% | 388 |
+| `walmart.orders` | 827 | 814 | 1,57% | 393 |
+| `shopee.orders` | 354 | 347 | 1,98% | 226 |
+| `seller.skus` | 50 | 50 | 0% | 1 |
+
+Ba dòng `tiktok_shop.orders` / `shopify.orders` / `shopee.orders` (1.810 / 910 / 354) khớp đúng số dòng mà các job validate Bronze/Silver đếm được ở DP1/DP2, nên đường ống cho ba Channel mới được kiểm bằng số của chính nguồn nhỏ này. Đây là nguồn **nhỏ có chủ đích** để kiểm cấu trúc và đường ống, không phải bằng chứng đạt ngưỡng 100 GB; ngưỡng 100 GB chỉ dựa trên Amazon + Walmart ở `/data/raw`.

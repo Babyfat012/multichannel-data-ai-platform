@@ -19,6 +19,8 @@ import dataclasses
 import json
 from pathlib import Path
 
+import pytest
+
 from generator.batch import BatchRun
 
 
@@ -81,6 +83,60 @@ def _config_at(config, root: Path):
 def _straight_run(config, root: Path) -> dict:
     """Chạy một lèo vào `root`, trả về manifest."""
     return BatchRun(_config_at(config, root)).run()
+
+
+@pytest.mark.parametrize("cut", [False, True])
+@pytest.mark.parametrize("changed", ["seed", "days_history", "orders_per_day"])
+def test_resume_rejects_changed_dataset_before_mutation(tiny_config, tmp_path, cut, changed):
+    """A resume must not relabel old Orders with a new catalog/config, even after a crash."""
+    config = dataclasses.replace(
+        _config_at(tiny_config, tmp_path / "guarded"),
+        scale=dataclasses.replace(tiny_config.scale, days_history=2, orders_per_day=10),
+    )
+    if cut:
+        _run_with_cut(config, cut_at=1, stamp_first=False)
+    else:
+        BatchRun(config).run()
+    root = Path(config.storage.output_root)
+    before = {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+    modified = (
+        dataclasses.replace(config, seed=config.seed + 1)
+        if changed == "seed" else
+        dataclasses.replace(config, scale=dataclasses.replace(
+            config.scale, **{changed: getattr(config.scale, changed) + 1}
+        ))
+    )
+    with pytest.raises(ValueError, match="identity|dataset"):
+        BatchRun(modified).run()
+    after = {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+    assert after == before, "Reject mismatches before rewriting SKU/manifest or discarding data"
+
+
+@pytest.mark.parametrize("damaged", ["legacy", "checkpoint", "manifest", "runtime_identity"])
+def test_untrusted_resume_metadata_is_rejected_without_repairing_it(tiny_config, tmp_path, damaged):
+    """Never silently adopt legacy data or relabel a foreign checkpoint as this world."""
+    config = dataclasses.replace(
+        _config_at(tiny_config, tmp_path / "guarded"),
+        scale=dataclasses.replace(tiny_config.scale, days_history=2, orders_per_day=10),
+    )
+    BatchRun(config).run()
+    root = Path(config.storage.output_root)
+    if damaged == "legacy":
+        (root / "_dataset_identity.json").unlink()
+    else:
+        name = {"checkpoint": "_checkpoint/day-00001.json", "manifest": "run_manifest.json",
+                "runtime_identity": "_dataset_identity.json"}[damaged]
+        path = root / name
+        value = json.loads(path.read_text())
+        if damaged == "runtime_identity":
+            value["runtime"]["numpy"] = "foreign-runtime"
+        else:
+            value["dataset_version"] = "foreign-world"
+        path.write_text(json.dumps(value))
+    before = {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+    with pytest.raises(ValueError, match="identity"):
+        BatchRun(config).run()
+    assert {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()} == before
 
 
 def test_resuming_after_a_clean_cut_matches_a_straight_run_byte_for_byte(tiny_config, tmp_path):

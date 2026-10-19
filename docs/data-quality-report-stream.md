@@ -2,6 +2,10 @@
 
 Báo cáo này đối chiếu các dòng rubric về streaming với số đo thật. Phần Batch nằm ở [data-quality-report-batch.md](data-quality-report-batch.md). Thiết kế và bản đồ code xem [generator-design.md, mục Stream](generator-design.md#stream).
 
+## Phạm vi
+
+Batch đạt ngưỡng 100 GB bằng `configs/scale-100gb.yaml`, nhưng Stream không phát ở quy mô đó: 851.506 Order/ngày nhân 30 ngày Stream sẽ là hàng chục triệu notification, vượt mục đích kiểm streaming. Stream trong báo cáo này dùng `configs/default.yaml` (4.000 Order/ngày) — cùng mục `streaming_problems` và `drift.tiktok_live` với bản 100 GB, nên mọi tỷ lệ (trễ, trùng, burst) giống nhau; chỉ số tuyệt đối nhỏ hơn. Ngưỡng 100 GB chỉ áp cho Batch Amazon + Walmart ở `/data/raw`.
+
 ## Lần chạy
 
 - Cấu hình: `configs/default.yaml` (seed 42, `cutoff` 2026-06-30, 30 ngày Stream tới 2026-07-30, livestream TikTok ngày mô phỏng 195).
@@ -227,6 +231,10 @@ docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
 ```
 
 ![Đọc thử tin nhắn từ Kafka](images/stream/kafka-messages.png)
+
+## Ba Channel nguồn nhỏ
+
+Nguồn nhỏ `out/channels-small` sinh đủ năm Channel cho **Batch** (xem báo cáo Batch). Stream chưa phát ba Channel mới vì chỉ Amazon và TikTok Shop có renderer sự kiện (notification/webhook); Shopify, Walmart và Shopee đến theo lô polling nên thuộc bước sau. Hai topic hiện có đã phủ hai dạng streaming chính cần kiểm: late arrival/out-of-order của Amazon và duplicate/burst của TikTok Shop.
 
 ## Giả định và việc còn mở
 

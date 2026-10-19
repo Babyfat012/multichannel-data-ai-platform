@@ -1,6 +1,19 @@
 # Thiết kế Data Generator
 
-Tài liệu thiết kế của generator dữ liệu giả lập cho dự án. Trạng thái: **đang triển khai**, phần đã có code xem [mục 15](#15-triển-khai). Thuật ngữ (Channel, Storefront, Order Line, ...) xem [Domain.md](Domain.md). Nguồn và mức tin cậy của dạng dữ liệu từng Channel xem [channel-sources.md](channel-sources.md).
+Tài liệu thiết kế và triển khai generator dữ liệu giả lập cho dự án. Trạng thái: **đã triển khai trong phạm vi mô tả ở mục 15**. Thuật ngữ (Channel, Storefront, Order Line, ...) xem [Domain.md](Domain.md). Nguồn và mức tin cậy của dạng dữ liệu từng Channel xem [channel-sources.md](channel-sources.md).
+
+Cập nhật resume 2026-10-18: trước mọi ghi/xóa, Batch so
+`_dataset_identity.json` với config (không gồm output root), thứ tự Storefront,
+SHA-256 mã generator và Python/NumPy/PyArrow/fsspec versions. Checkpoints và
+manifest cùng mang `dataset_version`. Đổi config/code/runtime hoặc root cũ
+chưa có identity sẽ fail; không tự gắn identity mới lên dữ liệu cũ.
+Dùng root mới khi cần world khác. `--restart` giữ nghĩa tái sinh dữ liệu
+generator sở hữu trong root đã chọn, vì thế chỉ dùng khi chủ động muốn làm lại.
+Không chạy restart trên bộ evidence cần giữ. Guard giả định một writer;
+chưa là khóa phân tán hoặc phép kiểm hash toàn bộ file đã sinh.
+[Bản xử lý](audit-remediation-20261018.md) ghi test và giới hạn.
+[Source contract v2](source-contract-v2.md) là đích tiếp theo, chưa được
+thực thi chỉ nhờ có `dataset_version`; logic label hiện tại vẫn là v1.
 
 ## Mục lục
 
@@ -355,9 +368,9 @@ Mỗi con số đo được đặt cạnh con số trong `run_manifest.json`.
 
 **Việc còn mở:**
 - Tình trạng REST và GraphQL của Shopify năm 2026.
-- Ước lượng dung lượng dữ liệu: đo từ lần chạy nhỏ đầu tiên rồi ngoại suy, không đoán trước.
-- Quy mô cho phần Spark: cấu hình mặc định chỉ ra khoảng 0,5 GB, Spark chạy vài giây nên khó thấy skew và mức cải thiện trên Spark UI. Khi làm Spark, thêm `configs/large.yaml` (tăng `scale.orders_per_day` lên khoảng 20.000 đến 40.000, tức 2,5 đến 5 GB), đo RAM của generator trước khi chạy, ưu tiên chạy trên cloud.
-- Thiết kế bảng theo từng tầng (`raw_`, `stg_`, `dim_`, `fact_`, `feat_`, SCD2): Bronze đã xong (`raw_amazon_orders`, `raw_walmart_orders` có thật) và `stg_*` đã chốt ở [docs/silver.md](silver.md); `dim_`/`fact_`/`feat_`/SCD2 chưa làm.
+- Dung lượng đã đo trong manifest nguồn: 100.012.790.412 byte cho Amazon/Walmart/SKU; xem [báo cáo Batch](data-quality-report-batch.md).
+- Quy mô Spark đã kiểm bằng `configs/scale-100gb.yaml`; benchmark 20/180 ngày ở [Spark](spark.md), pipeline Airflow dùng cửa sổ nhỏ hơn ghi trong [Airflow](airflow.md). Không dùng kế hoạch `large.yaml` cũ.
+- Bronze/Silver đủ năm Channel, Gold fact, Amazon SCD2 và feature offline đã chạy; schema và phạm vi bằng chứng ở [Schema](schema.md) và [Gold](gold.md).
 
 ## 14. Đối chiếu với rubric
 
@@ -392,7 +405,7 @@ Mục này ghi phần đã có code: code nằm ở đâu, chạy thế nào, v�
 | 2 | Docker Compose (MinIO, PostgreSQL), bảng `seller.skus`, lệnh nạp PostgreSQL, `report.py`, Dockerfile tối ưu | Xong (notebook để sau) |
 | 2b | Amazon Returns và FBA reports, small-file, Listing, tỷ giá | Chưa làm |
 | 3 | Stream qua Kafka: burst (livestream TikTok), late (Amazon), duplicate (TikTok Shop), nhịp phát theo đoạn | Xong. Shopify, Walmart và Shopee trong Stream để bước 4 |
-| 4 | TikTok Shop, Shopify, Shopee, drift | Chưa làm |
+| 4 | TikTok Shop, Shopify, Shopee, drift | Ba renderer Batch và Bronze/Silver/Gold đã chạy trên nguồn nhỏ; Stream ba Channel và concept drift chưa làm |
 
 ### Chạy thử
 

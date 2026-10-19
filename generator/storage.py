@@ -247,6 +247,10 @@ class OutputStore:
         with self.fs.open(self.path(relative), "rt", encoding="utf-8") as f:
             return json.load(f)
 
+    def exists(self, relative: str) -> bool:
+        """Check for an output object without creating or modifying it."""
+        return self.fs.exists(self.path(relative))
+
     def remove(self, relative: str) -> None:
         """Xóa một file. Không có file thì coi như xong, không ném lỗi."""
         try:

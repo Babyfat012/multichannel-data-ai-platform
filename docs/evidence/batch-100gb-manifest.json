@@ -1,0 +1,52 @@
+{
+  "source_manifest": "/data/raw/run_manifest.json",
+  "cutoff": "2026-06-30T00:00:00+00:00",
+  "config": {
+    "seed": 42,
+    "n_skus": 2000,
+    "start_date": "2026-01-01",
+    "days_history": 180,
+    "orders_per_day": 851506,
+    "duplicate_rate": 0.02,
+    "amazon_orders_api_switch_day": 100
+  },
+  "datasets": {
+    "amazon.orders": {
+      "rows": 108248563,
+      "unique_keys": 106109650,
+      "duplicate_rate": 0.019759,
+      "files": 3316,
+      "bytes": 86728943600
+    },
+    "walmart.orders": {
+      "rows": 10949058,
+      "unique_keys": 10732935,
+      "duplicate_rate": 0.019739,
+      "files": 3255,
+      "bytes": 13283621342
+    },
+    "seller.skus": {
+      "rows": 2000,
+      "unique_keys": 2000,
+      "duplicate_rate": 0,
+      "files": 1,
+      "bytes": 225470
+    }
+  },
+  "total_bytes": 100012790412,
+  "schema_evolution": {
+    "dataset": "amazon.orders",
+    "new_schema": "orders-2026-01-01",
+    "first_export_date": "2026-04-10"
+  },
+  "not_rendered_yet": [
+    "shopee",
+    "shopify",
+    "tiktok_shop"
+  ],
+  "verification": {
+    "method": "Counted JSONL files and summed file sizes directly under /data/raw; values match the source manifest.",
+    "jsonl_files": 6572,
+    "sum_file_bytes": 100012790412
+  }
+}

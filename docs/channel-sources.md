@@ -76,6 +76,16 @@ Webhook trùng: có thảo luận cộng đồng về việc Shopify gọi webho
 
 **Buyer.** `customer` có thể null với khách không đăng nhập.
 
+**Renderer Batch trong repo (2026-10-13).** `generator/channels/shopify.py` xuất một
+response REST `order` trên mỗi dòng JSONL, gồm `line_items` và `customer=null` cho
+khách guest. Nó giữ `price` trước giảm giá và `total_discount` của từng dòng;
+`fulfillment_status` chỉ nói hàng đã được fulfillment, không suy ra ngày giao
+thật. Dạng REST được chọn cho bộ dữ liệu giả lập hiện có; khi nối ứng dụng Shopify
+thật, cần xem lại yêu cầu GraphQL theo phiên bản API đang dùng.
+Source export nhỏ ở `out/channels-small` đã qua DP1 Bronze với 910 response.
+
+Đối chiếu với [Shopify Order resource](https://shopify.dev/docs/api/admin-rest/latest/resources/order).
+
 ## 4. Walmart
 
 **Order.** Nguồn: trang tài liệu chính thức Walmart Marketplace (Get all orders, Order management event). Mức: **Cao**.
@@ -150,6 +160,18 @@ Nguồn: trang tài liệu chính thức `partner.tiktokshop.com`, đọc qua tr
 
 **Buyer.** `user_id` ở cấp đơn là mã buyer trong phạm vi TikTok Shop, không dùng xuyên Channel được.
 
+**Renderer Batch trong repo (2026-10-13).** `generator/channels/tiktok_batch.py` vẽ
+Get Order Detail 202309 thành một response `data.orders` chứa một Order trên mỗi
+dòng JSONL. Cùng một Order dùng chung ID với webhook TikTok Shop đã có. Snapshot
+giữ trạng thái API `CANCELLED`; webhook vẫn giữ chữ `CANCEL`. `payment.seller_discount`
+gộp toàn bộ giảm giá của lõi mô phỏng, `platform_discount=0` vì lõi chưa phân biệt
+hai bên trả giảm giá. `line_items.quantity` là giả định cần đối chiếu khi mở rộng
+API thực. Source export nhỏ nằm ở `out/channels-small`; DP1 đã nạp và kiểm
+1.810 response vào Bronze. Silver được mô tả trong `silver-five-channels.md`.
+
+Trang chính thức dùng để đối chiếu trạng thái và trường lọc theo thời gian:
+[Get Order List 202309](https://partner.tiktokshop.com/docv2/page/get-order-list-202309).
+
 ## 6. Shopee
 
 Nguồn: trang tài liệu chính thức `open.shopee.com`, đọc qua trình duyệt. Mức: **Cao** cho mục đọc được dưới đây.
@@ -168,6 +190,16 @@ Nguồn: trang tài liệu chính thức `open.shopee.com`, đọc qua trình du
 
 **Push (webhook) của Shopee: không cần.** Thiết kế của dự án giả định Shopee đến theo polling (xem [Domain.md](Domain.md)), nên payload push không cần cho generator. Push code 3 (cập nhật trạng thái đơn) chỉ từng thấy qua thảo luận nhà phát triển, mức **Thấp**, không dùng.
 
+**Renderer Batch trong repo (2026-10-13).** `generator/channels/shopee.py` xuất
+`response.order_list` gồm một Order trên mỗi dòng JSONL, có `item_list`, giá
+VND dạng số nguyên và `order_item_id` để nối ground truth. Vì schema Order chưa có
+ngày giao thật, renderer chiếu cả trạng thái lõi `DELIVERED` và `COMPLETED` sang
+`COMPLETED`; `update_time` chỉ là lúc trạng thái hiện tại đổi, không mặc nhiên là
+`delivered_at`.
+
+Source export nhỏ của Shopee nằm ở `out/channels-small`; DP1 đã nạp và kiểm
+354 response vào Bronze.
+
 ## 7. Hệ quả cho generator
 
 1. **Cả 5 Channel đều đã có nguồn chính thức cho đơn hàng và trả hàng.** Còn thiếu: `ReturnStatus` đầy đủ của Shopee, `packages` và các webhook cancel/refund của TikTok Shop, khác biệt giữa hai phiên bản Get Order Detail của TikTok Shop, cột đầy đủ của các report FBA, danh sách trạng thái return của Walmart, notification của Amazon, fulfillment và mã webhook của Shopify. Các mục này ghi là giả định khi dùng.
@@ -180,3 +212,9 @@ Nguồn: trang tài liệu chính thức `open.shopee.com`, đọc qua trình du
 4. **Mã buyer theo Channel** (Walmart `buyerId`, Shopify `customer.id`, TikTok Shop `user_id`, Shopee `buyer_user_id`) chỉ có nghĩa trong từng Channel. Amazon không có mã buyer ổn định.
 5. **Không nhất quán tên trạng thái giữa API và webhook** của cùng một Channel (TikTok Shop `CANCELLED` và `CANCEL`) được giữ nguyên trong generator.
 6. **Walmart webhook có `eventId`**, nên duplicate ở Walmart có thể mô hình hóa qua `eventId` nếu sau này đổi Walmart từ polling sang webhook.
+7. **Mở rộng renderer không đổi số đo của Channel cũ.** TikTok Shop, Shopify và
+   Shopee dùng luồng RNG export riêng theo Order. Amazon/Walmart vẫn dùng luồng
+   cũ của lần chạy 100 GB; manifest nhỏ sau khi thêm cả ba Channel có cùng
+   `rows`, `unique_keys`, `rows_by_placement` và `bytes` của hai nguồn cũ như
+   `out/small/run_manifest.json`. Số file khác vì bản cũ dùng cách ghi file
+   trước cơ chế resume.
