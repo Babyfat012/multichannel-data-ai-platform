@@ -1,6 +1,6 @@
 """Test bảng ánh xạ của tầng Silver, không cần cụm Spark.
 
-`spark_jobs/silver_mapping.py` cố tình không import pyspark, nên các quyết định nghiệp vụ
+`spark_jobs/lib/order_snapshot_mapping.py` cố tình không import pyspark, nên các quyết định nghiệp vụ
 của Silver (trạng thái chuẩn, fulfillment method, mã quốc gia) kiểm được ngay trên máy host.
 
 Mỗi test dưới đây gắn với một quyết định có ghi trong `docs/silver.md`, và chỗ nào nói về
@@ -14,10 +14,9 @@ from pathlib import Path
 
 import pytest
 
-# `spark_jobs/` không phải package cài được, nên thêm vào sys.path như spark-submit làm.
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "spark_jobs"))
+# Shared helpers use package imports from the repository root.
 
-from silver_mapping import (  # noqa: E402
+from spark_jobs.lib.order_snapshot_mapping import (  # noqa: E402
     AMAZON_2026_STATUS,
     AMAZON_V0_STATUS,
     WALMART_STATUS,
@@ -55,6 +54,7 @@ class TestTrangThaiAmazon:
         ],
     )
     def test_dang_v0(self, v0, expected):
+        """Map each Amazon v0 state to its expected normalized lifecycle state."""
         assert amazon_order_status(v0, None) == expected
 
     @pytest.mark.parametrize(
@@ -67,6 +67,7 @@ class TestTrangThaiAmazon:
         ],
     )
     def test_dang_2026(self, raw, expected):
+        """Map each Amazon 2026 state to its expected normalized lifecycle state."""
         assert amazon_order_status(None, raw) == expected
 
     def test_amazon_khong_bao_gio_ra_delivered(self):
@@ -109,9 +110,11 @@ class TestTrangThaiWalmart:
         ],
     )
     def test_cac_trang_thai_con_lai(self, raw, expected):
+        """Map the remaining documented Walmart states to normalized values."""
         assert walmart_order_status(raw) == expected
 
     def test_chu_la_thanh_none(self):
+        """Return null for unknown Walmart status values and absent input."""
         assert walmart_order_status("khong-co-that") is None
         assert walmart_order_status(None) is None
 
@@ -121,10 +124,12 @@ class TestFulfillmentMethod:
 
     @pytest.mark.parametrize("raw", ["AFN", "AMAZON"])
     def test_channel_giao(self, raw):
+        """Normalize channel-fulfilled Amazon codes to the shared channel value."""
         assert amazon_fulfillment_method(raw) == "channel"
 
     @pytest.mark.parametrize("raw", ["MFN", "MERCHANT"])
     def test_seller_tu_giao(self, raw):
+        """Normalize seller-fulfilled Amazon codes to the shared seller value."""
         assert amazon_fulfillment_method(raw) == "seller"
 
     def test_bon_chu_nguon_khong_trung_nghia_nhau(self):
@@ -137,9 +142,11 @@ class TestMaQuocGia:
     """`country` là cột chuẩn duy nhất, không có cột gốc đi kèm."""
 
     def test_usa_ve_us(self):
+        """Normalize the source country alias USA to the ISO country code US."""
         assert normalize_country("USA") == "US"
 
     def test_ma_da_dung_thi_giu_nguyen(self):
+        """Keep already normalized country codes unchanged."""
         assert normalize_country("US") == "US"
         assert normalize_country("DE") == "DE"
 
@@ -152,4 +159,5 @@ class TestMaQuocGia:
         assert normalize_country("XX") == "XX"
 
     def test_none_van_la_none(self):
+        """Preserve a missing country as None."""
         assert normalize_country(None) is None

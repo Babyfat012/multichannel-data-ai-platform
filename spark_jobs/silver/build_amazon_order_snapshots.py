@@ -3,7 +3,7 @@
 Đây là job đầu tiên của tầng Silver. Nó làm đúng hai việc mà Bronze cố ý KHÔNG làm, theo
 thiết kế đã chốt ở `docs/silver.md`:
 
-  1. **Gộp hai dạng schema của Amazon** (rubric sheet `de`: handle schema evolution).
+  1. **Gộp hai dạng schema của Amazon**.
      Amazon giao dạng v0 tên khoá PascalCase (`AmazonOrderId`, `OrderStatus`) cho tới
      export day 99, rồi từ export day 100 = **2026-04-10** đổi sang camelCase và lồng sâu
      hơn (`orderId`, `fulfillment.status`). Mốc đổi là cấu hình
@@ -14,7 +14,7 @@ thiết kế đã chốt ở `docs/silver.md`:
      Bronze giữ nguyên chuỗi JSON nên cả hai dạng nằm chung một bảng, một cột `payload`.
      Job này parse hai dạng bằng HAI schema riêng rồi `unionByName` về một bộ cột.
 
-  2. **Bỏ bản trùng** (rubric sheet `de`: another offline problem — duplicate 2%).
+  2. **Bỏ bản trùng**
      Khoá dedup `(order_id, order_item_id)`, giữ bản `last_updated_time` lớn nhất, hoà thì
      giữ `export_date` lớn nhất (`docs/silver.md` mục 3.1).
 
@@ -37,8 +37,8 @@ Giới hạn của chính nguồn, ghi ở đây để không ai đi tìm:
     (`docs/silver.md` mục 5).
 
 Chạy:
-    spark-submit ... 02_silver_amazon.py
-    spark-submit ... 02_silver_amazon.py --source-table raw_amazon_orders_sample \
+    spark-submit ... silver/build_amazon_order_snapshots.py
+    spark-submit ... silver/build_amazon_order_snapshots.py --source-table raw_amazon_orders_sample \
         --table stg_amazon_order_lines_sample     # chạy thử trên 20 ngày
 """
 
@@ -60,9 +60,9 @@ from pyspark.sql.types import (
     StructType,
 )
 
-# spark-submit đưa thư mục của file script vào sys.path, nên import phẳng là đủ.
-from iceberg_session import CATALOG, build_spark
-from silver_mapping import (
+# Shared helpers use package imports from the repository root.
+from spark_jobs.lib.iceberg_session import CATALOG, build_spark
+from spark_jobs.lib.order_snapshot_mapping import (
     AMAZON_2026_STATUS,
     AMAZON_FULFILLMENT,
     AMAZON_V0_STATUS,
@@ -211,7 +211,7 @@ def _lookup(table: dict[str, str], col):
     """Tra một bảng ánh xạ chữ -> chữ bằng map literal của Spark.
 
     Dùng `create_map` thay vì chuỗi `when(...)` dài: bảng ánh xạ đã nằm ở
-    `silver_mapping.py` (có test), nên ở đây chỉ cần đổ nó vào Spark, không viết lại logic.
+    `lib/order_snapshot_mapping.py` (có test), nên ở đây chỉ cần đổ nó vào Spark, không viết lại logic.
     Chữ không có trong bảng thì map trả NULL — đúng ý: một chữ lạ phải hiện ra thành null
     để đếm được, chứ không làm chết job.
     """
@@ -376,7 +376,7 @@ def write_silver(spark: SparkSession, df: DataFrame, table: str) -> None:
     `createOrReplace` là một commit nguyên khối: hoặc bảng mới hiện ra đầy đủ, hoặc không
     có gì đổi. Nửa đường hỏng thì bảng cũ vẫn nguyên, chạy lại được.
 
-    CHỌN PARTITION — khoản này là ĐỀ XUẤT của planner, `docs/silver.md` chưa chốt:
+    CHỌN PARTITION — đã chốt ở `docs/silver.md` mục 10.4:
     partition theo ngày ĐẶT HÀNG (`days(created_at)`), không theo `export_date`.
       * `export_date` sau dedup chỉ còn nghĩa "ngày export của bản thắng", không còn là một
         lát dữ liệu đầy đủ — partition theo nó thì một đơn nhảy partition mỗi lần có bản mới.

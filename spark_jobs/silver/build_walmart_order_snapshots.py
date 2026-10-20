@@ -1,11 +1,11 @@
 """Job Silver 02 — `bronze.raw_walmart_orders` -> `silver.stg_walmart_order_lines`.
 
-Cặp với `02_silver_amazon.py`. Hai bảng Silver RIÊNG, không gộp — chốt ở `docs/silver.md`
+Cặp với `silver/build_amazon_order_snapshots.py`. Hai bảng Silver RIÊNG, không gộp — chốt ở `docs/silver.md`
 mục 2. Lý do: hai kênh có hình khoá dedup khác nhau (Amazon 2 cột, Walmart 3 cột), nên một
 job dedup chung phải mang hai nhánh logic rồi vẫn ghi vào một bảng. Việc gộp hai kênh là
 của **Gold** (`fact_` / `obt_`), nơi cả hai đã sạch và đã cùng snake_case.
 
-Khác `02_silver_amazon.py` ở ba điểm, đều do NGUỒN khác chứ không do thiết kế:
+Khác `silver/build_amazon_order_snapshots.py` ở ba điểm, đều do NGUỒN khác chứ không do thiết kế:
 
   1. **Một dạng schema, không hai.** Walmart không có schema evolution, nên job này không
      có nhánh parse thứ hai. Phần việc "gộp hai dạng" nằm hết ở job Amazon.
@@ -29,8 +29,8 @@ Bảng này KHÔNG có cột `fulfillment_method`: grep `fulfill` trong
 `generator/channels/walmart.py` ra rỗng, kênh này không công bố gì (`docs/silver.md` 8.3).
 
 Chạy:
-    spark-submit ... 02_silver_walmart.py
-    spark-submit ... 02_silver_walmart.py --source-table raw_walmart_orders_smoke \
+    spark-submit ... silver/build_walmart_order_snapshots.py
+    spark-submit ... silver/build_walmart_order_snapshots.py --source-table raw_walmart_orders_smoke \
         --table stg_walmart_order_lines_smoke
 """
 
@@ -53,9 +53,9 @@ from pyspark.sql.types import (
     StructType,
 )
 
-# spark-submit đưa thư mục của file script vào sys.path, nên import phẳng là đủ.
-from iceberg_session import CATALOG, build_spark
-from silver_mapping import COUNTRY_ALIASES, WALMART_STATUS
+# Shared helpers use package imports from the repository root.
+from spark_jobs.lib.iceberg_session import CATALOG, build_spark
+from spark_jobs.lib.order_snapshot_mapping import COUNTRY_ALIASES, WALMART_STATUS
 
 BRONZE_NS = "bronze"
 SILVER_NS = "silver"
@@ -277,8 +277,8 @@ def dedup(df: DataFrame) -> DataFrame:
 def write_silver(spark: SparkSession, df: DataFrame, table: str) -> None:
     """Ghi (thay thế) bảng Silver, partition theo `days(created_at)`.
 
-    Cùng cách chọn partition với job Amazon, và cùng là ĐỀ XUẤT của planner chưa chốt trong
-    `docs/silver.md`: chia theo ngày ĐẶT HÀNG, không theo ngày lấy dữ liệu. Lý do: sau dedup
+    Cùng cách chọn partition với job Amazon, đã chốt ở `docs/silver.md` mục 10.4:
+    chia theo ngày ĐẶT HÀNG, không theo ngày lấy dữ liệu. Lý do: sau dedup
     thì `fetched_at` chỉ còn nghĩa "lần lấy của bản thắng", nên partition theo nó làm một
     đơn nhảy partition mỗi lần có bản mới.
 
