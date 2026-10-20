@@ -1,0 +1,45 @@
+{
+  "date": "2026-10-18",
+  "code_sha256": "4f6f77f5cae0e2ba444ecb4b7d1342e67e3a82aa728ace817d746a4a9df1ceed",
+  "results": [
+    {
+      "probe": "generator_resume_changed_seed",
+      "scope": "local temporary 2-day dataset, 20 SKU, 10 expected orders/day; temp data discarded",
+      "first_seed": 7,
+      "second_manifest_seed": 8,
+      "raw_files_unchanged": true,
+      "sku_catalog_changed": true,
+      "raw_sha256_before": "2dc7922ff2c4cd6cf8daf3b015fec9be8cb0263c816192e61421aa2fb32179ef",
+      "raw_sha256_after": "2dc7922ff2c4cd6cf8daf3b015fec9be8cb0263c816192e61421aa2fb32179ef",
+      "sku_sha256_before": "a7a0314d54609dc5557a902fd285bfd83200402b05a82e329482a05d4eca301f",
+      "sku_sha256_after": "00a52377dc262938511c0146d49dd839fe6d020d83db56fcd6ef0ec4c4bc5caf",
+      "finding_reproduced": true
+    }
+  ],
+  "python_version": "3.12.13",
+  "command_recipe": "Run BatchRun(config seed=7, n_skus=20, days_history=2, orders_per_day=10, switch_day=2) in a new temporary root; hash Orders and SKU; run replace(config, seed=8) without restart on the same root; hash again.",
+  "expected_guard": "Refuse changed dataset/config before any source or manifest mutation.",
+  "config_a": {
+    "seed": 7,
+    "scale": {
+      "n_skus": 20,
+      "days_history": 2,
+      "orders_per_day": 10
+    },
+    "offline_problems": {
+      "amazon_orders_api_switch_day": 2
+    },
+    "storage": {
+      "output_root": "<temporary root>"
+    }
+  },
+  "config_b_override": {
+    "seed": 8
+  },
+  "dependency_versions": {
+    "numpy": "2.5.3",
+    "pyarrow": "25.0.1",
+    "PyYAML": "6.0.3"
+  },
+  "interpreter": ".venv/bin/python"
+}

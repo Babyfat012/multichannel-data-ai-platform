@@ -1,0 +1,62 @@
+{
+  "recorded_at_utc": "2026-10-18T04:11:36.657080+00:00",
+  "scope": "Local remediation checks only; expanded architecture gates and Cloud not accepted",
+  "python": {
+    "version": "3.12.13",
+    "numpy": "2.5.3",
+    "pyarrow": "25.0.1",
+    "fsspec": "2026.9.0"
+  },
+  "checks": {
+    "python": {
+      "command": ".venv/bin/pytest -q --junitxml=/tmp/fsds-audit-remediation-20261018.xml",
+      "tests": 166,
+      "failures": 0,
+      "errors": 0,
+      "pytest_elapsed_seconds": 8.29,
+      "junit_path": "docs/evidence/audit-remediation-python-20261018.xml",
+      "junit_sha256": "35a295cf41a54288d0865ec894acb18000f283c5e20e357781844237739cc948"
+    },
+    "resume_red_before_fix": {
+      "new_parameter_cases": 6,
+      "failed": 6,
+      "reason": "DID NOT RAISE ValueError when dataset config changed",
+      "provenance": "Observed in this session before identity guard was implemented; original probe retained separately"
+    },
+    "spark": {
+      "command": "docker run --rm --network none --read-only --tmpfs /tmp:rw,size=1g --mount type=bind,src=/home/phattl/eonsr/FSDS,dst=/workspace,readonly --entrypoint python fsds-airflow:2.10.5-spark3.5.3 /workspace/tests/spark_validation_checks.py",
+      "tests": 4,
+      "result": "OK",
+      "elapsed_seconds": 14.485,
+      "spark_version": "3.5.3",
+      "image_tag": "fsds-airflow:2.10.5-spark3.5.3",
+      "image_digest_recorded": false,
+      "first_attempt": "Failed to initialize Spark due to hostname resolution in network-none container; test runner pinned loopback then passed",
+      "limits": "Logical DataFrame regression, no Iceberg delete files, Kafka, catalog, warehouse volumes or Cloud"
+    }
+  },
+  "source_sha256": {
+    "generator/dataset_identity.py": "680f5406b25b60e8e74ecec989a8b23973285db6a31d9832c769d68000d068b9",
+    "generator/batch.py": "223c9d41522db0ada4a8c9b25ff878570f0dadf4d1a80a6c31f3ba3326909b68",
+    "generator/storage.py": "0b9d19e2ace28c38f646f924565c5ed319dd37866b21267ee1617b2007187530",
+    "spark_jobs/cdc_boundary.py": "9f3d19410102025b237bd55839d154cdbda05aeb3a0ff70102ed4f6e7b646417",
+    "spark_jobs/07_bronze_cdc.py": "fa4a6966142c5c8506c78fe21d13b9eef5ec9f22bba3d6b21b3d21263cd5d3b8",
+    "spark_jobs/08_validate_cdc.py": "0c8ea00dc56bd8bf561f5f55d4c6768c20a90973f4ebfede0f6b787e0e416031",
+    "spark_jobs/14_validate_features.py": "fc5267e751c49516d0d56e53bab265b8f5502e11f744b0b46ac45040cd7d0a96",
+    "dags/dp1_cdc.py": "6ef46dcf1637b284e7ace4af66dd10e78a9cd6139f2568902a852f4afd63fdcb",
+    "scripts/setup_dp1_cdc.sh": "e85ff0a51a36bb6ea1f62d60b8de5a0025b12874c2413e9facad89cbc6a3b857",
+    "tests/test_batch_resume.py": "d87be5be0698472525146c1ffdaa8b028d5e993dd35e1cd5bc24853c2bdd9a31",
+    "tests/test_cdc_boundary.py": "707639be6b81f997864ed1e1430343d5adf35d2073ddd8b6605a6fe28f685949",
+    "tests/spark_validation_checks.py": "7bae45967704d9e6b29471178e6d80820a5a286991e1e3e125266c2d741a2ef9"
+  },
+  "original_failure_evidence": "docs/evidence/design-audit-small-probes-20261018.json",
+  "remaining": [
+    "Kafka/Spark/Iceberg CDC v2 integration and broker reset fencing",
+    "Source v2 feeds/world/substream fixtures",
+    "Frozen input vectors and independent payload/PIT oracle",
+    "Publication CAS/seal/turn pin/restore POC",
+    "Feast/ML/agent/Cloud gates G0-G4"
+  ],
+  "existing_data_rebuilt": false,
+  "cloud_actions": false
+}

@@ -1,0 +1,93 @@
+{
+  "audit_date": "2026-10-15",
+  "rubric": {
+    "workbook": "edai-k11-cw/rubic/EDAI K11 - MLE.xlsx",
+    "sheet": "de",
+    "scored_rows": 38,
+    "total_points": 100
+  },
+  "unit_tests": {
+    "command": ".venv/bin/pytest -q",
+    "passed": 144,
+    "seconds": 8.53,
+    "scope": "Existing host unit tests; no Airflow or Spark integration run"
+  },
+  "docstrings": {
+    "source_files": 74,
+    "functions_and_classes": 372,
+    "missing_module_descriptions": [],
+    "missing_function_or_class_docstrings": []
+  },
+  "markdown_links": {
+    "public_documents_checked": 23,
+    "missing_local_targets": [],
+    "git_ignored_targets": [
+      {
+        "source": "README.md",
+        "target": "docs/adr/0003-iceberg-va-rest-catalog-cho-lakehouse.md"
+      },
+      {
+        "source": "README.md",
+        "target": "docs/plan.md"
+      },
+      {
+        "source": "docs/de-rubric-matrix.md",
+        "target": "edai-k11-cw/rubic/EDAI K11 - MLE.xlsx"
+      },
+      {
+        "source": "docs/de-rubric-matrix.md",
+        "target": "CONTEXT.md"
+      },
+      {
+        "source": "docs/novel-ideas.md",
+        "target": "docs/plan.md"
+      }
+    ],
+    "scope": "Inline Markdown links and images; excludes external URLs and anchor validation"
+  },
+  "batch_manifest": {
+    "path": "/data/raw/run_manifest.json",
+    "raw_bytes": 100012790412,
+    "datasets": [
+      "amazon.orders",
+      "seller.skus",
+      "walmart.orders"
+    ]
+  },
+  "spark_silver": {
+    "event_log": "out/spark-events/app-20261014035356-0002",
+    "sha256": "22cc5f63cbda17fc4109cb8f7c791c2af6e73014f5424fd1648aa84bffdd57b3",
+    "application": {
+      "App Name": "silver-amazon-stg_amazon_order_lines_dp2",
+      "App ID": "app-20261014035356-0002",
+      "Timestamp": 1791950035417
+    },
+    "ended_at_epoch_ms": 1791950292212,
+    "failed_jobs": 0,
+    "sql_executions": [
+      {
+        "execution_id": 0,
+        "description": "count at NativeMethodAccessorImpl.java:0",
+        "from_json": true,
+        "row_number": false,
+        "amazon_v0_key": true,
+        "amazon_2026_key": true
+      },
+      {
+        "execution_id": 3,
+        "description": "createOrReplace at NativeMethodAccessorImpl.java:0",
+        "from_json": true,
+        "row_number": true,
+        "amazon_v0_key": true,
+        "amazon_2026_key": true
+      }
+    ],
+    "screenshot_limitation": "11-silver-amazon-query-plan.png shows SQL execution 2 (AtomicReplaceTableAsSelect), not sub-execution 3 with schema normalization and dedup"
+  },
+  "airflow_runtime": {
+    "containers_running_at_audit": false,
+    "new_runtime_check_executed_in_audit": false,
+    "existing_runtime_check_log": "No /opt/airflow/logs/dag_id=fsds_runtime_config_check found in stopped fsds-airflow-1",
+    "conclusion": "Runtime validation after metadata/operator changes remains unverified"
+  }
+}
