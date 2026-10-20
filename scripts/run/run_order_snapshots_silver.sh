@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Chạy hai job Silver trên cụm Spark standalone.
 #
-# Vì sao script RIÊNG chứ không thêm đích vào `run_bronze_evidence.sh`: script kia là
+# Vì sao script RIÊNG chứ không thêm đích vào `evidence/measure_order_snapshots_bronze.sh`: script kia là
 # bằng chứng đo hiệu năng của tầng Bronze (`docs/spark.md` mục 5 và 6) — mỗi đích trong đó
 # gắn với một con số đã ghi vào tài liệu. Silver là tầng khác, chạy vì mục đích khác (ra
 # bảng dùng được, không phải ra số so sánh), nên để riêng cho khỏi lẫn.
@@ -28,9 +28,10 @@
 #   amazon   — bảng Amazon thật   -> silver.stg_amazon_order_lines  (NẶNG: 108 triệu dòng)
 #   tatca    — walmart rồi amazon
 #
-# Dùng:  bash scripts/run_silver.sh [smoke|dup|walmart|amazon|tatca]
+# Dùng:  bash scripts/run/run_order_snapshots_silver.sh [smoke|dup|walmart|amazon|tatca]
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 
 WHICH="${1:-smoke}"
 # Driver chạy ở worker-1 chứ không ở spark-master: container master chỉ có 512 MB và bị
@@ -61,9 +62,9 @@ case "$WHICH" in
     # Hai bảng Bronze nhỏ đã có sẵn từ lúc dựng Bronze: `*_smoke` (Walmart, 20 file) và
     # `raw_amazon_orders_sample` (20 ngày mẫu). Đủ để kiểm cả hai nhánh schema của Amazon,
     # vì 20 ngày rải đều cắt qua cả mốc đổi schema (export day 100 = 2026-04-10).
-    submit "silver-walmart-smoke" 02_silver_walmart.py \
+    submit "silver-walmart-smoke" silver/build_walmart_order_snapshots.py \
       --source-table raw_walmart_orders_smoke --table stg_walmart_order_lines_smoke
-    submit "silver-amazon-smoke" 02_silver_amazon.py \
+    submit "silver-amazon-smoke" silver/build_amazon_order_snapshots.py \
       --source-table raw_amazon_orders_sample --table stg_amazon_order_lines_smoke
     ;;
   dup)
@@ -73,18 +74,18 @@ case "$WHICH" in
     docker exec "$MASTER_CONTAINER" /opt/spark/bin/spark-submit \
       --master spark://spark-master:7077 --packages "$ICEBERG_PKGS" \
       --driver-memory "${DRIVER_MEMORY:-600m}" \
-      /opt/spark_jobs/01_bronze_baseline.py \
+      /opt/spark_jobs/bronze/ingest_amazon_order_snapshots.py \
       --window-days 10 --window-start 2026-04-05 --aqe on \
       --table raw_amazon_orders_dup > "$LOG_DIR/bronze-dup.log" 2>&1
     grep -E "^ngày sẽ nạp|^  ->|^XONG" "$LOG_DIR/bronze-dup.log" || tail -5 "$LOG_DIR/bronze-dup.log"
-    submit "silver-amazon-dup" 02_silver_amazon.py \
+    submit "silver-amazon-dup" silver/build_amazon_order_snapshots.py \
       --source-table raw_amazon_orders_dup --table stg_amazon_order_lines_dup
     ;;
   walmart|tatca)
-    submit "silver-walmart" 02_silver_walmart.py
+    submit "silver-walmart" silver/build_walmart_order_snapshots.py
     ;;&
   amazon|tatca)
-    submit "silver-amazon" 02_silver_amazon.py
+    submit "silver-amazon" silver/build_amazon_order_snapshots.py
     ;;
   *)
     echo "Tham số phải là smoke | dup | walmart | amazon | tatca" >&2
