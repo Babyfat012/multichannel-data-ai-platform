@@ -1,0 +1,42 @@
+{
+  "dag_id": "fsds_runtime_config_check",
+  "run_id": "de_runtime_20261015",
+  "state": "success",
+  "logical_date": "2026-10-15T14:41:50+00:00",
+  "started_at": "2026-10-15T14:41:51.221414+00:00",
+  "completed_at": "2026-10-15T14:42:02.332259+00:00",
+  "dag_import_errors": 0,
+  "tasks": [
+    {
+      "task_id": "verify_connections_and_variables",
+      "state": "success",
+      "started_at": "2026-10-15T14:41:51.379093+00:00",
+      "completed_at": "2026-10-15T14:41:51.585950+00:00"
+    },
+    {
+      "task_id": "verify_spark_runtime",
+      "state": "success",
+      "started_at": "2026-10-15T14:41:53.494789+00:00",
+      "completed_at": "2026-10-15T14:42:02.066524+00:00"
+    }
+  ],
+  "connections": [
+    {
+      "connection_id": "fsds_minio",
+      "password_encrypted": true
+    },
+    {
+      "connection_id": "fsds_postgres",
+      "password_encrypted": true
+    },
+    {
+      "connection_id": "fsds_kafka",
+      "password_encrypted": false
+    }
+  ],
+  "proof_lines": [
+    "[2026-10-15T14:41:51.578+0000] {logging_mixin.py:190} INFO - FSDS runtime configuration resolved: connections=fsds_minio,fsds_postgres,fsds_kafka; variables=fsds_minio_internal_endpoint,fsds_warehouse_name,fsds_lakekeeper_catalog_uri,fsds_dp1_cdc_topic; encrypted_passwords=fsds_minio,fsds_postgres; resolved_keys=12",
+    "[2026-10-15T14:42:01.571+0000] {spark_submit.py:645} INFO - FSDS Spark runtime smoke: PASS; resolved_keys=12; master=spark://spark-master:7077; rows=3; sum=3; table_writes=0"
+  ],
+  "scope": "Connection/Variable lookup and three-row Spark standalone query; no source or table writes"
+}
