@@ -1,0 +1,17 @@
+{
+    "name": "fsds-walmart-orders",
+    "connector": {
+        "state": "RUNNING",
+        "worker_id": "172.23.0.6:8083",
+        "version": "3.4.3.Final"
+    },
+    "tasks": [
+        {
+            "id": 0,
+            "state": "RUNNING",
+            "worker_id": "172.23.0.6:8083",
+            "version": "3.4.3.Final"
+        }
+    ],
+    "type": "source"
+}
