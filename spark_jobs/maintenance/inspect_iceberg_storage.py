@@ -33,22 +33,33 @@ def main() -> None:
                 F.min("file_size_in_bytes").alias("smallest"),
                 F.expr("percentile_approx(file_size_in_bytes, 0.5)").alias("median"),
                 F.max("file_size_in_bytes").alias("largest"),
-                F.sum(F.when(F.col("file_size_in_bytes") < 16 * 1024 * 1024, 1).otherwise(0)).alias("under_16_mib"),
-                F.sum(F.when(F.col("file_size_in_bytes") < 64 * 1024 * 1024, 1).otherwise(0)).alias("under_64_mib"),
+                F.sum(F.when(F.col("file_size_in_bytes") < 16 * 1024 * 1024, 1).otherwise(0)).alias(
+                    "under_16_mib"
+                ),
+                F.sum(F.when(F.col("file_size_in_bytes") < 64 * 1024 * 1024, 1).otherwise(0)).alias(
+                    "under_64_mib"
+                ),
             ).first()
             if "partition" in files.columns:
                 by_partition = files.groupBy("partition").count()
-                partitions = by_partition.agg(
-                    F.count("*").alias("partitions"),
-                    F.max("count").alias("max_files_per_partition"),
-                    F.sum(F.when(F.col("count") > 1, 1).otherwise(0)).alias("partitions_with_multiple_files"),
-                ).first().asDict()
+                partitions = (
+                    by_partition.agg(
+                        F.count("*").alias("partitions"),
+                        F.max("count").alias("max_files_per_partition"),
+                        F.sum(F.when(F.col("count") > 1, 1).otherwise(0)).alias(
+                            "partitions_with_multiple_files"
+                        ),
+                    )
+                    .first()
+                    .asDict()
+                )
             else:
-                partitions = {"partitions": 1,
-                              "max_files_per_partition": summary["files"],
-                              "partitions_with_multiple_files": int(summary["files"] > 1)}
-            print(f"STORAGE_FILE_SUMMARY {table} "
-                  f"{dict(**summary.asDict(), **partitions)}")
+                partitions = {
+                    "partitions": 1,
+                    "max_files_per_partition": summary["files"],
+                    "partitions_with_multiple_files": int(summary["files"] > 1),
+                }
+            print(f"STORAGE_FILE_SUMMARY {table} {dict(**summary.asDict(), **partitions)}")
     finally:
         spark.stop()
 

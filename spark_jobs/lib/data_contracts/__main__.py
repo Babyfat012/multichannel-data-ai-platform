@@ -1,12 +1,14 @@
 """CLI infer/diff/check-registry/gate, chỉ dùng thư viện chuẩn."""
+
 import argparse
-from dataclasses import asdict
 import json
+from dataclasses import asdict
 from pathlib import Path
-from spark_jobs.lib.data_contracts.schema import infer_schema
+
 from spark_jobs.lib.data_contracts.compat import diff, verdict
-from spark_jobs.lib.data_contracts.registry import Registry
 from spark_jobs.lib.data_contracts.gate import gate_root
+from spark_jobs.lib.data_contracts.registry import Registry
+from spark_jobs.lib.data_contracts.schema import infer_schema
 
 
 def main(argv=None):
@@ -19,7 +21,9 @@ def main(argv=None):
     compare = commands.add_parser("diff")
     compare.add_argument("old")
     compare.add_argument("new")
-    compare.add_argument("--mode", default="BACKWARD", choices=["BACKWARD", "FORWARD", "FULL", "NONE"])
+    compare.add_argument(
+        "--mode", default="BACKWARD", choices=["BACKWARD", "FORWARD", "FULL", "NONE"]
+    )
     compare.add_argument("--migrations", help="File JSON map đường dẫn cũ -> mới")
     check = commands.add_parser("check-registry")
     check.add_argument("--contracts-dir", default=None)
@@ -29,12 +33,25 @@ def main(argv=None):
     args = parser.parse_args(argv)
     code = 0
     if args.command == "infer":
-        result = infer_schema(json.loads(line) for filename in args.files for line in Path(filename).read_text().splitlines() if line.strip())
+        result = infer_schema(
+            json.loads(line)
+            for filename in args.files
+            for line in Path(filename).read_text().splitlines()
+            if line.strip()
+        )
     elif args.command == "diff":
         migrations = json.loads(Path(args.migrations).read_text()) if args.migrations else None
-        changes = diff(json.loads(Path(args.old).read_text()), json.loads(Path(args.new).read_text()), migrations)
+        changes = diff(
+            json.loads(Path(args.old).read_text()),
+            json.loads(Path(args.new).read_text()),
+            migrations,
+        )
         compatible = verdict(changes, args.mode)
-        result = {"mode": args.mode, "compatible": compatible, "changes": [asdict(c) for c in changes]}
+        result = {
+            "mode": args.mode,
+            "compatible": compatible,
+            "changes": [asdict(c) for c in changes],
+        }
         code = 0 if compatible else 1
     elif args.command == "check-registry":
         errors = Registry(args.contracts_dir).check_registry()

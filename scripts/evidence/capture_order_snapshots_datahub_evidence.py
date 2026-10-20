@@ -21,7 +21,6 @@ import aiohttp
 
 from scripts.evidence.capture_airflow_evidence import ChromePage, wait_for_chrome
 
-
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / "docs" / "images" / "datahub"
 BASE_URL = "http://127.0.0.1:9002"
@@ -34,10 +33,13 @@ DATASETS = {
 # không đè sáu ảnh lịch sử ở docs/images/datahub/.
 PROFILES = {
     "legacy": (DATASETS, OUTPUT),
-    "v2": ({
-        "dp1-cdc": "lakehouse.bronze.raw_walmart_cdc_v2",
-        "dp3": "lakehouse.gold.feat_order_line_return_dp3",
-    }, OUTPUT / "v2"),
+    "v2": (
+        {
+            "dp1-cdc": "lakehouse.bronze.raw_walmart_cdc_v2",
+            "dp3": "lakehouse.gold.feat_order_line_return_dp3",
+        },
+        OUTPUT / "v2",
+    ),
 }
 
 
@@ -67,8 +69,15 @@ async def login(page: ChromePage) -> None:
     result = await page.evaluate(
         "(() => {"
         "const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;"
-        "for (const [id, value] of [[" + json.dumps("username") + ", " + json.dumps(username)
-        + "], [" + json.dumps("password") + ", " + json.dumps(password) + "]]) {"
+        "for (const [id, value] of [["
+        + json.dumps("username")
+        + ", "
+        + json.dumps(username)
+        + "], ["
+        + json.dumps("password")
+        + ", "
+        + json.dumps(password)
+        + "]]) {"
         "const el = document.getElementById(id); if (!el) return 'missing ' + id;"
         "set.call(el, value); el.dispatchEvent(new Event('input', {bubbles:true}));"
         "el.dispatchEvent(new Event('change', {bubbles:true}));"
@@ -91,9 +100,7 @@ async def login(page: ChromePage) -> None:
 
 async def dismiss_onboarding(page: ChromePage) -> None:
     """Close the first-visit asset sidebar tour before taking evidence."""
-    if not await page.evaluate(
-        "document.body.innerText.includes('Introducing the Asset Sidebar')"
-    ):
+    if not await page.evaluate("document.body.innerText.includes('Introducing the Asset Sidebar')"):
         return
     await page.evaluate(
         "(() => { const element = document.elementFromPoint(1110, 143);"
@@ -127,21 +134,33 @@ async def capture(inspect_only: bool, profile_name: str = "legacy") -> None:
         output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="fsds-datahub-chrome-") as directory:
         profile = Path(directory)
-        chrome = subprocess.Popen([
-            "google-chrome", "--headless=new", "--no-sandbox", "--disable-gpu",
-            "--disable-dev-shm-usage", "--hide-scrollbars", "--window-size=1680,1050",
-            "--remote-debugging-port=0", "--remote-allow-origins=*",
-            f"--user-data-dir={profile}", "about:blank",
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=True)
+        chrome = subprocess.Popen(
+            [
+                "google-chrome",
+                "--headless=new",
+                "--no-sandbox",
+                "--disable-gpu",
+                "--disable-dev-shm-usage",
+                "--hide-scrollbars",
+                "--window-size=1680,1050",
+                "--remote-debugging-port=0",
+                "--remote-allow-origins=*",
+                f"--user-data-dir={profile}",
+                "about:blank",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
         try:
             port = await wait_for_chrome(profile)
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"http://127.0.0.1:{port}/json") as response:
                     targets = await response.json()
                 tab = next(item for item in targets if item["type"] == "page")
-                async with session.ws_connect(tab["webSocketDebuggerUrl"],
-                                              max_msg_size=20_000_000) as websocket:
+                async with session.ws_connect(
+                    tab["webSocketDebuggerUrl"], max_msg_size=20_000_000
+                ) as websocket:
                     page = ChromePage(websocket)
                     await page.call("Page.enable")
                     await login(page)
@@ -161,9 +180,13 @@ async def capture(inspect_only: bool, profile_name: str = "legacy") -> None:
                             if inspect_only:
                                 print(f"{dp} {suffix}: {url}\n{body[:1500]}\n")
                                 continue
-                            image = await page.call("Page.captureScreenshot", {
-                                "format": "png", "captureBeyondViewport": False,
-                            })
+                            image = await page.call(
+                                "Page.captureScreenshot",
+                                {
+                                    "format": "png",
+                                    "captureBeyondViewport": False,
+                                },
+                            )
                             path = output / f"{dp}-{suffix}.png"
                             path.write_bytes(base64.b64decode(image["data"]))
                             print(f"Captured {path.relative_to(ROOT)}")
@@ -180,8 +203,12 @@ def main() -> None:
     """Run the browser capture or inspect the UI routes without writing images."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--inspect-only", action="store_true")
-    parser.add_argument("--profile", choices=sorted(PROFILES), default="legacy",
-                        help="legacy = sáu ảnh lịch sử; v2 = CDC v2 và DP3 chạy lại, thư mục riêng")
+    parser.add_argument(
+        "--profile",
+        choices=sorted(PROFILES),
+        default="legacy",
+        help="legacy = sáu ảnh lịch sử; v2 = CDC v2 và DP3 chạy lại, thư mục riêng",
+    )
     args = parser.parse_args()
     asyncio.run(capture(args.inspect_only, args.profile))
 

@@ -3,19 +3,20 @@
 Không cần listener callback hay mạng. Event log không nén, đóng Spark trước khi đọc;
 JSON giữ tất cả stage, task thành công, plan và nhận diện exchange cấp dữ liệu cho sweep.
 """
+
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
 import hashlib
 import json
 import math
 import os
-from pathlib import Path
 import re
 import statistics
 import sys
 import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -27,31 +28,42 @@ def distribution(values):
     if not values:
         return dict(max=0, median=0, p95=0, max_median=None)
     median = statistics.median(values)
-    return dict(max=values[-1], median=median, p95=values[math.ceil(.95 * len(values)) - 1],
-                max_median=values[-1] / median if median else None)
+    return dict(
+        max=values[-1],
+        median=median,
+        p95=values[math.ceil(0.95 * len(values)) - 1],
+        max_median=values[-1] / median if median else None,
+    )
 
 
 def _nodes(node):
     """Duyệt cây physical plan được ghi bởi SQLExecutionStart."""
     yield node
-    for child in node.get('children', []):
+    for child in node.get("children", []):
         yield from _nodes(child)
 
 
 def _window_exchanges(plan):
     """Chỉ lấy Exchange cấp Window qua Sort/wrapper; không nhận aggregate/join cùng khóa."""
+
     def inputs(node):
         """Dừng ở ranh giới operator thay đổi dữ liệu hoặc Exchange đầu tiên."""
-        name = node.get('nodeName', '')
-        if name == 'Exchange':
+        name = node.get("nodeName", "")
+        if name == "Exchange":
             yield node
-        elif name in ('Sort', 'InputAdapter', 'Project', 'AQEShuffleRead', 'ShuffleQueryStage') or name.startswith('WholeStageCodegen'):
-            for child in node.get('children', []):
+        elif name in (
+            "Sort",
+            "InputAdapter",
+            "Project",
+            "AQEShuffleRead",
+            "ShuffleQueryStage",
+        ) or name.startswith("WholeStageCodegen"):
+            for child in node.get("children", []):
                 yield from inputs(child)
 
     for node in _nodes(plan):
-        if node.get('nodeName') == 'Window':
-            for child in node.get('children', []):
+        if node.get("nodeName") == "Window":
+            for child in node.get("children", []):
                 yield from inputs(child)
 
 
@@ -62,183 +74,291 @@ def read_event_logs(directory):
     bằng output rows. Chỉ sweep consumer có shuffle mới dùng để so tải window.
     """
     stage_groups, stages, tasks, exchanges, plans = {}, {}, {}, {}, []
-    for path in sorted(Path(directory).rglob('*')):
-        if not path.is_file() or path.name.startswith('.'):
+    for path in sorted(Path(directory).rglob("*")):
+        if not path.is_file() or path.name.startswith("."):
             continue
         with path.open() as stream:
             for line in stream:
                 event = json.loads(line)
-                kind = event['Event']
-                if kind == 'SparkListenerJobStart':
-                    group = (event.get('Properties') or {}).get('spark.jobGroup.id', 'ungrouped')
-                    for sid in event['Stage IDs']:
+                kind = event["Event"]
+                if kind == "SparkListenerJobStart":
+                    group = (event.get("Properties") or {}).get("spark.jobGroup.id", "ungrouped")
+                    for sid in event["Stage IDs"]:
                         stage_groups.setdefault(sid, set()).add(group)
-                elif kind.endswith(('SparkListenerSQLExecutionStart', 'SparkListenerSQLAdaptiveExecutionUpdate')):
-                    plans.append(dict(execution_id=event['executionId'], event=kind,
-                                      plan=event['physicalPlanDescription']))
-                    for node in _window_exchanges(event.get('sparkPlanInfo', {})):
-                        desc = node.get('simpleString', '')
-                        partitioning = re.search(r'hashpartitioning\((.*?), \d+\)', desc)
-                        if node.get('nodeName') == 'Exchange' and partitioning:
+                elif kind.endswith(
+                    ("SparkListenerSQLExecutionStart", "SparkListenerSQLAdaptiveExecutionUpdate")
+                ):
+                    plans.append(
+                        dict(
+                            execution_id=event["executionId"],
+                            event=kind,
+                            plan=event["physicalPlanDescription"],
+                        )
+                    )
+                    for node in _window_exchanges(event.get("sparkPlanInfo", {})):
+                        desc = node.get("simpleString", "")
+                        partitioning = re.search(r"hashpartitioning\((.*?), \d+\)", desc)
+                        if node.get("nodeName") == "Exchange" and partitioning:
                             keys = partitioning.group(1)
-                            key_names = re.sub(r'#\d+L?', '', keys)
-                            if key_names in ('dataset_version, seller_sku', 'dataset_version, seller_sku, _bucket'):
-                                role = 'bucket_sweep' if '_bucket#' in keys else 'sku_sweep_or_prefix'
-                                for metric in node.get('metrics', []):
-                                    exchanges[metric['accumulatorId']] = role
-                elif kind == 'SparkListenerStageCompleted':
-                    info = event['Stage Info']
-                    stages[(info['Stage ID'], info['Stage Attempt ID'])] = info
-                elif kind == 'SparkListenerTaskEnd' and event.get('Task End Reason', {}).get('Reason') == 'Success':
-                    info, metrics = event['Task Info'], event.get('Task Metrics', {})
-                    shuffle = metrics.get('Shuffle Read Metrics', {})
-                    task = dict(partition=info['Index'], task_attempt=info['Attempt'],
-                                input_records=metrics.get('Input Metrics', {}).get('Records Read', 0),
-                                shuffle_records=shuffle.get('Total Records Read', 0),
-                                shuffle_read_bytes=shuffle.get('Remote Bytes Read', 0) + shuffle.get('Local Bytes Read', 0),
-                                duration_ms=info['Finish Time'] - info['Launch Time'])
-                    task['records_read'] = task['input_records'] + task['shuffle_records']
-                    key = (event['Stage ID'], event['Stage Attempt ID'], info['Index'])
-                    if key not in tasks or tasks[key]['task_attempt'] < task['task_attempt']:
+                            key_names = re.sub(r"#\d+L?", "", keys)
+                            if key_names in (
+                                "dataset_version, seller_sku",
+                                "dataset_version, seller_sku, _bucket",
+                            ):
+                                role = (
+                                    "bucket_sweep" if "_bucket#" in keys else "sku_sweep_or_prefix"
+                                )
+                                for metric in node.get("metrics", []):
+                                    exchanges[metric["accumulatorId"]] = role
+                elif kind == "SparkListenerStageCompleted":
+                    info = event["Stage Info"]
+                    stages[(info["Stage ID"], info["Stage Attempt ID"])] = info
+                elif (
+                    kind == "SparkListenerTaskEnd"
+                    and event.get("Task End Reason", {}).get("Reason") == "Success"
+                ):
+                    info, metrics = event["Task Info"], event.get("Task Metrics", {})
+                    shuffle = metrics.get("Shuffle Read Metrics", {})
+                    task = dict(
+                        partition=info["Index"],
+                        task_attempt=info["Attempt"],
+                        input_records=metrics.get("Input Metrics", {}).get("Records Read", 0),
+                        shuffle_records=shuffle.get("Total Records Read", 0),
+                        shuffle_read_bytes=shuffle.get("Remote Bytes Read", 0)
+                        + shuffle.get("Local Bytes Read", 0),
+                        duration_ms=info["Finish Time"] - info["Launch Time"],
+                    )
+                    task["records_read"] = task["input_records"] + task["shuffle_records"]
+                    key = (event["Stage ID"], event["Stage Attempt ID"], info["Index"])
+                    if key not in tasks or tasks[key]["task_attempt"] < task["task_attempt"]:
                         tasks[key] = task
     producers = {}
     for (sid, _), info in stages.items():
-        roles = {exchanges[a['ID']] for a in info.get('Accumulables', []) if a['ID'] in exchanges}
+        roles = {exchanges[a["ID"]] for a in info.get("Accumulables", []) if a["ID"] in exchanges}
         if roles:
             producers.setdefault(sid, set()).update(roles)
     report = []
     for (sid, attempt), info in sorted(stages.items()):
         rows = [task for (stage, att, _), task in tasks.items() if (stage, att) == (sid, attempt)]
-        roles = sorted({role for parent in info.get('Parent IDs', []) for role in producers.get(parent, set())})
-        report.append(dict(stage_id=sid, stage_attempt=attempt, name=info['Stage Name'],
-                           groups=sorted(stage_groups.get(sid, [])), sweep_exchange_inputs=roles,
-                           failed=info.get('Failure Reason'), scheduled_tasks=info['Number of Tasks'],
-                           task_count=len(rows),
-                           records=distribution([r['records_read'] for r in rows]),
-                           shuffle_records=distribution([r['shuffle_records'] for r in rows]),
-                           shuffle_read_bytes=distribution([r['shuffle_read_bytes'] for r in rows]),
-                           duration_ms=distribution([r['duration_ms'] for r in rows]),
-                           tasks=sorted(rows, key=lambda r: r['partition'])))
+        roles = sorted(
+            {role for parent in info.get("Parent IDs", []) for role in producers.get(parent, set())}
+        )
+        report.append(
+            dict(
+                stage_id=sid,
+                stage_attempt=attempt,
+                name=info["Stage Name"],
+                groups=sorted(stage_groups.get(sid, [])),
+                sweep_exchange_inputs=roles,
+                failed=info.get("Failure Reason"),
+                scheduled_tasks=info["Number of Tasks"],
+                task_count=len(rows),
+                records=distribution([r["records_read"] for r in rows]),
+                shuffle_records=distribution([r["shuffle_records"] for r in rows]),
+                shuffle_read_bytes=distribution([r["shuffle_read_bytes"] for r in rows]),
+                duration_ms=distribution([r["duration_ms"] for r in rows]),
+                tasks=sorted(rows, key=lambda r: r["partition"]),
+            )
+        )
     return dict(stages=report, sql_plans=plans)
 
 
-def run_measurement(workdir, source=None, *, days=90, orders_per_day=20, seed=7, sku_count=100,
-                    buckets=18, partitions=16, aqe=False):
+def run_measurement(
+    workdir,
+    source=None,
+    *,
+    days=90,
+    orders_per_day=20,
+    seed=7,
+    sku_count=100,
+    buckets=18,
+    partitions=16,
+    aqe=False,
+):
     """Sinh/đọc một nguồn, dựng Silver→Gold thật, pin fact/segments rồi đo hai sweep cùng input."""
-    from pyspark.sql import SparkSession, functions as F
-    from generator.generate_order_lifecycle import ScaleConfig, generate_scaled
+    from pyspark.sql import SparkSession
+    from pyspark.sql import functions as F
+
     import spark_jobs.lib.order_lifecycle_gold as gold_job
-    from spark_jobs.lib.order_lifecycle_skew import bucket_width_days, sku_features_salted
+    from generator.generate_order_lifecycle import ScaleConfig, generate_scaled
     from spark_jobs.lib.order_lifecycle_lakehouse import bronze_from_root, build_silver
+    from spark_jobs.lib.order_lifecycle_skew import bucket_width_days, sku_features_salted
 
     width = bucket_width_days(buckets)
     if type(partitions) is not int or partitions < 1:
-        raise ValueError('partitions must be a positive integer')
+        raise ValueError("partitions must be a positive integer")
     workdir = Path(workdir).resolve()
-    logdir = workdir / 'events'
+    logdir = workdir / "events"
     logdir.mkdir(parents=True)
     if source is None:
-        source = workdir / 'source'
-        generate_scaled(source, ScaleConfig(seed=seed, days=days, orders_per_day=orders_per_day, sku_count=sku_count))
+        source = workdir / "source"
+        generate_scaled(
+            source,
+            ScaleConfig(seed=seed, days=days, orders_per_day=orders_per_day, sku_count=sku_count),
+        )
     source = Path(source).resolve()
-    manifest_bytes = (source / 'manifest.json').read_bytes()
+    manifest_bytes = (source / "manifest.json").read_bytes()
     manifest = json.loads(manifest_bytes)
-    cutoff = manifest['horizons']['source_observation_end']
-    os.environ.setdefault('SPARK_LOCAL_IP', '127.0.0.1')
-    os.environ.setdefault('SPARK_LOCAL_HOSTNAME', 'localhost')
-    os.environ['FSDS_CONTRACTS_DIR'] = str(ROOT / 'contracts')
-    spark = (SparkSession.builder.master('local[2]').appName('order-lifecycle-skew-measurement')
-             .config('spark.driver.bindAddress', '127.0.0.1')
-             .config('spark.sql.session.timeZone', 'UTC')
-             .config('spark.sql.shuffle.partitions', str(partitions))
-             .config('spark.sql.adaptive.enabled', str(aqe).lower())
-             .config('spark.sql.adaptive.skewJoin.enabled', 'true')
-             .config('spark.sql.autoBroadcastJoinThreshold', '-1')
-             .config('spark.eventLog.enabled', 'true').config('spark.eventLog.compress', 'false')
-             .config('spark.eventLog.rolling.enabled', 'false')
-             .config('spark.eventLog.dir', logdir.as_uri()).getOrCreate())
-    spark.sparkContext.setLogLevel('ERROR')
-    report = dict(input_manifest=manifest, manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
-                  source=str(source), cutoff=cutoff, buckets=buckets, bucket_width_days=width,
-                  runtime=dict(spark=spark.version, python=sys.version, application_id=spark.sparkContext.applicationId),
-                  config={k: spark.conf.get(k) for k in ('spark.sql.shuffle.partitions', 'spark.sql.adaptive.enabled',
-                          'spark.sql.adaptive.skewJoin.enabled', 'spark.sql.autoBroadcastJoinThreshold',
-                          'spark.sql.session.timeZone')})
+    cutoff = manifest["horizons"]["source_observation_end"]
+    os.environ.setdefault("SPARK_LOCAL_IP", "127.0.0.1")
+    os.environ.setdefault("SPARK_LOCAL_HOSTNAME", "localhost")
+    os.environ["FSDS_CONTRACTS_DIR"] = str(ROOT / "contracts")
+    spark = (
+        SparkSession.builder.master("local[2]")
+        .appName("order-lifecycle-skew-measurement")
+        .config("spark.driver.bindAddress", "127.0.0.1")
+        .config("spark.sql.session.timeZone", "UTC")
+        .config("spark.sql.shuffle.partitions", str(partitions))
+        .config("spark.sql.adaptive.enabled", str(aqe).lower())
+        .config("spark.sql.adaptive.skewJoin.enabled", "true")
+        .config("spark.sql.autoBroadcastJoinThreshold", "-1")
+        .config("spark.eventLog.enabled", "true")
+        .config("spark.eventLog.compress", "false")
+        .config("spark.eventLog.rolling.enabled", "false")
+        .config("spark.eventLog.dir", logdir.as_uri())
+        .getOrCreate()
+    )
+    spark.sparkContext.setLogLevel("ERROR")
+    report = dict(
+        input_manifest=manifest,
+        manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
+        source=str(source),
+        cutoff=cutoff,
+        buckets=buckets,
+        bucket_width_days=width,
+        runtime=dict(
+            spark=spark.version, python=sys.version, application_id=spark.sparkContext.applicationId
+        ),
+        config={
+            k: spark.conf.get(k)
+            for k in (
+                "spark.sql.shuffle.partitions",
+                "spark.sql.adaptive.enabled",
+                "spark.sql.adaptive.skewJoin.enabled",
+                "spark.sql.autoBroadcastJoinThreshold",
+                "spark.sql.session.timeZone",
+            )
+        },
+    )
     try:
-        spark.sparkContext.setJobGroup('silver_gold_build', 'Silver và Gold từ module thật')
-        bronze = bronze_from_root(spark, str(source), 'skew').cache()
-        silver = build_silver(bronze=bronze, as_of=cutoff, contracts_dir=str(ROOT / 'contracts'))
-        gold = gold_job.build_gold(silver, cutoff, 'skew', datetime(2026, 10, 19, tzinfo=timezone.utc))
-        fact = gold['fact_order_lines'].localCheckpoint(eager=True)
-        segments = gold['label_segments'].localCheckpoint(eager=True)
-        report['fact_rows'], report['segment_rows'] = fact.count(), segments.count()
-        report['dataset_versions'] = [r[0] for r in fact.select('dataset_version').distinct().collect()]
-        gold['label_return_v2'].count()
-        windows = gold_job._feature_windows(segments, fact.select(*gold_job.KEY, 'seller_sku'))
+        spark.sparkContext.setJobGroup("silver_gold_build", "Silver và Gold từ module thật")
+        bronze = bronze_from_root(spark, str(source), "skew").cache()
+        silver = build_silver(bronze=bronze, as_of=cutoff, contracts_dir=str(ROOT / "contracts"))
+        gold = gold_job.build_gold(silver, cutoff, "skew", datetime(2026, 10, 19, tzinfo=UTC))
+        fact = gold["fact_order_lines"].localCheckpoint(eager=True)
+        segments = gold["label_segments"].localCheckpoint(eager=True)
+        report["fact_rows"], report["segment_rows"] = fact.count(), segments.count()
+        report["dataset_versions"] = [
+            r[0] for r in fact.select("dataset_version").distinct().collect()
+        ]
+        gold["label_return_v2"].count()
+        windows = gold_job._feature_windows(segments, fact.select(*gold_job.KEY, "seller_sku"))
         # Đếm đầu vào sweep bằng endpoint thật; đây là key load, không giả làm task metrics.
-        key_times = (windows.select('dataset_version', 'seller_sku', F.explode(F.array('a', 'b')).alias('time'))
-                     .unionByName(fact.filter('created_at is not null').select(
-                         'dataset_version', 'seller_sku', F.col('created_at').alias('time'))))
-        report['top5_line_skus'] = [r.asDict() for r in fact.groupBy('dataset_version', 'seller_sku')
-                                    .count().orderBy(F.desc('count'), 'dataset_version', 'seller_sku').limit(5).collect()]
-        report['top5_partition_keys'] = {}
-        for mode in ('baseline', 'salted'):
-            keys = ['dataset_version', 'seller_sku']
+        key_times = windows.select(
+            "dataset_version", "seller_sku", F.explode(F.array("a", "b")).alias("time")
+        ).unionByName(
+            fact.filter("created_at is not null").select(
+                "dataset_version", "seller_sku", F.col("created_at").alias("time")
+            )
+        )
+        report["top5_line_skus"] = [
+            r.asDict()
+            for r in fact.groupBy("dataset_version", "seller_sku")
+            .count()
+            .orderBy(F.desc("count"), "dataset_version", "seller_sku")
+            .limit(5)
+            .collect()
+        ]
+        report["top5_partition_keys"] = {}
+        for mode in ("baseline", "salted"):
+            keys = ["dataset_version", "seller_sku"]
             source_keys = key_times
-            if mode == 'salted':
-                source_keys = source_keys.withColumn('_bucket', F.floor(
-                    F.datediff(F.to_date('time'), F.lit('1970-01-01')) / F.lit(bucket_width_days(buckets))))
-                keys += ['_bucket']
-            report['top5_partition_keys'][mode] = [r.asDict() for r in
-                source_keys.groupBy(*keys).count().orderBy(F.desc('count'), *keys).limit(5).collect()]
+            if mode == "salted":
+                source_keys = source_keys.withColumn(
+                    "_bucket",
+                    F.floor(
+                        F.datediff(F.to_date("time"), F.lit("1970-01-01"))
+                        / F.lit(bucket_width_days(buckets))
+                    ),
+                )
+                keys += ["_bucket"]
+            report["top5_partition_keys"][mode] = [
+                r.asDict()
+                for r in source_keys.groupBy(*keys)
+                .count()
+                .orderBy(F.desc("count"), *keys)
+                .limit(5)
+                .collect()
+            ]
         outputs = {}
-        report['physical_plans'] = {}
-        for mode, build in (('baseline', lambda: gold_job.sku_features(fact, segments)),
-                            ('salted', lambda: sku_features_salted(fact, segments, buckets))):
-            spark.sparkContext.setJobGroup(mode, mode + ' sweep cùng fact/segments')
+        report["physical_plans"] = {}
+        for mode, build in (
+            ("baseline", lambda: gold_job.sku_features(fact, segments)),
+            ("salted", lambda: sku_features_salted(fact, segments, buckets)),
+        ):
+            spark.sparkContext.setJobGroup(mode, mode + " sweep cùng fact/segments")
             features = build()
-            report['physical_plans'][mode] = features._jdf.queryExecution().executedPlan().toString()
+            report["physical_plans"][mode] = (
+                features._jdf.queryExecution().executedPlan().toString()
+            )
             path = str(workdir / mode)
-            features.write.mode('error').parquet(path)
+            features.write.mode("error").parquet(path)
             outputs[mode] = spark.read.parquet(path)
-        spark.sparkContext.setJobGroup('correctness', 'exceptAll hai chiều')
-        cols = outputs['baseline'].columns
-        left, right = outputs['baseline'].select(*cols), outputs['salted'].select(*cols)
-        report['differences'] = dict(baseline_only=left.exceptAll(right).count(), salted_only=right.exceptAll(left).count())
-        report['nonzero_features'] = left.filter('labeled_count_90d > 0').count()
+        spark.sparkContext.setJobGroup("correctness", "exceptAll hai chiều")
+        cols = outputs["baseline"].columns
+        left, right = outputs["baseline"].select(*cols), outputs["salted"].select(*cols)
+        report["differences"] = dict(
+            baseline_only=left.exceptAll(right).count(), salted_only=right.exceptAll(left).count()
+        )
+        report["nonzero_features"] = left.filter("labeled_count_90d > 0").count()
     finally:
         spark.stop()
     report.update(read_event_logs(logdir))
-    for stage in report['stages']:
-        stage['top5_partition_keys'] = {mode: report['top5_partition_keys'][mode]
-            for mode in ('baseline', 'salted') if mode in stage['groups'] and stage['sweep_exchange_inputs']}
+    for stage in report["stages"]:
+        stage["top5_partition_keys"] = {
+            mode: report["top5_partition_keys"][mode]
+            for mode in ("baseline", "salted")
+            if mode in stage["groups"] and stage["sweep_exchange_inputs"]
+        }
     return report
 
 
 def main():
     """CLI không cần catalog/Docker service; đầu ra và event log phải nằm ở thư mục ghi được."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--source', type=Path)
-    parser.add_argument('--workdir', type=Path)
-    parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--days', type=int, default=90)
-    parser.add_argument('--orders-per-day', type=int, default=20)
-    parser.add_argument('--seed', type=int, default=7)
-    parser.add_argument('--sku-count', type=int, default=100)
-    parser.add_argument('--buckets', type=int, default=18)
-    parser.add_argument('--partitions', type=int, default=16)
-    parser.add_argument('--aqe', action='store_true')
+    parser.add_argument("--source", type=Path)
+    parser.add_argument("--workdir", type=Path)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--days", type=int, default=90)
+    parser.add_argument("--orders-per-day", type=int, default=20)
+    parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--sku-count", type=int, default=100)
+    parser.add_argument("--buckets", type=int, default=18)
+    parser.add_argument("--partitions", type=int, default=16)
+    parser.add_argument("--aqe", action="store_true")
     args = parser.parse_args()
-    workdir = (args.workdir or Path(tempfile.mkdtemp(prefix='v2-skew-'))).resolve()
+    workdir = (args.workdir or Path(tempfile.mkdtemp(prefix="v2-skew-"))).resolve()
     workdir.mkdir(parents=True, exist_ok=True)
-    report = run_measurement(workdir, args.source, days=args.days, orders_per_day=args.orders_per_day,
-                             seed=args.seed, sku_count=args.sku_count, buckets=args.buckets,
-                             partitions=args.partitions, aqe=args.aqe)
-    args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
-    print(json.dumps(dict(output=str(args.output), workdir=str(workdir), differences=report['differences'])))
-    if any(report['differences'].values()):
-        raise SystemExit('Salted features differ from baseline')
+    report = run_measurement(
+        workdir,
+        args.source,
+        days=args.days,
+        orders_per_day=args.orders_per_day,
+        seed=args.seed,
+        sku_count=args.sku_count,
+        buckets=args.buckets,
+        partitions=args.partitions,
+        aqe=args.aqe,
+    )
+    args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    print(
+        json.dumps(
+            dict(output=str(args.output), workdir=str(workdir), differences=report["differences"])
+        )
+    )
+    if any(report["differences"].values()):
+        raise SystemExit("Salted features differ from baseline")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

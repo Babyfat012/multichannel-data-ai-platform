@@ -21,31 +21,37 @@ CHANNELS = ("tiktok_shop", "shopify", "shopee")
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 MONEY = "decimal(14,2)"
 
-TIKTOK_ITEM = StructType([
-    StructField("id", StringType()),
-    StructField("seller_sku", StringType()),
-    StructField("product_name", StringType()),
-    StructField("quantity", IntegerType()),
-    StructField("original_price", StringType()),
-    StructField("seller_discount", StringType()),
-    StructField("platform_discount", StringType()),
-])
-SHOPIFY_ITEM = StructType([
-    StructField("id", StringType()),
-    StructField("sku", StringType()),
-    StructField("title", StringType()),
-    StructField("quantity", IntegerType()),
-    StructField("price", StringType()),
-    StructField("total_discount", StringType()),
-])
-SHOPEE_ITEM = StructType([
-    StructField("order_item_id", StringType()),
-    StructField("model_sku", StringType()),
-    StructField("item_name", StringType()),
-    StructField("model_quantity_purchased", IntegerType()),
-    StructField("model_original_price", IntegerType()),
-    StructField("model_discounted_price", IntegerType()),
-])
+TIKTOK_ITEM = StructType(
+    [
+        StructField("id", StringType()),
+        StructField("seller_sku", StringType()),
+        StructField("product_name", StringType()),
+        StructField("quantity", IntegerType()),
+        StructField("original_price", StringType()),
+        StructField("seller_discount", StringType()),
+        StructField("platform_discount", StringType()),
+    ]
+)
+SHOPIFY_ITEM = StructType(
+    [
+        StructField("id", StringType()),
+        StructField("sku", StringType()),
+        StructField("title", StringType()),
+        StructField("quantity", IntegerType()),
+        StructField("price", StringType()),
+        StructField("total_discount", StringType()),
+    ]
+)
+SHOPEE_ITEM = StructType(
+    [
+        StructField("order_item_id", StringType()),
+        StructField("model_sku", StringType()),
+        StructField("item_name", StringType()),
+        StructField("model_quantity_purchased", IntegerType()),
+        StructField("model_original_price", IntegerType()),
+        StructField("model_discounted_price", IntegerType()),
+    ]
+)
 
 
 def j(path: str):
@@ -68,9 +74,12 @@ def normalize(bronze: DataFrame, channel: str) -> DataFrame:
         updated = epoch_seconds(j(root + ".update_time"))
         status = j(root + ".status")
         status_map = {
-            "UNPAID": "pending_payment", "AWAITING_SHIPMENT": "awaiting_shipment",
-            "IN_TRANSIT": "shipped", "DELIVERED": "delivered",
-            "COMPLETED": "completed", "CANCELLED": "cancelled",
+            "UNPAID": "pending_payment",
+            "AWAITING_SHIPMENT": "awaiting_shipment",
+            "IN_TRANSIT": "shipped",
+            "DELIVERED": "delivered",
+            "COMPLETED": "completed",
+            "CANCELLED": "cancelled",
         }
         order_id = j(root + ".id")
         city = j(root + ".recipient_address.city")
@@ -83,8 +92,7 @@ def normalize(bronze: DataFrame, channel: str) -> DataFrame:
         item_schema = SHOPIFY_ITEM
         created = F.to_timestamp(j(root + ".created_at"))
         updated = F.to_timestamp(j(root + ".updated_at"))
-        status = F.concat_ws("/", j(root + ".financial_status"),
-                             j(root + ".fulfillment_status"))
+        status = F.concat_ws("/", j(root + ".financial_status"), j(root + ".fulfillment_status"))
         status_map = None
         order_id = j(root + ".id")
         city = j(root + ".shipping_address.city")
@@ -99,8 +107,11 @@ def normalize(bronze: DataFrame, channel: str) -> DataFrame:
         updated = epoch_seconds(j(root + ".update_time"))
         status = j(root + ".order_status")
         status_map = {
-            "UNPAID": "pending_payment", "READY_TO_SHIP": "awaiting_shipment",
-            "SHIPPED": "shipped", "COMPLETED": "completed", "CANCELLED": "cancelled",
+            "UNPAID": "pending_payment",
+            "READY_TO_SHIP": "awaiting_shipment",
+            "SHIPPED": "shipped",
+            "COMPLETED": "completed",
+            "CANCELLED": "cancelled",
         }
         order_id = j(root + ".order_sn")
         city = j(root + ".recipient_address.city")
@@ -119,11 +130,17 @@ def normalize(bronze: DataFrame, channel: str) -> DataFrame:
         canonical = canonical.otherwise("pending_payment")
 
     parsed = bronze.select(
-        order_id.alias("order_id"), created.alias("created_at"),
-        updated.alias("last_updated_time"), canonical.alias("order_status"),
-        status.alias("channel_status"), currency.alias("currency"),
-        city.alias("city"), postal.alias("postal_code"), country.alias("country"),
-        "export_date", "source_file",
+        order_id.alias("order_id"),
+        created.alias("created_at"),
+        updated.alias("last_updated_time"),
+        canonical.alias("order_status"),
+        status.alias("channel_status"),
+        currency.alias("currency"),
+        city.alias("city"),
+        postal.alias("postal_code"),
+        country.alias("country"),
+        "export_date",
+        "source_file",
         F.from_json(j(item_path), ArrayType(item_schema)).alias("items"),
     )
     lines = parsed.select("*", F.explode("items").alias("item")).drop("items")
@@ -134,8 +151,9 @@ def normalize(bronze: DataFrame, channel: str) -> DataFrame:
         name = item["product_name"]
         quantity = item["quantity"]
         gross = item["original_price"].cast(MONEY) * quantity
-        discount = (item["seller_discount"].cast(MONEY)
-                    + item["platform_discount"].cast(MONEY)) * quantity
+        discount = (
+            item["seller_discount"].cast(MONEY) + item["platform_discount"].cast(MONEY)
+        ) * quantity
     elif channel == "shopify":
         line_id = item["id"]
         sku = item["sku"]
@@ -152,14 +170,24 @@ def normalize(bronze: DataFrame, channel: str) -> DataFrame:
         discount = gross - item["model_discounted_price"].cast(MONEY) * quantity
 
     return lines.select(
-        "order_id", line_id.alias("order_item_id"), "created_at",
-        "last_updated_time", "order_status", "channel_status", "currency",
-        "city", "postal_code", "country", sku.alias("seller_sku"),
-        name.alias("product_name"), quantity.alias("quantity"),
+        "order_id",
+        line_id.alias("order_item_id"),
+        "created_at",
+        "last_updated_time",
+        "order_status",
+        "channel_status",
+        "currency",
+        "city",
+        "postal_code",
+        "country",
+        sku.alias("seller_sku"),
+        name.alias("product_name"),
+        quantity.alias("quantity"),
         gross.cast(MONEY).alias("line_gross_amount"),
         discount.cast(MONEY).alias("line_discount_amount"),
         (gross - discount).cast(MONEY).alias("line_net_amount"),
-        "export_date", "source_file",
+        "export_date",
+        "source_file",
     )
 
 
@@ -186,17 +214,22 @@ def main(argv: list[str] | None = None) -> int:
     target = f"{CATALOG}.silver.{args.table}"
     try:
         bronze = spark.table(source)
-        lines = (normalize(bronze, args.channel)
-                 .withColumn("processed_at", F.current_timestamp())
-                 .withColumn("run_id", F.lit(run_id)))
+        lines = (
+            normalize(bronze, args.channel)
+            .withColumn("processed_at", F.current_timestamp())
+            .withColumn("run_id", F.lit(run_id))
+        )
         before = lines.count()
         newest = Window.partitionBy("order_id", "order_item_id").orderBy(
             F.col("last_updated_time").desc_nulls_last(),
             F.col("export_date").desc_nulls_last(),
             F.col("source_file").desc_nulls_last(),
         )
-        unique = (lines.withColumn("_rn", F.row_number().over(newest))
-                  .filter(F.col("_rn") == 1).drop("_rn"))
+        unique = (
+            lines.withColumn("_rn", F.row_number().over(newest))
+            .filter(F.col("_rn") == 1)
+            .drop("_rn")
+        )
         spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {CATALOG}.silver")
         unique.writeTo(target).partitionedBy(F.days("created_at")).createOrReplace()
         after = spark.table(target).count()

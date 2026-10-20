@@ -1,4 +1,4 @@
-# CI tối thiểu (ADR-0012): chặn thay đổi schema contract phá vỡ + chạy pytest.
+# CI tối thiểu (ADR-0012): ruff, chặn thay đổi schema contract phá vỡ, chạy pytest.
 # Không Docker/Spark/Cloud: test Spark chạy trong image riêng, ngoài CI này.
 name: ci
 
@@ -21,6 +21,10 @@ jobs:
           python-version: "3.12"
       - name: Cài thư viện theo uv.lock
         run: uv sync --frozen
+      - name: Ruff (format + lint)
+        run: |
+          uv run ruff format --check .
+          uv run ruff check .
       - name: Kiểm registry hợp đồng (DE-N1)
         run: uv run python -m spark_jobs.lib.data_contracts check-registry --contracts-dir contracts
       - name: Pytest

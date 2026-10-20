@@ -136,18 +136,23 @@ def main(argv: list[str] | None = None) -> int:
             all_lines = all_lines.unionByName(frame)
 
         identity = F.struct(
-            F.col("channel"), F.col("channel_order_id"),
-            F.col("channel_secondary_order_id"), F.col("channel_line_id")
+            F.col("channel"),
+            F.col("channel_order_id"),
+            F.col("channel_secondary_order_id"),
+            F.col("channel_line_id"),
         )
-        fact = (all_lines
-                .withColumn("order_line_key", F.sha2(F.to_json(identity), 256))
-                .withColumn("amazon_order_version_key", F.when(
+        fact = (
+            all_lines.withColumn("order_line_key", F.sha2(F.to_json(identity), 256))
+            .withColumn(
+                "amazon_order_version_key",
+                F.when(
                     F.col("channel") == "amazon",
-                    amazon_order_version_key(F.col("channel_order_id"),
-                                             F.col("last_updated_time")),
-                ).otherwise(null("string")))
-                .withColumn("gold_created_at", F.current_timestamp())
-                .withColumn("run_id", F.lit(run_id)))
+                    amazon_order_version_key(F.col("channel_order_id"), F.col("last_updated_time")),
+                ).otherwise(null("string")),
+            )
+            .withColumn("gold_created_at", F.current_timestamp())
+            .withColumn("run_id", F.lit(run_id))
+        )
         target = f"{CATALOG}.gold.{args.table}"
         spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {CATALOG}.gold")
         fact.writeTo(target).partitionedBy(F.days("created_at")).createOrReplace()

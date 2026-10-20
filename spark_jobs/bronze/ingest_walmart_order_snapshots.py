@@ -1,41 +1,14 @@
-"""Job Bronze 01b — nạp bảng `walmart.orders` của PostgreSQL vào Iceberg `bronze.raw_walmart_orders`.
+"""Bronze: PostgreSQL `walmart.orders` -> Iceberg `bronze.raw_walmart_orders` qua JDBC.
 
-Cặp với `bronze/ingest_amazon_order_snapshots.py`. Hai job vì Bronze có đúng HAI nguồn batch, và chúng khác
-nhau ở chỗ dữ liệu *đến từ đâu*, không phải ở chỗ *làm gì với nó*:
+Walmart nằm trong DB của phòng ban khác nên đọc qua JDBC; Amazon giao file nên có job riêng.
+Mỗi nguồn một bảng: commit Iceberg là nguyên khối, nguồn này hỏng không kéo nguồn kia.
 
-  * Amazon giao FILE (JSONL trên đĩa/MinIO)  -> `bronze/ingest_amazon_order_snapshots.py`
-  * Walmart nằm trong DB của PHÒNG BAN KHÁC   -> job này, đọc qua JDBC
-  (TikTok Shop không có trong batch — nó chỉ đi Kafka, nên thuộc phần Flink.)
+`raw_payload` giữ nguyên chuỗi JSON, parse là việc của Silver. `fetched_at` (giờ nguồn kéo
+đơn) tách khỏi `ingested_at` (giờ Spark ghi) để đo được độ trễ nguồn.
 
-Vì sao hai BẢNG riêng chứ không một bảng gộp (Q2, chốt 2026-10-06): commit Iceberg là
-nguyên khối — hoặc vào hết, hoặc không gì vào. Tách bảng thì một nguồn hỏng chỉ phải chạy
-lại nguồn đó, không kéo theo nguồn kia.
-
-Quyết định thiết kế đứng sau file này (chốt 2026-10-06, xem HANDOFF.bronze.md mục 1):
-  * Q1 — `raw_payload` GIỮ NGUYÊN chuỗi JSON, không parse. Bronze là bảng đầu tiên của
-    lakehouse: nhiệm vụ của nó là chép trung thực, việc parse và quy chuẩn thuộc Silver.
-  * Q3 — cột provenance đặt tên riêng cho từng bảng, không gộp tên chung:
-      `source_table`  thay cho `source_file` của Amazon. Vì sao không dùng
-                      `input_file_name()`: qua JDBC hàm đó trả CHUỖI RỖNG, không phải lỗi,
-                      nên dùng nó là âm thầm mất provenance.
-      `fetched_at`    thời điểm hệ thống NGUỒN kéo đơn từ Walmart. Cố ý KHÔNG gộp với
-                      `ingested_at` — một cái là đồng hồ của phòng ban khác, một cái là
-                      đồng hồ của pipeline này. Gộp lại là mất khả năng đo độ trễ nguồn.
-      `ingested_at`   lúc Spark ghi dòng này.
-      `run_id`        mã lần chạy, để dò ngược log.
-  * Q4 — PARTITIONED BY (days(fetched_at)). Hidden partitioning của Iceberg: khai báo theo
-    cột thời gian thật, Iceberg tự dẫn ra giá trị ngày. An toàn dù nguồn đổi nhịp kéo, vì
-    không phụ thuộc vào một cột ngày do người ghi tự điền.
-
-Hai cái bẫy của JDBC đã xử lý trong file này, giải thích tại chỗ:
-  * `raw_payload` là JSONB -> ép sang text ngay trong câu SQL, xem `source_query`.
-  * Spark mặc định mở MỘT kết nối -> một task kéo hết bảng, xem `read_jdbc`.
-
-Ví dụ chạy (cần cả driver PostgreSQL trong --packages, xem scripts/evidence/measure_order_snapshots_bronze.sh):
-    spark-submit --master spark://spark-master:7077 \
-      --packages org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.11.0,\
-org.apache.iceberg:iceberg-aws-bundle:1.11.0,org.postgresql:postgresql:42.7.4 \
-      /opt/spark_jobs/bronze/ingest_walmart_order_snapshots.py --num-partitions 16
+Chạy (cần driver PostgreSQL trong --packages, xem scripts/evidence/measure_order_snapshots_bronze.sh):
+    spark-submit --master spark://spark-master:7077 --packages <iceberg,aws,postgresql> \
+        /opt/spark_jobs/bronze/ingest_walmart_order_snapshots.py --num-partitions 16
 """
 
 from __future__ import annotations
@@ -52,18 +25,15 @@ from pyspark.sql import functions as F
 CATALOG = "lakehouse"
 NAMESPACE = "bronze"
 
-# Bảng nguồn trong DB `sources` — cố ý mang tên schema của Walmart để nhìn là biết nó mô
-# phỏng hệ thống của phòng ban khác, không phải bảng do data team sở hữu.
+# Bảng của "phòng ban khác", data team không sở hữu.
 SOURCE_TABLE = "walmart.orders"
 
-# Cột dùng để CHIA VIỆC ĐỌC. `export_date` kiểu DATE, và Spark JDBC nhận partitionColumn
-# kiểu số, DATE hoặc TIMESTAMP — KHÔNG bắt buộc phải là cột số. Nên không cần đi tìm `ctid`
-# hay thêm cột id vào bảng nguồn (sửa bảng của "phòng ban khác" là việc không nên làm).
+# Spark JDBC chia việc được theo cột DATE, nên không phải thêm cột id vào bảng nguồn.
 PARTITION_COLUMN = "export_date"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Đọc tham số dòng lệnh. Tách khỏi `main` để test được mà không cần SparkSession."""
+    """Đọc tham số dòng lệnh."""
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument(
         "--run-id",
@@ -96,10 +66,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def jdbc_options() -> dict[str, str]:
-    """Thông tin kết nối PostgreSQL, lấy từ biến môi trường (`env_file: .env` của compose).
-
-    Dùng tên service `postgres` chứ không `localhost`: job chạy TRONG mạng Compose.
-    """
+    """Thông tin kết nối PostgreSQL từ biến môi trường; host là service `postgres` trong Compose."""
     user = os.environ["POSTGRES_USER"]
     password = os.environ["POSTGRES_PASSWORD"]
     db = os.environ["POSTGRES_DB"]
@@ -114,16 +81,10 @@ def jdbc_options() -> dict[str, str]:
 
 
 def source_query() -> str:
-    """Câu SQL làm nguồn đọc, bọc trong ngoặc để Spark dùng làm bảng dẫn xuất.
+    """Câu SQL nguồn, ép `raw_payload::text`.
 
-    Vì sao không đọc thẳng `walmart.orders` mà phải qua câu SQL: cột `raw_payload` kiểu
-    JSONB, và JDBC trả nó về dưới dạng `OTHER` (java.sql.Types 1111) — Spark không có
-    kiểu Catalyst tương ứng và có thể gãy ngay lúc suy ra schema. Ép `::text` tại nguồn
-    thì PostgreSQL trả về đúng kiểu `text`, Spark nhận thành StringType.
-
-    Và ép sang text KHÔNG làm mất gì theo Q1: Bronze vốn phải giữ nguyên chuỗi JSON. Việc
-    parse thuộc Silver. Nếu để JSONB thì chính PostgreSQL đã parse hộ — tức là nguồn đã
-    "sửa" dữ liệu trước khi Bronze chép, đúng cái Bronze phải tránh.
+    JDBC trả JSONB dưới kiểu `OTHER` mà Spark không đọc được. Ép text cũng giữ đúng chuỗi
+    nguồn, đúng việc của Bronze.
     """
     return f"""(
         SELECT purchase_order_id,
@@ -134,13 +95,11 @@ def source_query() -> str:
     ) AS src"""
 
 
+# ponytail: trùng phần lớn `lib/iceberg_session.build_spark`, giữ riêng vì cần cờ AQE và event log
+# (phải đặt trước khi tạo session) và vì số đo trong docs/spark.md gắn với cấu hình này.
+# Gộp khi đo lại Bronze v1.
 def build_spark(aqe: str, app_name: str) -> SparkSession:
-    """Dựng SparkSession đã nối vào catalog Iceberg trên Lakekeeper.
-
-    Giống `bronze/ingest_amazon_order_snapshots.py`: Lakekeeper chỉ giữ con trỏ tới metadata mới nhất của mỗi
-    bảng, còn file metadata và file dữ liệu thật nằm trên MinIO. Spark mang sẵn access key
-    của MinIO nên không xin credential tạm — warehouse đã tạo với sts-enabled=false.
-    """
+    """SparkSession nối catalog Iceberg trên Lakekeeper, dữ liệu nằm trên MinIO."""
     minio_endpoint = os.environ.get("MINIO_INTERNAL_ENDPOINT", "http://minio:9000")
     warehouse = os.environ.get("WAREHOUSE_NAME", "fsds")
     catalog_uri = os.environ.get("LAKEKEEPER_CATALOG_URI", "http://lakekeeper:8181/catalog")
@@ -168,15 +127,10 @@ def build_spark(aqe: str, app_name: str) -> SparkSession:
 
 
 def read_bounds(spark: SparkSession) -> tuple[str, str, int]:
-    """Hỏi PostgreSQL dải `export_date` thật và số dòng, TRƯỚC khi đọc dữ liệu.
+    """Hỏi PostgreSQL dải `export_date` thật trước khi đọc.
 
-    Vì sao phải hỏi thay vì đoán: `lowerBound`/`upperBound` của Spark không phải bộ lọc —
-    chúng chỉ dùng để chia dải thành `numPartitions` khoảng. Đoán sai dải thì vẫn đủ dòng
-    (dòng ngoài dải dồn vào khoảng đầu/cuối) nhưng việc chia hết ý nghĩa: một task ôm gần
-    hết bảng. Nên đây là một lượt truy vấn rẻ để đổi lấy việc chia đúng.
-
-    Trả về `upper` đã cộng thêm một ngày: Spark sinh các khoảng nửa mở, nếu `upper` đúng
-    bằng ngày lớn nhất thì ngày đó rơi vào khoảng cuối cùng cùng với phần dư.
+    `lowerBound`/`upperBound` không lọc dòng, chỉ dùng để chia việc; đoán sai thì một task
+    ôm gần hết bảng. `upper` cộng thêm một ngày vì Spark chia khoảng nửa mở.
     """
     opts = jdbc_options()
     stats = f"""(
@@ -190,15 +144,10 @@ def read_bounds(spark: SparkSession) -> tuple[str, str, int]:
 
 
 def read_jdbc(spark: SparkSession, lower: str, upper: str, num_partitions: int) -> DataFrame:
-    """Đọc bảng nguồn qua JDBC, chia thành `num_partitions` lượt đọc song song.
+    """Đọc bảng qua JDBC bằng `num_partitions` kết nối song song.
 
-    Không có bốn tuỳ chọn partition thì Spark mở ĐÚNG MỘT kết nối và một task kéo toàn bộ
-    bảng — 1,3 triệu dòng về một executor, hai worker còn lại ngồi không. Bốn tuỳ chọn phải
-    đi cùng nhau; thiếu một cái là Spark lặng lẽ bỏ qua cả nhóm.
-
-    `fetchsize` là số dòng driver kéo về mỗi lượt. Mặc định của PostgreSQL JDBC là 0 =
-    "lấy hết kết quả vào RAM trước đã", mà mỗi dòng mang một payload JSON -> dễ OOM
-    executor 2 GB. Đặt mức vừa phải để driver kéo theo từng mẻ.
+    Thiếu một trong bốn tuỳ chọn partition thì Spark lặng lẽ dùng một kết nối. `fetchsize`
+    đặt khác 0 để driver không kéo cả kết quả vào RAM.
     """
     opts = jdbc_options()
     return (
@@ -215,11 +164,7 @@ def read_jdbc(spark: SparkSession, lower: str, upper: str, num_partitions: int) 
 
 
 def add_provenance(df: DataFrame, run_id: str) -> DataFrame:
-    """Thêm bộ cột provenance của riêng bảng Walmart (Q3).
-
-    `source_table` đặt cứng chứ không gọi `input_file_name()`: qua JDBC hàm đó trả chuỗi
-    rỗng mà không báo lỗi, nên dùng nó là âm thầm mất cột nguồn gốc.
-    """
+    """Thêm cột provenance; `source_table` đặt cứng vì `input_file_name()` qua JDBC trả rỗng."""
     return (
         df.withColumn("source_table", F.lit(SOURCE_TABLE))
         .withColumn("ingested_at", F.current_timestamp())
@@ -228,19 +173,9 @@ def add_provenance(df: DataFrame, run_id: str) -> DataFrame:
 
 
 def write_bronze(spark: SparkSession, df: DataFrame, table: str) -> None:
-    """Ghi (thay thế) bảng Iceberg, partition ẩn theo ngày của `fetched_at` (Q4).
+    """Ghi đè bảng Iceberg trong một commit, partition ẩn `days(fetched_at)`.
 
-    `days(fetched_at)` là hidden partitioning: khai báo một lần ở đây, và từ đó mọi câu
-    truy vấn lọc theo `fetched_at` tự được bỏ qua partition không liên quan — người viết
-    SQL không phải biết bảng chia theo gì.
-
-    `createOrReplace` là một commit nguyên khối: hoặc bảng mới hiện ra đầy đủ, hoặc không
-    gì đổi. Gãy nửa đường thì bảng cũ vẫn nguyên, chạy lại được.
-
-    Phải dùng `F.days(...)`, KHÔNG phải `F.expr("days(fetched_at)")`. `partitionedBy` nhận
-    một biểu thức phân hoạch (partition transform) chứ không phải một biểu thức SQL thường,
-    nên `expr` bị từ chối với `AnalysisException: Invalid partition transformation`. PySpark
-    có sẵn `days`, `months`, `years`, `hours`, `bucket` cho đúng việc này.
+    `partitionedBy` cần `F.days(...)`; `F.expr("days(...)")` bị từ chối.
     """
     spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {CATALOG}.{NAMESPACE}")
     full_name = f"{CATALOG}.{NAMESPACE}.{table}"
@@ -248,7 +183,7 @@ def write_bronze(spark: SparkSession, df: DataFrame, table: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Chạy job và in số đo để đối chiếu với số dòng thật trong PostgreSQL."""
+    """Chạy job và in số dòng để đối chiếu với PostgreSQL."""
     args = parse_args(argv)
     run_id = args.run_id or str(uuid.uuid4())
     app_name = f"bronze-walmart-jdbc-{args.num_partitions}p-{args.table}"

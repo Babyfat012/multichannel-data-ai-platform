@@ -8,6 +8,7 @@ không chỉ kiểm qua một lần chạy Batch nhỏ.
 from __future__ import annotations
 
 import json
+
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
@@ -52,12 +53,13 @@ def test_jsonl_pool_closes_open_files_when_the_body_raises(tmp_path):
     100 GB dài vài giờ, và dữ liệu đã sinh không nên mất vì một lỗi ở cuối.
     """
     store = OutputStore(str(tmp_path))
-    with pytest.raises(RuntimeError):
-        with store.jsonl_writers() as pool:
-            pool.write("a", "a.jsonl", {"x": 1})
-            raise RuntimeError("ngày mô phỏng lỗi")
+    with pytest.raises(RuntimeError), store.jsonl_writers() as pool:
+        pool.write("a", "a.jsonl", {"x": 1})
+        raise RuntimeError("ngày mô phỏng lỗi")
 
-    assert [json.loads(l) for l in (tmp_path / "a.jsonl").read_text().splitlines()] == [{"x": 1}]
+    assert [json.loads(line) for line in (tmp_path / "a.jsonl").read_text().splitlines()] == [
+        {"x": 1}
+    ]
 
 
 def test_jsonl_pool_refuses_to_write_to_a_closed_key(tmp_path):
@@ -94,10 +96,9 @@ def test_parquet_writer_makes_one_row_group_per_write_and_skips_empty(tmp_path):
 def test_parquet_writer_closes_the_file_when_the_body_raises(tmp_path):
     """Footer Parquet được ghi dù thân khối lỗi, nên file vẫn đọc được."""
     store = OutputStore(str(tmp_path))
-    with pytest.raises(RuntimeError):
-        with store.parquet_writer("t.parquet", SCHEMA) as writer:
-            writer.write({"n": [1]})
-            raise RuntimeError("ngày mô phỏng lỗi")
+    with pytest.raises(RuntimeError), store.parquet_writer("t.parquet", SCHEMA) as writer:
+        writer.write({"n": [1]})
+        raise RuntimeError("ngày mô phỏng lỗi")
 
     assert pq.read_table(tmp_path / "t.parquet").column("n").to_pylist() == [1]
 

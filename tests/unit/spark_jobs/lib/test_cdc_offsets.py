@@ -1,19 +1,22 @@
 """Guard the CDC run's frozen offset vector across retry, producer growth and reset."""
 
 import copy
-from concurrent.futures import ThreadPoolExecutor
 import json
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from spark_jobs.lib.cdc_offsets import freeze_boundary, load_boundary, kafka_read_options
+from spark_jobs.lib.cdc_offsets import freeze_boundary, kafka_read_options, load_boundary
 
 
 def source_snapshot(**changes):
     """A captured Kafka incarnation/range, independent of manifest serialization."""
     return {
-        "topic": "orders", "cluster_id": "cluster-A", "topic_id": "topic-A",
-        "starting_offsets": {"0": 0, "1": 2}, "ending_offsets": {"0": 5, "1": 7},
+        "topic": "orders",
+        "cluster_id": "cluster-A",
+        "topic_id": "topic-A",
+        "starting_offsets": {"0": 0, "1": 2},
+        "ending_offsets": {"0": 5, "1": 7},
         **changes,
     }
 
@@ -35,12 +38,15 @@ def test_retry_and_validation_keep_the_first_range_when_the_producer_advances(tm
     assert options["kafka.isolation.level"] == "read_committed"
 
 
-@pytest.mark.parametrize("changes", [
-    {"topic_id": "recreated-topic"},
-    {"cluster_id": "replacement-cluster"},
-    {"starting_offsets": {"0": 1, "1": 2}},
-    {"ending_offsets": {"0": 4, "1": 7}},
-])
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"topic_id": "recreated-topic"},
+        {"cluster_id": "replacement-cluster"},
+        {"starting_offsets": {"0": 1, "1": 2}},
+        {"ending_offsets": {"0": 4, "1": 7}},
+    ],
+)
 def test_reset_retention_or_truncation_refuses_replay_without_rewriting_boundary(tmp_path, changes):
     """Offsets alone cannot identify source records across reset or retention."""
     freeze_boundary(tmp_path, "run-1", source_snapshot())
@@ -78,8 +84,9 @@ def test_run_id_is_not_a_filesystem_path(tmp_path):
 def test_competing_first_writers_adopt_one_complete_boundary(tmp_path):
     """Overlapping task retries cannot replace or expose half a JSON manifest."""
     with ThreadPoolExecutor(max_workers=4) as pool:
-        results = list(pool.map(
-            lambda _: freeze_boundary(tmp_path, "run-1", source_snapshot()), range(8)))
+        results = list(
+            pool.map(lambda _: freeze_boundary(tmp_path, "run-1", source_snapshot()), range(8))
+        )
     assert all(result == results[0] for result in results)
     assert len(list(tmp_path.iterdir())) == 1
 

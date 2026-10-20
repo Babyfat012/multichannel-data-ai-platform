@@ -55,39 +55,48 @@ def main(argv: list[str] | None = None) -> int:
             channel: metadata_rows(spark, f"{CATALOG}.silver.{getattr(args, f'{channel}_source')}")
             for channel in SOURCES
         }
-        observed = {row["channel"]: row["count"] for row in
-                    fact.groupBy("channel").count().collect()}
+        observed = {
+            row["channel"]: row["count"] for row in fact.groupBy("channel").count().collect()
+        }
         print(f"Silver rows: {expected}; Gold rows: {observed}")
         if observed != expected or metadata_rows(spark, table) != sum(expected.values()):
             raise ValueError("Số dòng Gold không khớp năm bảng Silver")
 
-        bad = fact.filter(
-            F.col("order_line_key").isNull()
-            | F.col("channel_order_id").isNull()
-            | F.col("channel_line_id").isNull()
-            | F.col("created_at").isNull()
-            | F.col("seller_sku").isNull()
-            | F.col("currency").isNull()
-            | F.col("line_net_amount").isNull()
-            | F.col("quantity").isNull()
-            | (F.col("quantity") <= 0)
-            | (F.col("line_net_amount") < 0)
-            | ((F.col("channel") == "walmart")
-               & F.col("channel_secondary_order_id").isNull())
-            | F.col("run_id").isNull()
-            | (F.col("run_id") != args.run_id)
-            | ((F.col("channel") == "amazon")
-               & F.col("amazon_order_version_key").isNull())
-            | ((F.col("channel") != "amazon")
-               & F.col("amazon_order_version_key").isNotNull())
-            | ((F.col("channel") != "walmart")
-               & (F.col("line_gross_amount").isNull()
-                  | F.col("line_discount_amount").isNull()
-                  | (F.col("line_gross_amount") - F.col("line_discount_amount")
-                     != F.col("line_net_amount"))))
-        ).limit(1).count()
-        duplicates = (fact.groupBy("order_line_key").count()
-                      .filter(F.col("count") > 1).limit(1).count())
+        bad = (
+            fact.filter(
+                F.col("order_line_key").isNull()
+                | F.col("channel_order_id").isNull()
+                | F.col("channel_line_id").isNull()
+                | F.col("created_at").isNull()
+                | F.col("seller_sku").isNull()
+                | F.col("currency").isNull()
+                | F.col("line_net_amount").isNull()
+                | F.col("quantity").isNull()
+                | (F.col("quantity") <= 0)
+                | (F.col("line_net_amount") < 0)
+                | ((F.col("channel") == "walmart") & F.col("channel_secondary_order_id").isNull())
+                | F.col("run_id").isNull()
+                | (F.col("run_id") != args.run_id)
+                | ((F.col("channel") == "amazon") & F.col("amazon_order_version_key").isNull())
+                | ((F.col("channel") != "amazon") & F.col("amazon_order_version_key").isNotNull())
+                | (
+                    (F.col("channel") != "walmart")
+                    & (
+                        F.col("line_gross_amount").isNull()
+                        | F.col("line_discount_amount").isNull()
+                        | (
+                            F.col("line_gross_amount") - F.col("line_discount_amount")
+                            != F.col("line_net_amount")
+                        )
+                    )
+                )
+            )
+            .limit(1)
+            .count()
+        )
+        duplicates = (
+            fact.groupBy("order_line_key").count().filter(F.col("count") > 1).limit(1).count()
+        )
         print(f"Gold invalid={bad}, duplicate_order_line_key={duplicates}")
         if bad or duplicates:
             raise ValueError("Validate Gold fact thất bại")

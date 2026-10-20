@@ -37,8 +37,7 @@ class ChromePage:
         """Thực thi một lệnh CDP, bỏ qua event chạy xen giữa."""
         self.next_id += 1
         request_id = self.next_id
-        await self.websocket.send_json({"id": request_id, "method": method,
-                                        "params": params or {}})
+        await self.websocket.send_json({"id": request_id, "method": method, "params": params or {}})
         while True:
             message = await self.websocket.receive_json(timeout=30)
             if message.get("id") != request_id:
@@ -59,9 +58,14 @@ class ChromePage:
 
     async def evaluate(self, expression: str):
         """Chạy JavaScript trong tab và trả về giá trị đơn giản."""
-        result = await self.call("Runtime.evaluate", {
-            "expression": expression, "returnByValue": True, "awaitPromise": True,
-        })
+        result = await self.call(
+            "Runtime.evaluate",
+            {
+                "expression": expression,
+                "returnByValue": True,
+                "awaitPromise": True,
+            },
+        )
         if "exceptionDetails" in result:
             raise RuntimeError(result["exceptionDetails"])
         return result.get("result", {}).get("value")
@@ -71,8 +75,17 @@ def standalone_password() -> str:
     """Đọc password Airflow từ container mà không lộ trong command line."""
     env = os.environ.copy()
     env.pop("POSTGRES_PASSWORD", None)
-    command = ["docker", "compose", "--profile", "airflow", "exec", "-T",
-               "airflow", "cat", "/opt/airflow/standalone_admin_password.txt"]
+    command = [
+        "docker",
+        "compose",
+        "--profile",
+        "airflow",
+        "exec",
+        "-T",
+        "airflow",
+        "cat",
+        "/opt/airflow/standalone_admin_password.txt",
+    ]
     return subprocess.check_output(command, cwd=ROOT, env=env, text=True).strip()
 
 
@@ -91,21 +104,32 @@ async def capture(password: str, dag_ids: list[str], suffix: str = "") -> None:
     OUTPUT.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="fsds-airflow-chrome-") as directory:
         profile = Path(directory)
-        chrome = subprocess.Popen([
-            "google-chrome", "--headless=new", "--no-sandbox", "--disable-gpu",
-            "--hide-scrollbars", "--window-size=1680,1050",
-            "--remote-debugging-port=0", "--remote-allow-origins=*",
-            f"--user-data-dir={profile}", "about:blank",
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=True)
+        chrome = subprocess.Popen(
+            [
+                "google-chrome",
+                "--headless=new",
+                "--no-sandbox",
+                "--disable-gpu",
+                "--hide-scrollbars",
+                "--window-size=1680,1050",
+                "--remote-debugging-port=0",
+                "--remote-allow-origins=*",
+                f"--user-data-dir={profile}",
+                "about:blank",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
         try:
             port = await wait_for_chrome(profile)
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"http://127.0.0.1:{port}/json") as response:
                     targets = await response.json()
                 tab = next(item for item in targets if item["type"] == "page")
-                async with session.ws_connect(tab["webSocketDebuggerUrl"],
-                                              max_msg_size=20_000_000) as websocket:
+                async with session.ws_connect(
+                    tab["webSocketDebuggerUrl"], max_msg_size=20_000_000
+                ) as websocket:
                     page = ChromePage(websocket)
                     await page.call("Page.enable")
                     await page.navigate(f"{BASE_URL}/login/")
@@ -137,9 +161,13 @@ async def capture(password: str, dag_ids: list[str], suffix: str = "") -> None:
                             url = await page.evaluate("location.href")
                             if "/login/" in url:
                                 raise RuntimeError("Phiên đăng nhập hết hạn khi chụp DAG")
-                            image = await page.call("Page.captureScreenshot", {
-                                "format": "png", "captureBeyondViewport": False,
-                            })
+                            image = await page.call(
+                                "Page.captureScreenshot",
+                                {
+                                    "format": "png",
+                                    "captureBeyondViewport": False,
+                                },
+                            )
                             path = OUTPUT / f"{dag_id}-{view}{suffix}.png"
                             path.write_bytes(base64.b64decode(image["data"]))
                             print(f"Đã chụp {path.relative_to(ROOT)}")
@@ -156,13 +184,20 @@ async def capture(password: str, dag_ids: list[str], suffix: str = "") -> None:
 def main() -> None:
     """Đọc CLI và chạy phiên chụp."""
     parser = argparse.ArgumentParser(description="Chụp bằng chứng Airflow UI")
-    parser.add_argument("--dag-id", action="append", choices=(
-        "dp1_bronze", "dp2_silver", "dp1_cdc", "dp3_features", "dp3_walmart_labels",
-        "fsds_runtime_config_check",
-    ),
-                        help="DAG cần chụp; bỏ trống để chụp DP1/DP2 mặc định")
-    parser.add_argument("--suffix", default="",
-                        help="hậu tố để giữ ảnh của các lần chạy trước")
+    parser.add_argument(
+        "--dag-id",
+        action="append",
+        choices=(
+            "dp1_bronze",
+            "dp2_silver",
+            "dp1_cdc",
+            "dp3_features",
+            "dp3_walmart_labels",
+            "fsds_runtime_config_check",
+        ),
+        help="DAG cần chụp; bỏ trống để chụp DP1/DP2 mặc định",
+    )
+    parser.add_argument("--suffix", default="", help="hậu tố để giữ ảnh của các lần chạy trước")
     args = parser.parse_args()
     if args.suffix and not re.fullmatch(r"-[a-z0-9-]+", args.suffix):
         parser.error("--suffix phải bắt đầu bằng '-' và chỉ có chữ thường, số, dấu '-'")

@@ -1,7 +1,7 @@
 """Kiểm receipt/schema offline bằng thư viện chuẩn, không cần Spark hoặc DataHub."""
 
-from datetime import datetime, timezone
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,23 +10,45 @@ import pytest
 from scripts.run.publish_order_lifecycle_datahub import build_mcps, load_receipts, schema_fields
 from spark_jobs.lib import receipts as receipt_schemas
 
-
 TABLE = "lakehouse.gold.lifecycle_fact_order_lines"
-SCHEMA = {"type": "struct", "fields": [
-    {"name": "line_id", "type": "string", "nullable": False, "metadata": {}},
-    {"name": "quantity", "type": "integer", "nullable": True, "metadata": {}},
-    {"name": "evidence", "type": {"type": "array", "containsNull": False,
-        "elementType": {"type": "struct", "fields": [
-            {"name": "observed_at", "type": "timestamp", "nullable": False, "metadata": {}}
-        ]}}, "nullable": True, "metadata": {}},
-]}
+SCHEMA = {
+    "type": "struct",
+    "fields": [
+        {"name": "line_id", "type": "string", "nullable": False, "metadata": {}},
+        {"name": "quantity", "type": "integer", "nullable": True, "metadata": {}},
+        {
+            "name": "evidence",
+            "type": {
+                "type": "array",
+                "containsNull": False,
+                "elementType": {
+                    "type": "struct",
+                    "fields": [
+                        {
+                            "name": "observed_at",
+                            "type": "timestamp",
+                            "nullable": False,
+                            "metadata": {},
+                        }
+                    ],
+                },
+            },
+            "nullable": True,
+            "metadata": {},
+        },
+    ],
+}
 
 
 def publisher_args(receipt):
     """Trỏ publisher vào đúng receipt vừa tạo, không dùng schema contract thay thế."""
-    return SimpleNamespace(receipt_dir=None, receipt=[f"build_gold={receipt}"],
-                           contracts_dir=Path(__file__).resolve().parents[4] / "contracts",
-                           source_root=receipt.parent / "no-source", walmart_jdbc=None)
+    return SimpleNamespace(
+        receipt_dir=None,
+        receipt=[f"build_gold={receipt}"],
+        contracts_dir=Path(__file__).resolve().parents[4] / "contracts",
+        source_root=receipt.parent / "no-source",
+        walmart_jdbc=None,
+    )
 
 
 def test_relative_schema_round_trip_and_completed_at(tmp_path, monkeypatch):
@@ -36,20 +58,39 @@ def test_relative_schema_round_trip_and_completed_at(tmp_path, monkeypatch):
     assert relative == "schemas.json"
     assert not Path(relative).is_absolute()
     assert json.loads((receipt.parent / relative).read_text()) == {"tables": {TABLE: SCHEMA}}
-    receipt.write_text(json.dumps({"run_id": "original-run", "schema_file": relative,
-                                   "completed_at": "2026-10-19T01:02:03Z", "checks": {"duplicate_fact": 0}}))
+    receipt.write_text(
+        json.dumps(
+            {
+                "run_id": "original-run",
+                "schema_file": relative,
+                "completed_at": "2026-10-19T01:02:03Z",
+                "checks": {"duplicate_fact": 0},
+            }
+        )
+    )
     monkeypatch.chdir(tmp_path)
     receipts, schemas = load_receipts(publisher_args(receipt))
     assert receipts["build_gold"][0]["run_id"] == "original-run"
     assert schemas == {TABLE: SCHEMA}
     assert [field["fieldPath"] for field in schema_fields(schemas[TABLE])] == [
-        "line_id", "quantity", "evidence", "evidence[].observed_at"]
+        "line_id",
+        "quantity",
+        "evidence",
+        "evidence[].observed_at",
+    ]
     mcps = build_mcps(publisher_args(receipt))
-    schema = next(json.loads(m["aspect"]["value"]) for m in mcps
-                  if m["aspectName"] == "schemaMetadata" and TABLE in m["entityUrn"])
+    schema = next(
+        json.loads(m["aspect"]["value"])
+        for m in mcps
+        if m["aspectName"] == "schemaMetadata" and TABLE in m["entityUrn"]
+    )
     assert schema["fields"] == schema_fields(SCHEMA)
-    event = next(json.loads(m["aspect"]["value"]) for m in mcps if m["aspectName"] == "assertionRunEvent")
-    assert event["timestampMillis"] == int(datetime(2026, 10, 19, 1, 2, 3, tzinfo=timezone.utc).timestamp() * 1000)
+    event = next(
+        json.loads(m["aspect"]["value"]) for m in mcps if m["aspectName"] == "assertionRunEvent"
+    )
+    assert event["timestampMillis"] == int(
+        datetime(2026, 10, 19, 1, 2, 3, tzinfo=UTC).timestamp() * 1000
+    )
     assert event["result"]["nativeResults"]["timestamp_source"] == "completed_at"
 
 
@@ -95,15 +136,21 @@ def test_replace_failure_preserves_previous_schema(tmp_path, monkeypatch):
     assert sorted(p.name for p in tmp_path.iterdir()) == ["schemas.json"]
 
 
-@pytest.mark.parametrize("tables, message", [
-    ({}, "tables"),
-    ({TABLE: {}}, "struct"),
-    ({TABLE: {"type": "struct"}}, "fields"),
-    ({TABLE: {"type": "struct", "fields": []}}, "fields"),
-    ({TABLE: {"type": "struct", "fields": [{"type": "string"}]}}, "name"),
-    ({TABLE: {"type": "struct", "fields": [{"name": "id"}]}}, "type"),
-    ({TABLE: {"type": "struct", "fields": [{"name": "nested", "type": {"type": "struct"}}]}}, "fields"),
-])
+@pytest.mark.parametrize(
+    "tables, message",
+    [
+        ({}, "tables"),
+        ({TABLE: {}}, "struct"),
+        ({TABLE: {"type": "struct"}}, "fields"),
+        ({TABLE: {"type": "struct", "fields": []}}, "fields"),
+        ({TABLE: {"type": "struct", "fields": [{"type": "string"}]}}, "name"),
+        ({TABLE: {"type": "struct", "fields": [{"name": "id"}]}}, "type"),
+        (
+            {TABLE: {"type": "struct", "fields": [{"name": "nested", "type": {"type": "struct"}}]}},
+            "fields",
+        ),
+    ],
+)
 def test_refuse_empty_or_incomplete_schema(tmp_path, tables, message):
     """Schema lỗi bị từ chối rõ ràng, không làm hỏng file của job trước."""
     receipt = tmp_path / "build_gold.json"
@@ -116,8 +163,8 @@ def test_refuse_empty_or_incomplete_schema(tmp_path, tables, message):
 
 def test_completed_at_is_current_utc():
     """Giờ hoàn tất có hậu tố Z và nằm giữa hai lần đọc đồng hồ UTC."""
-    before = datetime.now(timezone.utc)
+    before = datetime.now(UTC)
     completed = receipt_schemas.completed_at_utc()
-    after = datetime.now(timezone.utc)
+    after = datetime.now(UTC)
     assert completed.endswith("Z")
     assert before <= datetime.fromisoformat(completed.replace("Z", "+00:00")) <= after

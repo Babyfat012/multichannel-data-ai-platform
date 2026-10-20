@@ -16,9 +16,8 @@ import argparse
 import ast
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-
 
 RUNS = {
     "dp1_bronze": "manual__2026-10-13T15:30:09+00:00",
@@ -31,13 +30,21 @@ CHANNELS = ("amazon", "walmart", "tiktok_shop", "shopify", "shopee")
 LEGACY_CDC_TABLE = "lakehouse.bronze.raw_walmart_cdc"
 # Metric có tên bắt đầu bằng các tiền tố này phải bằng 0 thì check mới PASS.
 FAILURE_PREFIXES = (
-    "invalid", "duplicate", "missing", "extra", "bad_", "multiple_current",
-    "payload_mismatch", "wrong_", "source_invalid", "source_duplicate",
+    "invalid",
+    "duplicate",
+    "missing",
+    "extra",
+    "bad_",
+    "multiple_current",
+    "payload_mismatch",
+    "wrong_",
+    "source_invalid",
+    "source_duplicate",
 )
 
 
 def number(pattern: str, log: str) -> int:
-    """Extract one comma-formatted integer from a task log."""
+    """Lấy một số nguyên có dấu phẩy ngăn cách từ log task."""
     match = re.search(pattern, log)
     if match is None:
         raise ValueError(f"Missing metric: {pattern}")
@@ -45,7 +52,7 @@ def number(pattern: str, log: str) -> int:
 
 
 def success_log(root: Path, dag: str, task: str, run_id: str) -> tuple[str, str, str]:
-    """Return the latest successful attempt, its relative path and finish time."""
+    """Lần chạy thành công gần nhất: đường dẫn tương đối và giờ kết thúc."""
     directory = root / f"dag_id={dag}" / f"run_id={run_id}" / f"task_id={task}"
     attempts = sorted(
         directory.glob("attempt=*.log"),
@@ -57,9 +64,11 @@ def success_log(root: Path, dag: str, task: str, run_id: str) -> tuple[str, str,
         match = re.search(r"Marking task as SUCCESS\..*end_date=(\d{8}T\d{6})", log)
         if match:
             completed = datetime.strptime(match.group(1), "%Y%m%dT%H%M%S")
-            return log, path.relative_to(root).as_posix(), completed.replace(
-                tzinfo=timezone.utc
-            ).isoformat()
+            return (
+                log,
+                path.relative_to(root).as_posix(),
+                completed.replace(tzinfo=UTC).isoformat(),
+            )
     raise ValueError(f"No successful attempt for {dag}.{task} in {directory}")
 
 
@@ -76,8 +85,10 @@ def cdc_metrics(log: str) -> tuple[dict[str, int], str, str]:
         return metrics, "Kafka = Bronze = số offset duy nhất; không thiếu và không lỗi", "cdc-v1"
     metrics["extra_rows"] = number(r"thừa=([\d,]+)", log)
     metrics["payload_mismatch_rows"] = number(r"sai payload=([\d,]+)", log)
-    rule = ("Trong khoảng offset đã đóng băng của run và đúng source epoch: Kafka = Bronze "
-            "= số offset duy nhất; không thiếu, không thừa, payload khớp, không lỗi")
+    rule = (
+        "Trong khoảng offset đã đóng băng của run và đúng source epoch: Kafka = Bronze "
+        "= số offset duy nhất; không thiếu, không thừa, payload khớp, không lỗi"
+    )
     return metrics, rule, "cdc-v2"
 
 
@@ -91,7 +102,11 @@ def feature_metrics(log: str) -> tuple[dict[str, int], str, str]:
             "invalid_rows": number(r"feature invalid=([\d,]+)", log),
             "duplicate_order_line_key": number(r"duplicate_order_line_key=([\d,]+)", log),
         }
-        return metrics, "Feature bằng Gold; không lỗi, không trùng khóa, không rò rỉ nhãn", "feature-v1"
+        return (
+            metrics,
+            "Feature bằng Gold; không lỗi, không trùng khóa, không rò rỉ nhãn",
+            "feature-v1",
+        )
     raw = ast.literal_eval(match.group(1))
     metrics = {
         "source_rows": raw["fact_rows"],
@@ -104,13 +119,15 @@ def feature_metrics(log: str) -> tuple[dict[str, int], str, str]:
         "extra_rows": raw["extra"],
         "wrong_event_time_rows": raw["wrong_event_time"],
     }
-    rule = ("Feature và Gold cùng tập khóa Order Line (không thiếu, không thừa), không trùng "
-            "khóa, event_timestamp = created_at của Gold, không rò rỉ nhãn. Chưa phải PIT đầy đủ")
+    rule = (
+        "Feature và Gold cùng tập khóa Order Line (không thiếu, không thừa), không trùng "
+        "khóa, event_timestamp = created_at của Gold, không rò rỉ nhãn. Chưa phải PIT đầy đủ"
+    )
     return metrics, rule, "feature-v2"
 
 
 def metrics_for(dag: str, task: str, log: str) -> tuple[dict[str, int], str, str]:
-    """Parse the counts, exact rule and log format demonstrated by a Spark validation."""
+    """Đọc số đếm, luật kiểm và dạng log của một lần validate Spark."""
     log_format = "v1"
     if dag == "dp1_bronze":
         if task in {"validate_amazon", "validate_walmart"}:
@@ -176,7 +193,9 @@ def metrics_for(dag: str, task: str, log: str) -> tuple[dict[str, int], str, str
         metrics = {
             "dataset_rows": number(r"Bridge Walmart: rows=([\d,]+)", log),
             "duplicate_keys": number(r"Bridge Walmart: rows=[\d,]+, duplicate=([\d,]+)", log),
-            "invalid_rows": number(r"Bridge Walmart: rows=[\d,]+, duplicate=[\d,]+, invalid=([\d,]+)", log),
+            "invalid_rows": number(
+                r"Bridge Walmart: rows=[\d,]+, duplicate=[\d,]+, invalid=([\d,]+)", log
+            ),
         }
         rule = "Bridge nhãn Walmart có dòng; không lỗi và không trùng khóa"
     else:
@@ -200,30 +219,64 @@ def parse_runs(overrides: list[str]) -> dict[str, str]:
     for item in overrides:
         dag, sep, run_id = item.partition("=")
         if not sep or dag not in RUNS or not run_id:
-            raise ValueError(f"--run phải có dạng dag=run_id với dag thuộc {sorted(RUNS)}: {item!r}")
+            raise ValueError(
+                f"--run phải có dạng dag=run_id với dag thuộc {sorted(RUNS)}: {item!r}"
+            )
         runs[dag] = run_id
     return runs
 
 
 def main() -> None:
-    """Write a manifest only when all selected checks parse and pass."""
+    """Chỉ ghi manifest khi mọi check được chọn đều đọc được và PASS."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--logs-root", type=Path, required=True)
-    parser.add_argument("--output", type=Path, default=Path("docs/evidence/datahub-validation.json"))
-    parser.add_argument("--run", action="append", default=[], metavar="DAG=RUN_ID",
-                        help="Thay run mặc định của một DAG; lặp lại cho nhiều DAG")
-    parser.add_argument("--cdc-table", default=LEGACY_CDC_TABLE,
-                        help="Bảng CDC mà run dp1_cdc đã ghi (Airflow Variable fsds_dp1_cdc_table)")
+    parser.add_argument(
+        "--output", type=Path, default=Path("docs/evidence/datahub-validation.json")
+    )
+    parser.add_argument(
+        "--run",
+        action="append",
+        default=[],
+        metavar="DAG=RUN_ID",
+        help="Thay run mặc định của một DAG; lặp lại cho nhiều DAG",
+    )
+    parser.add_argument(
+        "--cdc-table",
+        default=LEGACY_CDC_TABLE,
+        help="Bảng CDC mà run dp1_cdc đã ghi (Airflow Variable fsds_dp1_cdc_table)",
+    )
     args = parser.parse_args()
     runs = parse_runs(args.run)
     tasks = (
-        [("dp1_bronze", f"validate_{channel}", f"lakehouse.bronze.raw_{channel}_orders_dp1") for channel in CHANNELS]
+        [
+            ("dp1_bronze", f"validate_{channel}", f"lakehouse.bronze.raw_{channel}_orders_dp1")
+            for channel in CHANNELS
+        ]
         + [("dp1_cdc", "validate_walmart_cdc", args.cdc_table)]
-        + [("dp2_silver", f"validate_{channel}_silver", f"lakehouse.silver.stg_{channel}_order_lines_dp2") for channel in CHANNELS]
+        + [
+            (
+                "dp2_silver",
+                f"validate_{channel}_silver",
+                f"lakehouse.silver.stg_{channel}_order_lines_dp2",
+            )
+            for channel in CHANNELS
+        ]
         + [("dp2_silver", "validate_amazon_order_dim", "lakehouse.gold.dim_amazon_order_dp2")]
         + [("dp2_silver", "validate_gold_order_lines", "lakehouse.gold.fact_order_lines_dp2")]
-        + [("dp3_features", "validate_return_features", "lakehouse.gold.feat_order_line_return_dp3")]
-        + [("dp3_walmart_labels", "build_and_validate_walmart_labels", "lakehouse.gold.fact_walmart_return_labels_dp3")]
+        + [
+            (
+                "dp3_features",
+                "validate_return_features",
+                "lakehouse.gold.feat_order_line_return_dp3",
+            )
+        ]
+        + [
+            (
+                "dp3_walmart_labels",
+                "build_and_validate_walmart_labels",
+                "lakehouse.gold.fact_walmart_return_labels_dp3",
+            )
+        ]
     )
     checks = []
     for dag, task, dataset in tasks:
@@ -231,12 +284,20 @@ def main() -> None:
         metrics, rule, log_format = metrics_for(dag, task, log)
         if dag == "dp1_cdc":
             check_cdc_table(log_format, dataset)
-        checks.append({
-            "dag_id": dag, "task_id": task, "dataset": dataset,
-            "run_id": runs[dag], "state": "success", "completed_at": completed_at,
-            "source_log": source_log, "rule": rule, "log_format": log_format,
-            "metrics": metrics,
-        })
+        checks.append(
+            {
+                "dag_id": dag,
+                "task_id": task,
+                "dataset": dataset,
+                "run_id": runs[dag],
+                "state": "success",
+                "completed_at": completed_at,
+                "source_log": source_log,
+                "rule": rule,
+                "log_format": log_format,
+                "metrics": metrics,
+            }
+        )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps({"checks": checks}, ensure_ascii=False, indent=2) + "\n")
     print(f"Wrote {len(checks)} successful checks to {args.output}")

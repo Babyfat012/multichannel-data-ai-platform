@@ -76,7 +76,10 @@ def test_order_created_in_the_last_second_before_cutoff_is_left_out(tiny_config)
     rng = rng_for(0, "test")
     as_of = tiny_config.cutoff - timedelta(seconds=1)
 
-    for offset, expected in [(timedelta(0), True), (timedelta(microseconds=1), False),
-                             (timedelta(milliseconds=500), False)]:
+    for offset, expected in [
+        (timedelta(0), True),
+        (timedelta(microseconds=1), False),
+        (timedelta(milliseconds=500), False),
+    ]:
         late = dataclasses.replace(order, created_at=as_of + offset)
         assert bool(plan_exports(late, tiny_config, rng)) is expected, offset

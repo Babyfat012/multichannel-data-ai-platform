@@ -32,8 +32,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         source = spark.table(f"{CATALOG}.gold.{args.source_table}")
         rows = source.filter(F.col("channel") == "walmart").select(
-            "order_line_key", "channel_order_id", "created_at", "seller_sku",
-            "line_net_amount", "currency",
+            "order_line_key",
+            "channel_order_id",
+            "created_at",
+            "seller_sku",
+            "line_net_amount",
+            "currency",
         )
         host = os.environ.get("POSTGRES_HOST", "postgres")
         port = os.environ.get("POSTGRES_PORT", "5432")
@@ -46,9 +50,9 @@ def main(argv: list[str] | None = None) -> int:
             "driver": "org.postgresql.Driver",
             "batchsize": "5000",
         }
-        rows.repartition(4, "seller_sku").write.format("jdbc").options(
-            **options
-        ).mode("overwrite").save()
+        rows.repartition(4, "seller_sku").write.format("jdbc").options(**options).mode(
+            "overwrite"
+        ).save()
         print(f"Warehouse đã ghi: warehouse.{args.table}; channel=walmart")
         return 0
     finally:

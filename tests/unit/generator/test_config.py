@@ -47,13 +47,16 @@ def test_shipped_config_files_are_valid(name):
     load_config(Path(__file__).parents[3] / "configs" / name)
 
 
-@pytest.mark.parametrize("prime_day, message", [
-    ({"day": 180, "days": 2}, "ngày lịch sử"),
-    ({"day": 0}, "ngày lịch sử"),
-    ({"day": 10, "discount_share": 1.5}, "discount_share"),
-    ({"day": 10, "deal_skus": 5000}, "deal_skus"),
-    ({"day": 10, "dealskus": 5}, "drift.prime_day"),
-])
+@pytest.mark.parametrize(
+    "prime_day, message",
+    [
+        ({"day": 180, "days": 2}, "ngày lịch sử"),
+        ({"day": 0}, "ngày lịch sử"),
+        ({"day": 10, "discount_share": 1.5}, "discount_share"),
+        ({"day": 10, "deal_skus": 5000}, "deal_skus"),
+        ({"day": 10, "dealskus": 5}, "drift.prime_day"),
+    ],
+)
 def test_invalid_prime_day_is_rejected(prime_day, message):
     """Chứng minh cấu hình Sale Event sai (ngoài lịch sử, vượt biên, khoá sai) đều bị từ chối."""
     with pytest.raises(ValueError, match=message):

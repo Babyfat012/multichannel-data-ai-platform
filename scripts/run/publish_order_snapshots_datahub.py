@@ -12,7 +12,6 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-
 CHANNELS = ("amazon", "walmart", "tiktok_shop", "shopify", "shopee")
 BRONZE = {c: f"lakehouse.bronze.raw_{c}_orders_dp1" for c in CHANNELS}
 SILVER = {c: f"lakehouse.silver.stg_{c}_order_lines_dp2" for c in CHANNELS}
@@ -26,8 +25,16 @@ CDC = "lakehouse.bronze.raw_walmart_cdc_v2"
 CDC_LEGACY = "lakehouse.bronze.raw_walmart_cdc"
 DATASETS = (*BRONZE.values(), *SILVER.values(), FACT, DIM, FEATURE, LABELS, CDC, CDC_LEGACY)
 FAILURE_PREFIXES = (
-    "invalid", "duplicate", "missing", "extra", "bad_", "multiple_current",
-    "payload_mismatch", "wrong_", "source_invalid", "source_duplicate",
+    "invalid",
+    "duplicate",
+    "missing",
+    "extra",
+    "bad_",
+    "multiple_current",
+    "payload_mismatch",
+    "wrong_",
+    "source_invalid",
+    "source_duplicate",
 )
 RAW_AMAZON = "/data/raw/source-exports/channel=amazon/dataset=orders"
 RAW_FILES = {
@@ -49,8 +56,13 @@ def job_map() -> dict[str, dict[str, tuple[list[str], list[str]]]]:
     dp1: dict[str, tuple[list[str], list[str]]] = {}
     dp2: dict[str, tuple[list[str], list[str]]] = {}
     for channel in CHANNELS:
-        source = (RAW_AMAZON if channel == "amazon" else
-                  RAW_WALMART if channel == "walmart" else RAW_FILES[channel])
+        source = (
+            RAW_AMAZON
+            if channel == "amazon"
+            else RAW_WALMART
+            if channel == "walmart"
+            else RAW_FILES[channel]
+        )
         dp1[f"ingest_{channel}"] = ([source], [BRONZE[channel]])
         dp1[f"validate_{channel}"] = ([BRONZE[channel]], [])
         dp2[f"ingest_{channel}_silver"] = ([BRONZE[channel]], [SILVER[channel]])
@@ -95,7 +107,9 @@ def check_passed(item: dict) -> None:
         raise ValueError(f"Bảng assertion không thuộc mapping: {item['dataset']}")
     if item["state"] != "success":
         raise ValueError(f"Task Validate chưa thành công: {item['task_id']}")
-    if any(value != 0 for key, value in item["metrics"].items() if key.startswith(FAILURE_PREFIXES)):
+    if any(
+        value != 0 for key, value in item["metrics"].items() if key.startswith(FAILURE_PREFIXES)
+    ):
         raise ValueError(f"Số liệu Validate không PASS: {item['task_id']}")
 
 
@@ -103,39 +117,47 @@ def main() -> None:
     """Publish dataset lineage and validation assertions to DataHub GMS."""
     parser = argparse.ArgumentParser(description="Publish FSDS lineage and validation to DataHub")
     parser.add_argument("--server", default=os.getenv("DATAHUB_GMS_URL", "http://localhost:8089"))
-    parser.add_argument("--evidence", type=Path, default=Path("docs/evidence/datahub-validation.json"))
+    parser.add_argument(
+        "--evidence", type=Path, default=Path("docs/evidence/datahub-validation.json")
+    )
     args = parser.parse_args()
     evidence = json.loads(args.evidence.read_text())
 
     # Import tại điểm chạy để file vẫn đọc được khi client chưa được cài.
-    from datahub.ingestion.graph.client import DataHubGraph, DatahubClientConfig
+    from datahub.ingestion.graph.client import DatahubClientConfig, DataHubGraph
     from datahub.metadata.urns import DatasetUrn
     from datahub.sdk import DataFlow, DataHubClient, DataJob, Dataset
 
     token = os.getenv("DATAHUB_GMS_TOKEN")
     client = DataHubClient(server=args.server, token=token)
     graph = DataHubGraph(config=DatahubClientConfig(server=args.server, token=token))
+
     def urn(name: str) -> DatasetUrn:
         """Resolve a dataset URN using its actual storage platform."""
         return DatasetUrn(platform=SOURCE_DATASETS.get(name, "iceberg"), name=name, env="PROD")
 
     for name in (*SOURCE_DATASETS, *DATASETS):
         platform = SOURCE_DATASETS.get(name, "iceberg")
-        client.entities.upsert(Dataset(
-            platform=platform, name=name,
-            description=description(name, platform),
-        ))
+        client.entities.upsert(
+            Dataset(
+                platform=platform,
+                name=name,
+                description=description(name, platform),
+            )
+        )
 
     for dag_id, tasks in job_map().items():
-        flow = DataFlow(platform="airflow", name=dag_id,
-                        description=f"FSDS Airflow DAG {dag_id}")
+        flow = DataFlow(platform="airflow", name=dag_id, description=f"FSDS Airflow DAG {dag_id}")
         client.entities.upsert(flow)
         for task_id, (inputs, outputs) in tasks.items():
-            client.entities.upsert(DataJob(
-                name=task_id, flow=flow,
-                inlets=[urn(x) for x in inputs],
-                outlets=[urn(x) for x in outputs],
-            ))
+            client.entities.upsert(
+                DataJob(
+                    name=task_id,
+                    flow=flow,
+                    inlets=[urn(x) for x in inputs],
+                    outlets=[urn(x) for x in outputs],
+                )
+            )
             for source in inputs:
                 for target in outputs:
                     client.lineage.add_lineage(upstream=urn(source), downstream=urn(target))
@@ -163,9 +185,11 @@ def main() -> None:
                 *({"key": key, "value": str(value)} for key, value in metrics.items()),
             ],
         )
-    print(f"DataHub: {len(SOURCE_DATASETS) + len(DATASETS)} datasets, "
-          f"{sum(map(len, job_map().values()))} jobs, "
-          f"{len(evidence['checks'])} kết quả Validate")
+    print(
+        f"DataHub: {len(SOURCE_DATASETS) + len(DATASETS)} datasets, "
+        f"{sum(map(len, job_map().values()))} jobs, "
+        f"{len(evidence['checks'])} kết quả Validate"
+    )
 
 
 if __name__ == "__main__":

@@ -15,11 +15,30 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "ruff>=0.14"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/unit"]
 pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["reference", "edai-k11-cw", "out", "learning-records", "lessons"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+# E501: formatter lo phần code; chuỗi/comment dài để người viết tự ngắt.
+# B905: thêm strict= vào zip() đổi hành vi, không làm hàng loạt.
+# SIM117: with lồng nhau khi with trong dùng biến của with ngoài vẫn dễ đọc.
+ignore = ["E501", "B905", "SIM117"]
+
+[tool.ruff.lint.per-file-ignores]
+# Script Spark đặt sys.path/biến môi trường trước khi import code dự án.
+"tests/spark/*" = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["generator", "spark_jobs", "scripts", "dags"]
 
 [build-system]
 requires = ["hatchling"]

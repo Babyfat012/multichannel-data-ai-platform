@@ -32,7 +32,9 @@ def test_exported_orders_match_truth_for_rendered_storefronts(report):
 
 def test_schema_evolution_nulls_flip_at_switch(report):
     """Chứng minh cột `proceeds` và `IsPrime` null đảo chiều đúng tại mốc đổi schema."""
-    before, after = sorted(report.schema_evolution().as_dicts(), key=lambda r: r["period"], reverse=True)
+    before, after = sorted(
+        report.schema_evolution().as_dicts(), key=lambda r: r["period"], reverse=True
+    )
     assert before["pct_null_proceeds"] == 100 and before["pct_null_IsPrime"] == 0
     assert after["pct_null_proceeds"] == 0 and after["pct_null_IsPrime"] == 100
 

@@ -3,8 +3,15 @@
 
 def _type(value):
     """Tên kiểu JSON, tránh coi boolean là integer."""
-    return {type(None): "null", bool: "boolean", int: "integer", float: "number",
-            str: "string", list: "array", dict: "object"}[type(value)]
+    return {
+        type(None): "null",
+        bool: "boolean",
+        int: "integer",
+        float: "number",
+        str: "string",
+        list: "array",
+        dict: "object",
+    }[type(value)]
 
 
 def infer_schema(records):
@@ -34,7 +41,9 @@ def validate_record(record, schema, path="$"):
     if types and actual not in types and not (actual == "integer" and "number" in types):
         return [f"{path}: type {actual}, expected {types}"]
     if isinstance(record, dict):
-        errors.extend(f"{path}.{k}: missing required" for k in schema.get("required", []) if k not in record)
+        errors.extend(
+            f"{path}.{k}: missing required" for k in schema.get("required", []) if k not in record
+        )
         for key, child in schema.get("properties", {}).items():
             if key in record:
                 errors.extend(validate_record(record[key], child, f"{path}.{key}"))

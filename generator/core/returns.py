@@ -93,7 +93,7 @@ def decide_return(
 
     lag_days = rng.gamma(shape=2.0, scale=storefront.return_lag_mean_days / 2.0)
     line.return_requested_at = delivered_at + timedelta(days=float(lag_days))
-    line.refunded_at = line.return_requested_at + timedelta(days=float(rng.uniform(2, 7)))
+    rng.uniform(2, 7)  # Rút bỏ đi để giữ nguyên dãy số ngẫu nhiên của dữ liệu đã sinh.
     line.label = 1 if lag_days <= window_days else 0
 
 

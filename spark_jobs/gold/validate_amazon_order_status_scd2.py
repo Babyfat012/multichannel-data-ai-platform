@@ -31,37 +31,57 @@ def main(argv: list[str] | None = None) -> int:
         dim = spark.table(table)
         timeline = Window.partitionBy("order_id").orderBy("valid_from_ts")
         checked = dim.withColumn("_expected_to", F.lead("valid_from_ts").over(timeline))
-        invalid = checked.filter(
-            F.col("order_version_key").isNull()
-            | F.col("order_id").isNull()
-            | F.col("valid_from_ts").isNull()
-            | F.col("order_status").isNull()
-            | F.col("channel_status").isNull()
-            | F.col("first_observed_export_date").isNull()
-            | (F.col("valid_to_ts") < F.col("valid_from_ts"))
-            | ~F.col("valid_to_ts").eqNullSafe(F.col("_expected_to"))
-            | (F.col("is_current") != F.col("valid_to_ts").isNull())
-            | (F.col("run_id") != args.run_id)
-        ).limit(1).count()
-        duplicate = (dim.groupBy("order_version_key").count()
-                     .filter(F.col("count") > 1).limit(1).count())
-        multiple_current = (dim.filter("is_current").groupBy("order_id").count()
-                            .filter(F.col("count") != 1).limit(1).count())
+        invalid = (
+            checked.filter(
+                F.col("order_version_key").isNull()
+                | F.col("order_id").isNull()
+                | F.col("valid_from_ts").isNull()
+                | F.col("order_status").isNull()
+                | F.col("channel_status").isNull()
+                | F.col("first_observed_export_date").isNull()
+                | (F.col("valid_to_ts") < F.col("valid_from_ts"))
+                | ~F.col("valid_to_ts").eqNullSafe(F.col("_expected_to"))
+                | (F.col("is_current") != F.col("valid_to_ts").isNull())
+                | (F.col("run_id") != args.run_id)
+            )
+            .limit(1)
+            .count()
+        )
+        duplicate = (
+            dim.groupBy("order_version_key").count().filter(F.col("count") > 1).limit(1).count()
+        )
+        multiple_current = (
+            dim.filter("is_current")
+            .groupBy("order_id")
+            .count()
+            .filter(F.col("count") != 1)
+            .limit(1)
+            .count()
+        )
         fact = spark.table(f"{CATALOG}.gold.{args.fact_table}")
         amazon = fact.filter(F.col("channel") == "amazon")
         missing_key = amazon.filter(F.col("amazon_order_version_key").isNull())
-        missing_version = (amazon.select("amazon_order_version_key").distinct()
-                           .join(dim.select("order_version_key"),
-                                 F.col("amazon_order_version_key") ==
-                                 F.col("order_version_key"), "left_anti")
-                           .limit(1).count())
-        other_key = fact.filter((F.col("channel") != "amazon") &
-                                F.col("amazon_order_version_key").isNotNull())
+        missing_version = (
+            amazon.select("amazon_order_version_key")
+            .distinct()
+            .join(
+                dim.select("order_version_key"),
+                F.col("amazon_order_version_key") == F.col("order_version_key"),
+                "left_anti",
+            )
+            .limit(1)
+            .count()
+        )
+        other_key = fact.filter(
+            (F.col("channel") != "amazon") & F.col("amazon_order_version_key").isNotNull()
+        )
         bad_fact = missing_key.limit(1).count() + other_key.limit(1).count()
         rows = dim.groupBy("is_current").count().collect()
-        print(f"Amazon SCD2 versions={rows}; invalid={invalid}; duplicate={duplicate}; "
-              f"multiple_current={multiple_current}; bad_fact={bad_fact}; "
-              f"missing_version={missing_version}")
+        print(
+            f"Amazon SCD2 versions={rows}; invalid={invalid}; duplicate={duplicate}; "
+            f"multiple_current={multiple_current}; bad_fact={bad_fact}; "
+            f"missing_version={missing_version}"
+        )
         if invalid or duplicate or multiple_current or bad_fact or missing_version:
             raise ValueError("Validate Amazon Order SCD2 thất bại")
         print("Validate Amazon Order SCD2: PASS")

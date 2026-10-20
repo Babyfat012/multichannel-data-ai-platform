@@ -37,8 +37,7 @@ class ChromePage:
         """Thực thi một lệnh CDP, bỏ qua event chạy xen giữa."""
         self.next_id += 1
         request_id = self.next_id
-        await self.websocket.send_json({"id": request_id, "method": method,
-                                        "params": params or {}})
+        await self.websocket.send_json({"id": request_id, "method": method, "params": params or {}})
         while True:
             message = await self.websocket.receive_json(timeout=30)
             if message.get("id") != request_id:
@@ -49,9 +48,14 @@ class ChromePage:
 
     async def evaluate(self, expression: str):
         """Chạy JavaScript trong tab và trả về giá trị đơn giản."""
-        result = await self.call("Runtime.evaluate", {
-            "expression": expression, "returnByValue": True, "awaitPromise": True,
-        })
+        result = await self.call(
+            "Runtime.evaluate",
+            {
+                "expression": expression,
+                "returnByValue": True,
+                "awaitPromise": True,
+            },
+        )
         if "exceptionDetails" in result:
             raise RuntimeError(result["exceptionDetails"])
         return result.get("result", {}).get("value")
@@ -72,21 +76,32 @@ async def capture(url: str, output: Path, expects: list[str]) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="fsds-kafka-ui-chrome-") as directory:
         profile = Path(directory)
-        chrome = subprocess.Popen([
-            "google-chrome", "--headless=new", "--no-sandbox", "--disable-gpu",
-            "--hide-scrollbars", "--window-size=1680,1050",
-            "--remote-debugging-port=0", "--remote-allow-origins=*",
-            f"--user-data-dir={profile}", "about:blank",
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=True)
+        chrome = subprocess.Popen(
+            [
+                "google-chrome",
+                "--headless=new",
+                "--no-sandbox",
+                "--disable-gpu",
+                "--hide-scrollbars",
+                "--window-size=1680,1050",
+                "--remote-debugging-port=0",
+                "--remote-allow-origins=*",
+                f"--user-data-dir={profile}",
+                "about:blank",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
         try:
             port = await wait_for_chrome(profile)
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"http://127.0.0.1:{port}/json") as response:
                     targets = await response.json()
                 tab = next(item for item in targets if item["type"] == "page")
-                async with session.ws_connect(tab["webSocketDebuggerUrl"],
-                                              max_msg_size=20_000_000) as websocket:
+                async with session.ws_connect(
+                    tab["webSocketDebuggerUrl"], max_msg_size=20_000_000
+                ) as websocket:
                     page = ChromePage(websocket)
                     await page.call("Page.enable")
                     await page.call("Page.navigate", {"url": url})
@@ -102,9 +117,13 @@ async def capture(url: str, output: Path, expects: list[str]) -> None:
                     else:
                         raise RuntimeError(f"Nội dung chưa hiện ở {url}: {body[:500]!r}")
                     await asyncio.sleep(3)
-                    image = await page.call("Page.captureScreenshot", {
-                        "format": "png", "captureBeyondViewport": False,
-                    })
+                    image = await page.call(
+                        "Page.captureScreenshot",
+                        {
+                            "format": "png",
+                            "captureBeyondViewport": False,
+                        },
+                    )
                     output.write_bytes(base64.b64decode(image["data"]))
                     print(f"Đã chụp {output.relative_to(ROOT)}")
         finally:

@@ -33,13 +33,18 @@ def test_one_notification_id_per_status_change(tiny_config):
     ids = [renderer.render_event(order, c).key for c in order.timeline]
     # Mỗi lần đổi trạng thái có mã riêng, vẽ lại thì ra đúng mã cũ (để dedup được).
     assert len(set(ids)) == len(ids)
-    assert ids == [TikTokOrderWebhookRenderer(tiny_config).render_event(order, c).key for c in order.timeline]
+    assert ids == [
+        TikTokOrderWebhookRenderer(tiny_config).render_event(order, c).key for c in order.timeline
+    ]
 
 
 def test_cancel_uses_webhook_spelling(tiny_config):
     """Chứng minh trạng thái hủy dùng đúng cách viết của webhook (`CANCEL`, không phải `CANCELLED` như API)."""
     renderer = TikTokOrderWebhookRenderer(tiny_config)
-    statuses = {renderer.render_event(o, c).record["data"]["order_status"]
-                for o in _tiktok_orders(tiny_config, days=range(1, 15)) for c in o.timeline
-                if c.status == CANCELLED}
+    statuses = {
+        renderer.render_event(o, c).record["data"]["order_status"]
+        for o in _tiktok_orders(tiny_config, days=range(1, 15))
+        for c in o.timeline
+        if c.status == CANCELLED
+    }
     assert statuses <= {"CANCEL"}

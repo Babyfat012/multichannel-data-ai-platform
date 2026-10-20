@@ -7,14 +7,15 @@ import os
 from airflow.hooks.base import BaseHook
 from airflow.models import Variable
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
-
 from fsds_runtime import resolve_runtime_env
 
 
 class FsdsSparkSubmitOperator(SparkSubmitOperator):
     """Inject selected connection groups into spark-submit without templating secrets."""
 
-    template_fields = tuple(field for field in SparkSubmitOperator.template_fields if field != "env_vars")
+    template_fields = tuple(
+        field for field in SparkSubmitOperator.template_fields if field != "env_vars"
+    )
 
     def __init__(self, *, runtime_groups: tuple[str, ...] = ("iceberg",), **kwargs):
         """Create a Spark task with the Airflow connection groups it needs."""
@@ -36,11 +37,16 @@ class FsdsSparkSubmitOperator(SparkSubmitOperator):
             }
         variable_names = (
             ("fsds_minio_internal_endpoint", "fsds_warehouse_name", "fsds_lakekeeper_catalog_uri")
-            if "iceberg" in self.runtime_groups else ()
+            if "iceberg" in self.runtime_groups
+            else ()
         ) + (("fsds_dp1_cdc_topic",) if "kafka" in self.runtime_groups else ())
         variables = {name: Variable.get(name) for name in variable_names}
         original_env = self.env_vars
-        self.env_vars = {"PYTHONPATH": os.environ.get("PYTHONPATH", "/opt"), **(original_env or {}), **resolve_runtime_env(connections, variables, self.runtime_groups)}
+        self.env_vars = {
+            "PYTHONPATH": os.environ.get("PYTHONPATH", "/opt"),
+            **(original_env or {}),
+            **resolve_runtime_env(connections, variables, self.runtime_groups),
+        }
         inherited_secrets = {
             key: os.environ.pop(key)
             for key in (

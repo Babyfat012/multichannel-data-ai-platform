@@ -1,32 +1,17 @@
-"""Job Bronze 01 — nạp export gốc của Amazon vào bảng Iceberg `bronze.raw_amazon_orders`.
+"""Bronze: file JSONL của Amazon -> Iceberg `bronze.raw_amazon_orders`.
 
-Bronze là bảng ĐẦU TIÊN của lakehouse: trước nó không có bảng nào, chỉ có file do Channel
-giao. Vì vậy job này KHÔNG parse JSON và KHÔNG làm sạch gì — nó chỉ chuyển file thành bảng
-và gắn thêm cột cho biết mỗi dòng từ đâu tới.
+Không parse, không làm sạch: mỗi dòng file thành một dòng bảng, JSON giữ nguyên ở `payload`,
+thêm cột provenance (`source_file`, `export_date`, `ingested_at`, `run_id`). Tên khoá Amazon
+đổi giữa kỳ, nên parse để Silver lo. Partition theo `export_date`, khớp thư mục nguồn.
 
-Quyết định thiết kế đứng sau file này (chốt 2026-10-06..10):
-  * Giữ nguyên chuỗi JSON ở cột `payload`; việc parse để sang Silver. Lý do: tên khoá của
-    Amazon đổi giữa kỳ (`AmazonOrderId` tháng 1 -> `orderId` tháng 5). Parse ở Bronze
-    nghĩa là giải bài schema evolution ngay tại Bronze, trái với vai trò "chép nguyên bản".
-  * Hệ quả đã chấp nhận: bảng này KHÔNG có cột mã đơn hàng. Muốn tra một đơn thì tra ở
-    Silver. Bronze tồn tại để chạy lại khi Silver lỗi.
-  * Bốn cột provenance: `source_file`, `export_date`, `ingested_at`, `run_id`.
-  * PARTITIONED BY (export_date) — khớp đúng cách file nằm trên đĩa.
+Cờ `--aqe off` để chạy bản baseline có skew (cho ảnh Spark UI "trước"), rồi chạy lại với AQE.
 
-Vì sao có chế độ "baseline xấu": rubric cho điểm khi CHỨNG MINH tìm ra và sửa được vấn đề
-hiệu năng. Dữ liệu lệch 224 lần giữa ngày to nhất (1,64 GB) và nhỏ nhất (7,3 MB) -> skew.
-Bật AQE ngay từ đầu thì Spark tự sửa, không còn ảnh "trước" để chứng minh. Nên job này cho
-tắt AQE bằng cờ, chạy một lần xấu để chụp Spark UI, rồi chạy lại với AQE bật.
-
-Ví dụ ba lần chạy đã chốt:
-    # 1. baseline xấu, 20 ngày rải đều (có cả ngày bé và ngày to) -> ảnh skew + số giây
+Chạy:
     spark-submit ... bronze/ingest_amazon_order_snapshots.py --sample-days 20 --aqe off \
-        --table raw_amazon_orders_sample
-    # 2. đã sửa, CÙNG 20 ngày đó -> ảnh đẹp + số giây so được vì cùng quy mô
+        --table raw_amazon_orders_sample   # baseline
     spark-submit ... bronze/ingest_amazon_order_snapshots.py --sample-days 20 --aqe on \
-        --table raw_amazon_orders_sample
-    # 3. chạy thật, cả 180 ngày
-    spark-submit ... bronze/ingest_amazon_order_snapshots.py --aqe on
+        --table raw_amazon_orders_sample   # cùng 20 ngày, đã sửa
+    spark-submit ... bronze/ingest_amazon_order_snapshots.py --aqe on   # cả kỳ
 """
 
 from __future__ import annotations
@@ -40,13 +25,9 @@ import uuid
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
-# Shared helpers use package imports from the repository root.
-# lib/day_selection.py cố tình KHÔNG import pyspark để test được trên máy host.
 from spark_jobs.lib.day_selection import pick_sample_days, pick_window_days
 
-# Thư mục export của Amazon bên trong container Spark (mount read-only từ /data/raw).
-# Dưới nó là export_date=YYYY-MM-DD/part-*.jsonl -> Spark tự nhận `export_date` là cột
-# partition nhờ quy ước tên thư mục `cột=giá trị`.
+# Mount read-only; dưới nó là export_date=YYYY-MM-DD/part-*.jsonl.
 AMAZON_ROOT = "/data/raw/source-exports/channel=amazon/dataset=orders"
 
 CATALOG = "lakehouse"
@@ -54,10 +35,7 @@ NAMESPACE = "bronze"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Đọc tham số dòng lệnh.
-
-    Tách riêng khỏi `main` để test được mà không cần SparkSession.
-    """
+    """Đọc tham số dòng lệnh."""
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument(
         "--run-id",
@@ -114,19 +92,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
+# ponytail: trùng phần lớn `lib/iceberg_session.build_spark`, giữ riêng vì cần cờ AQE và event log
+# (phải đặt trước khi tạo session) và vì số đo trong docs/spark.md gắn với cấu hình này.
+# Gộp khi đo lại Bronze v1.
 def build_spark(aqe: str, shuffle_partitions: int, app_name: str) -> SparkSession:
-    """Dựng SparkSession đã nối vào catalog Iceberg trên Lakekeeper.
-
-    Lakekeeper chỉ giữ con trỏ tới metadata mới nhất của mỗi bảng; file metadata và file
-    dữ liệu thật nằm trên MinIO. Spark mang sẵn access key của MinIO nên không xin
-    credential tạm (vended credentials) từ Lakekeeper — warehouse đã tạo với
-    sts-enabled=false.
-    """
+    """SparkSession nối catalog Iceberg trên Lakekeeper, dữ liệu nằm trên MinIO."""
     minio_endpoint = os.environ.get("MINIO_INTERNAL_ENDPOINT", "http://minio:9000")
     warehouse = os.environ.get("WAREHOUSE_NAME", "fsds")
-    catalog_uri = os.environ.get(
-        "LAKEKEEPER_CATALOG_URI", "http://lakekeeper:8181/catalog"
-    )
+    catalog_uri = os.environ.get("LAKEKEEPER_CATALOG_URI", "http://lakekeeper:8181/catalog")
 
     builder = (
         SparkSession.builder.appName(app_name)
@@ -145,12 +118,9 @@ def build_spark(aqe: str, shuffle_partitions: int, app_name: str) -> SparkSessio
         .config(f"spark.sql.catalog.{CATALOG}.s3.endpoint", minio_endpoint)
         .config(f"spark.sql.catalog.{CATALOG}.s3.path-style-access", "true")
         .config(f"spark.sql.catalog.{CATALOG}.s3.region", "local-01")
-        # JSON chữ lặp tên khoá hàng trăm triệu lần -> zstd nén mạnh hơn snappy khá nhiều,
-        # mà `/` chỉ còn ~37 GB.
+        # JSON lặp tên khoá rất nhiều nên zstd nén tốt hơn snappy.
         .config("spark.sql.iceberg.compression-codec", "zstd")
-        # Ghi lại toàn bộ sự kiện của lần chạy ra /spark-events (bind mount tới
-        # ./out/spark-events trên host). Spark UI ở cổng 4040 chết cùng job; có event log
-        # thì mở History Server xem lại và chụp ảnh skew bất cứ lúc nào.
+        # Event log để xem lại trên History Server sau khi job xong.
         .config("spark.eventLog.enabled", "true")
         .config("spark.eventLog.dir", "file:///spark-events")
         .config("spark.sql.adaptive.enabled", "true" if aqe == "on" else "false")
@@ -160,11 +130,7 @@ def build_spark(aqe: str, shuffle_partitions: int, app_name: str) -> SparkSessio
 
 
 def list_export_days(spark: SparkSession, source: str) -> list[str]:
-    """Liệt kê giá trị export_date có thật dưới `source`, đọc từ HDFS API của Hadoop.
-
-    Dùng Hadoop FileSystem thay vì `os.listdir` để code không phụ thuộc vào việc thư mục
-    có nằm trên đĩa local hay trên s3a://.
-    """
+    """Liệt kê các `export_date` có thật dưới `source` (chạy được cả local lẫn s3a://)."""
     jvm = spark.sparkContext._jvm
     hadoop_conf = spark.sparkContext._jsc.hadoopConfiguration()
     path = jvm.org.apache.hadoop.fs.Path(source)
@@ -178,20 +144,13 @@ def list_export_days(spark: SparkSession, source: str) -> list[str]:
 
 
 def read_raw(spark: SparkSession, source: str, days: list[str] | None) -> DataFrame:
-    """Đọc JSONL thành MỘT cột chuỗi, kèm cột cho biết dòng đến từ file nào.
-
-    `spark.read.text` cho mỗi dòng file thành một dòng bảng ở cột `value`, không phân tích
-    JSON — đúng điều Bronze cần. `input_file_name()` trả đường dẫn file đang đọc; hàm này
-    chỉ hoạt động với nguồn FILE (qua JDBC nó trả chuỗi rỗng).
-    """
+    """Đọc JSONL thành một cột chuỗi `value`, kèm đường dẫn file nguồn."""
     reader = spark.read.option("basePath", source)
     if days is None:
         df = reader.text(source)
     else:
-        # Trỏ thẳng vào từng thư mục ngày: Spark khỏi phải liệt kê 3.316 file của 180 ngày
-        # rồi mới loại bỏ. `basePath` ở trên giữ cho `export_date` vẫn được nhận là cột.
-        # Phải truyền MỘT danh sách: `text(path1, path2)` sẽ gán path2 vào tham số
-        # `wholetext` và báo lỗi "For input string: <đường dẫn>".
+        # Đọc thẳng các thư mục ngày cần; `basePath` giữ `export_date` là cột.
+        # Phải truyền một list: `text(p1, p2)` hiểu p2 là tham số `wholetext`.
         df = reader.text([f"{source}/export_date={d}" for d in days])
     return df.select(
         F.col("value").alias("payload"),
@@ -201,17 +160,14 @@ def read_raw(spark: SparkSession, source: str, days: list[str] | None) -> DataFr
 
 
 def add_provenance(df: DataFrame, run_id: str) -> DataFrame:
-    """Thêm timestamp đầu query Spark (không phải lúc commit) và mã lần chạy."""
-    return df.withColumn("ingested_at", F.current_timestamp()).withColumn(
-        "run_id", F.lit(run_id)
-    )
+    """Thêm giờ ghi (lúc bắt đầu query, không phải lúc commit) và mã lần chạy."""
+    return df.withColumn("ingested_at", F.current_timestamp()).withColumn("run_id", F.lit(run_id))
 
 
 def write_bronze(spark: SparkSession, df: DataFrame, table: str) -> None:
-    """Ghi (thay thế) bảng Iceberg, partition theo export_date.
+    """Ghi đè bảng Iceberg trong một commit, partition theo `export_date`.
 
-    Với SparkCatalog, snapshot hiện hành được thay toàn bộ một cách atomic, kể cả khi
-    df chỉ có một số ngày. Mất ACK lúc commit cần kiểm tra trạng thái trước khi retry.
+    Nếu mất ACK lúc commit, kiểm trạng thái bảng trước khi chạy lại.
     """
     spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {CATALOG}.{NAMESPACE}")
     full_name = f"{CATALOG}.{NAMESPACE}.{table}"
@@ -219,7 +175,7 @@ def write_bronze(spark: SparkSession, df: DataFrame, table: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Chạy toàn bộ job và in ra số đo để đối chiếu với run_manifest.json của generator."""
+    """Chạy job và in số dòng để đối chiếu với `run_manifest.json` của generator."""
     args = parse_args(argv)
     run_id = args.run_id or str(uuid.uuid4())
     app_name = f"bronze-amazon-aqe-{args.aqe}-{args.table}"
@@ -260,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
 
         rows = spark.table(f"{CATALOG}.{NAMESPACE}.{args.table}").count()
         print(f"XONG sau {elapsed:.1f}s — {rows:,} dòng đã ghi")
-        print(f"Spark UI của lần chạy này đã kết thúc; xem history ở cổng 8080 nếu bật.")
+        print("Spark UI của lần chạy này đã kết thúc; xem history ở cổng 8080 nếu bật.")
         return 0
     finally:
         spark.stop()

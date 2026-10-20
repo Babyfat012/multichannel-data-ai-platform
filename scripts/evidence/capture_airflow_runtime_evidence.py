@@ -13,7 +13,7 @@ RUN_ID = "de_runtime_20261015"
 
 def main() -> None:
     """Require a successful two-task runtime run and preserve its safe proof."""
-    probe = '''
+    probe = """
 import json
 from pathlib import Path
 from airflow.models import DagBag, DagRun
@@ -50,15 +50,30 @@ if len(result["proof_lines"]) != 2:
     raise RuntimeError("Expected one configuration and one Spark success proof line")
 result["scope"] = "Connection/Variable lookup and three-row Spark standalone query; no source or table writes"
 print("FSDS_EVIDENCE_JSON=" + json.dumps(result))
-'''
+"""
     env = os.environ.copy()
     env.pop("POSTGRES_PASSWORD", None)
-    output = subprocess.check_output([
-        "docker", "compose", "--profile", "airflow", "exec", "-T", "airflow",
-        "python", "-c", probe,
-    ], cwd=ROOT, env=env, text=True)
+    output = subprocess.check_output(
+        [
+            "docker",
+            "compose",
+            "--profile",
+            "airflow",
+            "exec",
+            "-T",
+            "airflow",
+            "python",
+            "-c",
+            probe,
+        ],
+        cwd=ROOT,
+        env=env,
+        text=True,
+    )
     marker = "FSDS_EVIDENCE_JSON="
-    evidence = json.loads(next(line[len(marker):] for line in output.splitlines() if line.startswith(marker)))
+    evidence = json.loads(
+        next(line[len(marker) :] for line in output.splitlines() if line.startswith(marker))
+    )
     target = ROOT / "docs/evidence/airflow-runtime-20261015.json"
     target.write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n")
     print(f"Runtime evidence saved: {target.relative_to(ROOT)}; run={RUN_ID}; tasks=2/2 success")

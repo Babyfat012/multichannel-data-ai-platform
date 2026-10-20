@@ -1,21 +1,31 @@
 """Kiểm inventory Docker (không cần Docker) và việc image naive cài đúng bộ thư viện khóa."""
+
 import importlib.util
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
-spec = importlib.util.spec_from_file_location("scripts.evidence.inspect_docker_images", ROOT / "scripts/evidence/inspect_docker_images.py")
+spec = importlib.util.spec_from_file_location(
+    "scripts.evidence.inspect_docker_images", ROOT / "scripts/evidence/inspect_docker_images.py"
+)
 inventory = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(inventory)
 
 
 def test_services_keep_profiles_ports_and_limits():
     """Một hàng mỗi service, port giữ host_ip; thiếu host_ip nghĩa là mở mọi interface."""
-    config = {"services": {
-        "spark-master": {"image": "fsds-spark", "build": {"dockerfile": "docker/Dockerfile.airflow"},
-                         "profiles": ["spark"], "ports": [{"host_ip": "127.0.0.1", "published": "8080", "target": 8080}],
-                         "mem_limit": "2g", "cpus": 1.5},
-        "postgres": {"image": "postgres:15", "ports": [{"published": "5432", "target": 5432}]},
-    }}
+    config = {
+        "services": {
+            "spark-master": {
+                "image": "fsds-spark",
+                "build": {"dockerfile": "docker/Dockerfile.airflow"},
+                "profiles": ["spark"],
+                "ports": [{"host_ip": "127.0.0.1", "published": "8080", "target": 8080}],
+                "mem_limit": "2g",
+                "cpus": 1.5,
+            },
+            "postgres": {"image": "postgres:15", "ports": [{"published": "5432", "target": 5432}]},
+        }
+    }
     rows = inventory.services(config)
     assert [r["service"] for r in rows] == ["postgres", "spark-master"]
     assert rows[0]["ports"][0]["host_ip"] == "0.0.0.0" and rows[0]["profiles"] == []

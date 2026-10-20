@@ -1,27 +1,31 @@
 """DE-N2: unittest Iceberg Hadoop local, không mạng; chỉ dùng jar đã cache trong ivy.
 
-Chạy bằng lệnh Docker trong brief. Receipt thật ghi /tmp; không tự sửa evidence repo.
-Chỉ xuất evidence sau khi toàn suite xanh; stdout chứa JSON + sha256 để planner lưu.
+Chạy trong Docker. Receipt ghi /tmp, không sửa evidence trong repo.
+Chỉ xuất evidence khi cả suite xanh; stdout có JSON + sha256.
 """
+
 from __future__ import annotations
 
 import importlib.util
 import json
 import os
-from pathlib import Path
 import sys
 import tempfile
 import time
 import unittest
+from pathlib import Path
 
 os.environ.setdefault("SPARK_LOCAL_IP", "127.0.0.1")
 os.environ.setdefault("SPARK_LOCAL_HOSTNAME", "localhost")
 ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location("iceberg_maintenance", ROOT / "spark_jobs/maintenance/maintain_iceberg_tables.py")
+spec = importlib.util.spec_from_file_location(
+    "iceberg_maintenance", ROOT / "spark_jobs/maintenance/maintain_iceberg_tables.py"
+)
 job = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(job)
 
 from pyspark.sql import SparkSession
+
 from spark_jobs.lib.maintenance_policy import plan_maintenance, validated_config
 
 
@@ -35,17 +39,23 @@ class MaintenanceChecks(unittest.TestCase):
         jar = Path("/ivy/.ivy2/jars/org.apache.iceberg_iceberg-spark-runtime-3.5_2.12-1.11.0.jar")
         if not jar.is_file():
             raise RuntimeError(f"Thiếu jar offline: {jar}")
-        cls.spark = (SparkSession.builder.master("local[2]").appName("maintenance-regression")
-                     .config("spark.jars", str(jar))
-                     .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
-                     .config("spark.sql.catalog.local", "org.apache.iceberg.spark.SparkCatalog")
-                     .config("spark.sql.catalog.local.type", "hadoop")
-                     .config("spark.sql.catalog.local.warehouse", cls.temp.name + "/warehouse")
-                     .config("spark.sql.session.timeZone", "UTC")
-                     .config("spark.sql.shuffle.partitions", "2")
-                     .config("spark.driver.bindAddress", "127.0.0.1")
-                     .config("spark.ui.enabled", "false")
-                     .getOrCreate())
+        cls.spark = (
+            SparkSession.builder.master("local[2]")
+            .appName("maintenance-regression")
+            .config("spark.jars", str(jar))
+            .config(
+                "spark.sql.extensions",
+                "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+            )
+            .config("spark.sql.catalog.local", "org.apache.iceberg.spark.SparkCatalog")
+            .config("spark.sql.catalog.local.type", "hadoop")
+            .config("spark.sql.catalog.local.warehouse", cls.temp.name + "/warehouse")
+            .config("spark.sql.session.timeZone", "UTC")
+            .config("spark.sql.shuffle.partitions", "2")
+            .config("spark.driver.bindAddress", "127.0.0.1")
+            .config("spark.ui.enabled", "false")
+            .getOrCreate()
+        )
         cls.spark.sparkContext.setLogLevel("ERROR")
         cls.spark.sql("CREATE NAMESPACE local.demo")
         cls.receipts = []
@@ -79,15 +89,22 @@ class MaintenanceChecks(unittest.TestCase):
                 snap = job.snapshot_id(self.spark, table)
                 self.spark.sql(f"ALTER TABLE {table} CREATE TAG `gen-1` AS OF VERSION {snap}")
         time.sleep(1.1)  # Tất cả append cũ hơn cutoff 1 giây ở lần lập kế hoạch đầu.
-        config = validated_config({
-            "min_input_files": 12, "target_file_size_bytes": 65536,
-            "small_file_ratio": 1.0, "zorder_columns": ["seller_sku", "created_at"],
-            "zorder_min_new_files": 20,
-            # Giữ 3 snapshot cuối: append cuối + compact + zorder, giúp lần hai thực sự no-op.
-            "max_snapshot_age_hours": 1 / 3600, "retain_last": 3,
-            "backoff_seconds": 0,
-            "probe_predicates": [{"name": "sku-0001", "ranges": {"seller_sku": ["sku-0001", "sku-0001"]}}],
-        })
+        config = validated_config(
+            {
+                "min_input_files": 12,
+                "target_file_size_bytes": 65536,
+                "small_file_ratio": 1.0,
+                "zorder_columns": ["seller_sku", "created_at"],
+                "zorder_min_new_files": 20,
+                # Giữ 3 snapshot cuối: append cuối + compact + zorder, giúp lần hai thực sự no-op.
+                "max_snapshot_age_hours": 1 / 3600,
+                "retain_last": 3,
+                "backoff_seconds": 0,
+                "probe_predicates": [
+                    {"name": "sku-0001", "ranges": {"seller_sku": ["sku-0001", "sku-0001"]}}
+                ],
+            }
+        )
         return table, config
 
     def success_case(self, suffix, transient=0):
@@ -101,9 +118,13 @@ class MaintenanceChecks(unittest.TestCase):
         before, after = entry["before"], entry["after"]
         self.assertLess(after["data_files"], before["data_files"])
         self.assertLess(after["snapshots"], before["snapshots"])
-        self.assertEqual((before["rows"], before["fingerprint"]), (after["rows"], after["fingerprint"]))
-        self.assertLess(after["probes"]["sku-0001"]["candidate_data_files"],
-                        before["probes"]["sku-0001"]["candidate_data_files"])
+        self.assertEqual(
+            (before["rows"], before["fingerprint"]), (after["rows"], after["fingerprint"])
+        )
+        self.assertLess(
+            after["probes"]["sku-0001"]["candidate_data_files"],
+            before["probes"]["sku-0001"]["candidate_data_files"],
+        )
         self.assertEqual(job.fingerprint(self.spark, table, "gen-1"), tag_before)
         second = plan_maintenance(job.read_metadata(self.spark, table), config)
         self.assertTrue(second["no_op"], second)
@@ -142,8 +163,19 @@ class MaintenanceChecks(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(MaintenanceChecks))
+    result = unittest.TextTestRunner(verbosity=2).run(
+        unittest.defaultTestLoader.loadTestsFromTestCase(MaintenanceChecks)
+    )
     if result.wasSuccessful():
-        print("DE_N2_EVIDENCE_JSON=" + json.dumps({"suite": "tests.spark.check_iceberg_maintenance",
-              "code_sha256": job.code_hashes(), "receipts": MaintenanceChecks.receipts}, default=str))
+        print(
+            "DE_N2_EVIDENCE_JSON="
+            + json.dumps(
+                {
+                    "suite": "tests.spark.check_iceberg_maintenance",
+                    "code_sha256": job.code_hashes(),
+                    "receipts": MaintenanceChecks.receipts,
+                },
+                default=str,
+            )
+        )
     sys.exit(0 if result.wasSuccessful() else 1)

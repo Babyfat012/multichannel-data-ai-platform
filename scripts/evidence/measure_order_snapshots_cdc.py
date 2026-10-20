@@ -12,7 +12,7 @@ import json
 import sys
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import psycopg
@@ -24,7 +24,7 @@ from scripts.setup.setup_order_snapshots_debezium import TOPIC, load_settings
 
 def utc_now() -> str:
     """Return the current UTC timestamp in ISO-8601 form."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def wait_for_change(consumer: Consumer, probe_id: str, expected_op: str) -> dict:
@@ -62,12 +62,14 @@ def main() -> int:
     args = parser.parse_args()
     settings = load_settings(args.env_file)
     probe_id = "CDC-DEMO-" + uuid.uuid4().hex[:12]
-    consumer = Consumer({
-        "bootstrap.servers": f"127.0.0.1:{settings.get('KAFKA_PORT', '9094')}",
-        "group.id": "fsds-cdc-probe-" + uuid.uuid4().hex,
-        "auto.offset.reset": "latest",
-        "enable.auto.commit": False,
-    })
+    consumer = Consumer(
+        {
+            "bootstrap.servers": f"127.0.0.1:{settings.get('KAFKA_PORT', '9094')}",
+            "group.id": "fsds-cdc-probe-" + uuid.uuid4().hex,
+            "auto.offset.reset": "latest",
+            "enable.auto.commit": False,
+        }
+    )
     consumer.subscribe([TOPIC])
 
     # Assignment must complete before the first commit; otherwise a latest
@@ -102,10 +104,12 @@ def main() -> int:
                     committed_at = utc_now()
                     start = time.monotonic()
                     event = wait_for_change(consumer, probe_id, op)
-                    event.update({
-                        "committed_at_utc": committed_at,
-                        "commit_to_kafka_ms": round((time.monotonic() - start) * 1000, 1),
-                    })
+                    event.update(
+                        {
+                            "committed_at_utc": committed_at,
+                            "commit_to_kafka_ms": round((time.monotonic() - start) * 1000, 1),
+                        }
+                    )
                     events.append(event)
                     print(f"{op}: {event['commit_to_kafka_ms']} ms, offset={event['offset']}")
 
@@ -118,7 +122,7 @@ def main() -> int:
                 commit_and_observe("c")
 
                 cur.execute(
-                    "UPDATE walmart.orders SET raw_payload = jsonb_set(" 
+                    "UPDATE walmart.orders SET raw_payload = jsonb_set("
                     "raw_payload, '{orderLines,orderLine,0,orderLineStatuses,orderLineStatus,0,status}', "
                     "'\"Cancelled\"'::jsonb) WHERE purchase_order_id = %s",
                     (probe_id,),
@@ -127,9 +131,7 @@ def main() -> int:
                     raise RuntimeError(f"UPDATE chạm {cur.rowcount} dòng, cần đúng 1")
                 commit_and_observe("u")
 
-                cur.execute(
-                    "DELETE FROM walmart.orders WHERE purchase_order_id = %s", (probe_id,)
-                )
+                cur.execute("DELETE FROM walmart.orders WHERE purchase_order_id = %s", (probe_id,))
                 if cur.rowcount != 1:
                     raise RuntimeError(f"DELETE chạm {cur.rowcount} dòng, cần đúng 1")
                 commit_and_observe("d")
@@ -151,9 +153,7 @@ def main() -> int:
             user=settings["POSTGRES_USER"],
             password=settings["POSTGRES_PASSWORD"],
         ) as cleanup:
-            cleanup.execute(
-                "DELETE FROM walmart.orders WHERE purchase_order_id = %s", (probe_id,)
-            )
+            cleanup.execute("DELETE FROM walmart.orders WHERE purchase_order_id = %s", (probe_id,))
         raise
     finally:
         consumer.close()
@@ -161,8 +161,12 @@ def main() -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     output = args.output_dir / f"probe-{probe_id}.json"
     output.write_text(
-        json.dumps({"probe_id": probe_id, "topic": TOPIC, "events": events,
-                    "source_rows_remaining": 0}, indent=2, ensure_ascii=False) + "\n",
+        json.dumps(
+            {"probe_id": probe_id, "topic": TOPIC, "events": events, "source_rows_remaining": 0},
+            indent=2,
+            ensure_ascii=False,
+        )
+        + "\n",
         encoding="utf-8",
     )
     print(f"Bằng chứng: {output}")

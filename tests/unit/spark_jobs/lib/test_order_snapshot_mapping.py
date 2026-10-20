@@ -1,104 +1,60 @@
 """Test bảng ánh xạ của tầng Silver, không cần cụm Spark.
 
-`spark_jobs/lib/order_snapshot_mapping.py` cố tình không import pyspark, nên các quyết định nghiệp vụ
-của Silver (trạng thái chuẩn, fulfillment method, mã quốc gia) kiểm được ngay trên máy host.
-
-Mỗi test dưới đây gắn với một quyết định có ghi trong `docs/silver.md`, và chỗ nào nói về
-dữ liệu nguồn thì đối chiếu thẳng với bảng ánh xạ trong `generator/channels/`.
+Job Spark tra các dict này bằng `create_map`, nên `dict.get` ở đây đúng là phép tra của job.
 """
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
 
-# Shared helpers use package imports from the repository root.
-
-from spark_jobs.lib.order_snapshot_mapping import (  # noqa: E402
+from spark_jobs.lib.order_snapshot_mapping import (
     AMAZON_2026_STATUS,
+    AMAZON_FULFILLMENT,
     AMAZON_V0_STATUS,
+    COUNTRY_ALIASES,
     WALMART_STATUS,
-    amazon_fulfillment_method,
-    amazon_order_status,
-    normalize_country,
-    walmart_order_status,
 )
 
 
 class TestTrangThaiAmazon:
-    """Hai dạng schema của Amazon có hai bảng trạng thái riêng, không gộp được."""
+    """Hai dạng schema của Amazon có hai bảng trạng thái riêng."""
 
     def test_v0_va_2026_cung_bon_nghia(self):
-        """Hai bảng phải phủ ĐÚNG cùng một tập trạng thái chuẩn."""
+        """Hai bảng phủ đúng cùng một tập trạng thái chuẩn."""
         assert set(AMAZON_V0_STATUS.values()) == set(AMAZON_2026_STATUS.values())
 
     def test_ep_chu_hoa_khong_gop_duoc_hai_cach_viet(self):
-        """`Canceled` (v0, một chữ l) và `CANCELLED` (2026, hai chữ l) khác nhau.
-
-        Đây là lý do phải có HAI bảng chứ không một bảng rồi `.upper()`: ép chữ hoa biến
-        `Canceled` thành `CANCELED`, vẫn không khớp `CANCELLED`.
-        """
+        """`Canceled` (v0) viết hoa thành `CANCELED`, vẫn khác `CANCELLED` (2026)."""
         assert "Canceled" in AMAZON_V0_STATUS
         assert "CANCELLED" in AMAZON_2026_STATUS
         assert "Canceled".upper() not in AMAZON_2026_STATUS
 
     @pytest.mark.parametrize(
-        "v0,expected",
+        "table,raw,expected",
         [
-            ("Pending", "pending_payment"),
-            ("Unshipped", "awaiting_shipment"),
-            ("Shipped", "shipped"),
-            ("Canceled", "cancelled"),
+            (AMAZON_V0_STATUS, "Pending", "pending_payment"),
+            (AMAZON_V0_STATUS, "Unshipped", "awaiting_shipment"),
+            (AMAZON_V0_STATUS, "Shipped", "shipped"),
+            (AMAZON_V0_STATUS, "Canceled", "cancelled"),
+            (AMAZON_2026_STATUS, "PENDING", "pending_payment"),
+            (AMAZON_2026_STATUS, "UNSHIPPED", "awaiting_shipment"),
+            (AMAZON_2026_STATUS, "SHIPPED", "shipped"),
+            (AMAZON_2026_STATUS, "CANCELLED", "cancelled"),
         ],
     )
-    def test_dang_v0(self, v0, expected):
-        """Map each Amazon v0 state to its expected normalized lifecycle state."""
-        assert amazon_order_status(v0, None) == expected
-
-    @pytest.mark.parametrize(
-        "raw,expected",
-        [
-            ("PENDING", "pending_payment"),
-            ("UNSHIPPED", "awaiting_shipment"),
-            ("SHIPPED", "shipped"),
-            ("CANCELLED", "cancelled"),
-        ],
-    )
-    def test_dang_2026(self, raw, expected):
-        """Map each Amazon 2026 state to its expected normalized lifecycle state."""
-        assert amazon_order_status(None, raw) == expected
+    def test_trang_thai_chuan(self, table, raw, expected):
+        """Mỗi trạng thái Amazon ra đúng trạng thái chuẩn."""
+        assert table[raw] == expected
 
     def test_amazon_khong_bao_gio_ra_delivered(self):
-        """Amazon KHÔNG công bố 'đã giao': `Shipped` gộp shipped/delivered/completed.
-
-        Khớp `generator/channels/amazon.py` bảng `STATUS_V0` và `STATUS_2026`, nơi cả ba
-        trạng thái lõi đều ánh xạ về cùng một chữ. Hệ quả đã ghi ở `docs/silver.md` mục 6.
-        """
+        """Amazon không báo "đã giao": `Shipped` gộp shipped/delivered/completed."""
         for table in (AMAZON_V0_STATUS, AMAZON_2026_STATUS):
             assert "delivered" not in table.values()
             assert "completed" not in table.values()
 
-    def test_chu_la_thanh_none_chu_khong_nem_loi(self):
-        """Chữ lạ phải hiện ra thành null để đếm được, không làm chết job."""
-        assert amazon_order_status("KhongCoThat", None) is None
-        assert amazon_order_status(None, "KHONG_CO_THAT") is None
-        assert amazon_order_status(None, None) is None
-
 
 class TestTrangThaiWalmart:
     """Walmart có `Delivered` thật, nhưng nó gộp hai trạng thái lõi."""
-
-    def test_delivered_gop_hai_nghia_nen_chon_trang_thai_som_hon(self):
-        """Nguồn ánh xạ cả DELIVERED và COMPLETED thành `"Delivered"`.
-
-        `generator/channels/walmart.py` bảng `STATUS` có hai khoá lõi trỏ cùng một chữ, nên
-        từ payload không phân biệt được. Chọn `delivered` vì mọi đơn `completed` đều đã đi
-        qua `delivered` — nói `delivered` là nói một điều luôn đúng.
-        """
-        assert walmart_order_status("Delivered") == "delivered"
-        assert "completed" not in WALMART_STATUS.values()
 
     @pytest.mark.parametrize(
         "raw,expected",
@@ -106,58 +62,29 @@ class TestTrangThaiWalmart:
             ("Created", "pending_payment"),
             ("Acknowledged", "awaiting_shipment"),
             ("Shipped", "shipped"),
+            ("Delivered", "delivered"),
             ("Cancelled", "cancelled"),
         ],
     )
-    def test_cac_trang_thai_con_lai(self, raw, expected):
-        """Map the remaining documented Walmart states to normalized values."""
-        assert walmart_order_status(raw) == expected
+    def test_trang_thai_chuan(self, raw, expected):
+        """Mỗi trạng thái Walmart ra đúng trạng thái chuẩn."""
+        assert WALMART_STATUS[raw] == expected
 
-    def test_chu_la_thanh_none(self):
-        """Return null for unknown Walmart status values and absent input."""
-        assert walmart_order_status("khong-co-that") is None
-        assert walmart_order_status(None) is None
-
-
-class TestFulfillmentMethod:
-    """Một cột nên phải một bộ giá trị, dù hai dạng nguồn dùng hai bộ chữ."""
-
-    @pytest.mark.parametrize("raw", ["AFN", "AMAZON"])
-    def test_channel_giao(self, raw):
-        """Normalize channel-fulfilled Amazon codes to the shared channel value."""
-        assert amazon_fulfillment_method(raw) == "channel"
-
-    @pytest.mark.parametrize("raw", ["MFN", "MERCHANT"])
-    def test_seller_tu_giao(self, raw):
-        """Normalize seller-fulfilled Amazon codes to the shared seller value."""
-        assert amazon_fulfillment_method(raw) == "seller"
-
-    def test_bon_chu_nguon_khong_trung_nghia_nhau(self):
-        """Gộp hai dạng vào MỘT bảng chỉ an toàn khi không chữ nào trùng nghĩa khác."""
-        assert amazon_fulfillment_method("khong-co-that") is None
-        assert amazon_fulfillment_method(None) is None
+    def test_delivered_chon_trang_thai_som_hon(self):
+        """`Delivered` gộp delivered + completed; chọn `delivered` vì luôn đúng."""
+        assert "completed" not in WALMART_STATUS.values()
 
 
-class TestMaQuocGia:
-    """`country` là cột chuẩn duy nhất, không có cột gốc đi kèm."""
+def test_fulfillment_hai_dang_ve_mot_bo_gia_tri():
+    """AFN/AMAZON là Channel giao, MFN/MERCHANT là Seller tự giao."""
+    assert AMAZON_FULFILLMENT == {
+        "AFN": "channel",
+        "AMAZON": "channel",
+        "MFN": "seller",
+        "MERCHANT": "seller",
+    }
 
-    def test_usa_ve_us(self):
-        """Normalize the source country alias USA to the ISO country code US."""
-        assert normalize_country("USA") == "US"
 
-    def test_ma_da_dung_thi_giu_nguyen(self):
-        """Keep already normalized country codes unchanged."""
-        assert normalize_country("US") == "US"
-        assert normalize_country("DE") == "DE"
-
-    def test_ma_la_GIU_NGUYEN_chu_khong_thanh_none(self):
-        """Khác trạng thái: ở đây giá trị lạ phải đi tiếp được và nhìn thấy được.
-
-        Trạng thái có hai cột nên cột gốc còn chỗ trung thực; `country` chỉ có một cột, nên
-        biến mã lạ thành null là mất luôn dữ liệu.
-        """
-        assert normalize_country("XX") == "XX"
-
-    def test_none_van_la_none(self):
-        """Preserve a missing country as None."""
-        assert normalize_country(None) is None
+def test_ma_quoc_gia():
+    """`USA` quy về `US`; mã khác không có trong bảng nên job giữ nguyên."""
+    assert COUNTRY_ALIASES == {"USA": "US"}

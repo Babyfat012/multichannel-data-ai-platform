@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import json
 import os
-from pathlib import Path
 import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
 
 
 def completed_at_utc() -> str:
     """Trả thời điểm hiện tại theo ISO-8601 UTC, kết thúc bằng Z."""
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _validate_type(schema, location):
@@ -26,7 +26,11 @@ def _validate_type(schema, location):
         if not isinstance(fields, list) or not fields:
             raise ValueError(f"Schema struct cần fields không rỗng: {location}")
         for field in fields:
-            if not isinstance(field, dict) or not isinstance(field.get("name"), str) or not field["name"]:
+            if (
+                not isinstance(field, dict)
+                or not isinstance(field.get("name"), str)
+                or not field["name"]
+            ):
                 raise ValueError(f"Schema field thiếu name: {location}")
             _validate_type(field.get("type"), f"{location}.{field['name']}")
     elif kind == "array":
@@ -55,12 +59,22 @@ def write_receipt_schemas(tables: dict, receipt_path: Path | str) -> str:
 
     destination = Path(receipt_path).parent / "schemas.json"
     destination.parent.mkdir(parents=True, exist_ok=True)
-    previous = json.loads(destination.read_text(encoding="utf-8"))["tables"] if destination.exists() else {}
+    previous = (
+        json.loads(destination.read_text(encoding="utf-8"))["tables"]
+        if destination.exists()
+        else {}
+    )
     document = {"tables": {**previous, **tables}}
     temporary = None
     try:
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=destination.parent,
-                                         prefix=".schemas-", suffix=".tmp", delete=False) as stream:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=destination.parent,
+            prefix=".schemas-",
+            suffix=".tmp",
+            delete=False,
+        ) as stream:
             temporary = Path(stream.name)
             json.dump(document, stream, ensure_ascii=False, indent=2, sort_keys=True)
             stream.write("\n")

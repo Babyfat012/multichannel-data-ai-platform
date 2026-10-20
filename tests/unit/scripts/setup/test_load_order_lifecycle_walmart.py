@@ -28,7 +28,9 @@ def test_rows_cover_manifest_snapshot_scope(fixture_root):
     """Kiểm các dòng bootstrap phủ đúng snapshot scope trong manifest."""
     manifest = json.loads((fixture_root / "manifest.json").read_text())
     rows = loader.bootstrap_rows(fixture_root)
-    assert [r.purchase_order_id for r in rows] == manifest["native_sources"]["walmart"]["snapshot_scope"]["order_ids"]
+    assert [r.purchase_order_id for r in rows] == manifest["native_sources"]["walmart"][
+        "snapshot_scope"
+    ]["order_ids"]
     assert {r.dataset_version for r in rows} == {manifest["dataset_version"]}
 
 
@@ -42,6 +44,8 @@ def test_raw_payload_text_is_byte_identical_to_file(fixture_root):
 
 def test_rejects_root_without_walmart_file(tmp_path):
     """Kiểm từ chối nguồn thiếu file Walmart."""
-    (tmp_path / "manifest.json").write_text(json.dumps({"dataset_version": "dataset-x", "files": []}))
+    (tmp_path / "manifest.json").write_text(
+        json.dumps({"dataset_version": "dataset-x", "files": []})
+    )
     with pytest.raises(ValueError, match="walmart.orders"):
         loader.bootstrap_rows(tmp_path)

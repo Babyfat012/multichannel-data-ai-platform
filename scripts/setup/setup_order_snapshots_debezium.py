@@ -43,52 +43,46 @@ def load_settings(path: Path) -> dict[str, str]:
 
 def configure_postgres(settings: dict[str, str]) -> None:
     """Enable logical replication and prepare the publication source table."""
-    with psycopg.connect(
-        host="127.0.0.1",
-        port=int(settings.get("POSTGRES_PORT", "5432")),
-        dbname=settings["POSTGRES_DB"],
-        user=settings["POSTGRES_USER"],
-        password=settings["POSTGRES_PASSWORD"],
-        autocommit=True,
-    ) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SHOW wal_level")
-            wal_level = cur.fetchone()[0]
-            if wal_level != "logical":
-                raise RuntimeError(f"PostgreSQL wal_level={wal_level}; cần logical")
+    with (
+        psycopg.connect(
+            host="127.0.0.1",
+            port=int(settings.get("POSTGRES_PORT", "5432")),
+            dbname=settings["POSTGRES_DB"],
+            user=settings["POSTGRES_USER"],
+            password=settings["POSTGRES_PASSWORD"],
+            autocommit=True,
+        ) as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("SHOW wal_level")
+        wal_level = cur.fetchone()[0]
+        if wal_level != "logical":
+            raise RuntimeError(f"PostgreSQL wal_level={wal_level}; cần logical")
 
-            # The source has no primary key. FULL supplies before-values for
-            # UPDATE/DELETE; it is required for a usable CDC change log.
-            cur.execute("ALTER TABLE walmart.orders REPLICA IDENTITY FULL")
+        # The source has no primary key. FULL supplies before-values for
+        # UPDATE/DELETE; it is required for a usable CDC change log.
+        cur.execute("ALTER TABLE walmart.orders REPLICA IDENTITY FULL")
+        cur.execute(
+            "SELECT 1 FROM pg_publication WHERE pubname = %s",
+            ("fsds_walmart_orders",),
+        )
+        if cur.fetchone() is None:
+            cur.execute("CREATE PUBLICATION fsds_walmart_orders FOR TABLE walmart.orders")
+        else:
             cur.execute(
-                "SELECT 1 FROM pg_publication WHERE pubname = %s",
-                ("fsds_walmart_orders",),
+                "SELECT 1 FROM pg_publication_tables "
+                "WHERE pubname = %s AND schemaname = %s AND tablename = %s",
+                ("fsds_walmart_orders", "walmart", "orders"),
             )
             if cur.fetchone() is None:
-                cur.execute(
-                    "CREATE PUBLICATION fsds_walmart_orders FOR TABLE walmart.orders"
-                )
-            else:
-                cur.execute(
-                    "SELECT 1 FROM pg_publication_tables "
-                    "WHERE pubname = %s AND schemaname = %s AND tablename = %s",
-                    ("fsds_walmart_orders", "walmart", "orders"),
-                )
-                if cur.fetchone() is None:
-                    cur.execute(
-                        "ALTER PUBLICATION fsds_walmart_orders ADD TABLE walmart.orders"
-                    )
+                cur.execute("ALTER PUBLICATION fsds_walmart_orders ADD TABLE walmart.orders")
     print("PostgreSQL: WAL logical, replica identity FULL, publication sẵn sàng")
 
 
 def configure_topic(settings: dict[str, str]) -> None:
     """Ensure the configured CDC topic exists with the expected partitioning."""
-    admin = AdminClient(
-        {"bootstrap.servers": f"127.0.0.1:{settings.get('KAFKA_PORT', '9094')}"}
-    )
-    future = admin.create_topics([NewTopic(TOPIC, num_partitions=1, replication_factor=1)])[
-        TOPIC
-    ]
+    admin = AdminClient({"bootstrap.servers": f"127.0.0.1:{settings.get('KAFKA_PORT', '9094')}"})
+    future = admin.create_topics([NewTopic(TOPIC, num_partitions=1, replication_factor=1)])[TOPIC]
     try:
         future.result(timeout=30)
         print(f"Kafka: đã tạo topic {TOPIC} với một partition")

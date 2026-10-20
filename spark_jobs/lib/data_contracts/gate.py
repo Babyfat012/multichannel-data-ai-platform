@@ -1,9 +1,11 @@
 """Cổng fixture thuần Python: kiểm mọi dòng và mọi phần tử mảng."""
+
 import json
 from collections import Counter
 from pathlib import Path
-from spark_jobs.lib.data_contracts.schema import validate_record
+
 from spark_jobs.lib.data_contracts.registry import SUPPORTED_PARSERS
+from spark_jobs.lib.data_contracts.schema import validate_record
 
 
 def gate_root(root, registry):
@@ -18,8 +20,10 @@ def gate_root(root, registry):
         groups = {}
         for line in (root / source["path"]).read_text().splitlines():
             row = json.loads(line)
-            sid = row.get("schema_id") or manifest["native_sources"].get(source["feed"].removesuffix(".orders"), {}).get("schema_id")
-            entry = registry.lookup(sid)
+            sid = row.get("schema_id") or manifest["native_sources"].get(
+                source["feed"].removesuffix(".orders"), {}
+            ).get("schema_id")
+            entry = registry.entries.get(sid)
             detail = []
             if entry is None:
                 reason = "unregistered_schema"
@@ -28,8 +32,18 @@ def gate_root(root, registry):
             else:
                 detail = validate_record(row, entry["schema"])
                 reason = "contract_violation" if detail else None
-            group = groups.setdefault(sid, {"file": source["path"], "feed": source["feed"], "schema_id": sid,
-                                           "rows": 0, "accepted": 0, "by_reason": {}, "details": []})
+            group = groups.setdefault(
+                sid,
+                {
+                    "file": source["path"],
+                    "feed": source["feed"],
+                    "schema_id": sid,
+                    "rows": 0,
+                    "accepted": 0,
+                    "by_reason": {},
+                    "details": [],
+                },
+            )
             group["rows"] += 1
             if reason:
                 reasons[reason] += 1
@@ -40,5 +54,12 @@ def gate_root(root, registry):
             else:
                 group["accepted"] += 1
         files.extend(groups.values())
-    return {"files": files, "accepted": sum(f["accepted"] for f in files),
-            "quarantine": {"total": sum(reasons.values()), "by_reason": dict(reasons), "by_schema_id": dict(schemas)}}
+    return {
+        "files": files,
+        "accepted": sum(f["accepted"] for f in files),
+        "quarantine": {
+            "total": sum(reasons.values()),
+            "by_reason": dict(reasons),
+            "by_schema_id": dict(schemas),
+        },
+    }

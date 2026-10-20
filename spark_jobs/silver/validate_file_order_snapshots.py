@@ -16,9 +16,19 @@ ID_PATH = {
     "shopee": "$.response.order_list[0].order_sn",
 }
 REQUIRED = (
-    "order_id", "order_item_id", "created_at", "last_updated_time",
-    "order_status", "currency", "seller_sku", "quantity", "line_net_amount",
-    "export_date", "source_file", "processed_at", "run_id",
+    "order_id",
+    "order_item_id",
+    "created_at",
+    "last_updated_time",
+    "order_status",
+    "currency",
+    "seller_sku",
+    "quantity",
+    "line_net_amount",
+    "export_date",
+    "source_file",
+    "processed_at",
+    "run_id",
 )
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 
@@ -49,23 +59,31 @@ def main(argv: list[str] | None = None) -> int:
         missing = sorted(set(REQUIRED) - set(silver.columns))
         if missing:
             raise ValueError(f"{target} thiếu cột: {missing}")
-        source_orders = bronze.select(
-            F.get_json_object("payload", ID_PATH[args.channel]).alias("id")
-        ).distinct().count()
+        source_orders = (
+            bronze.select(F.get_json_object("payload", ID_PATH[args.channel]).alias("id"))
+            .distinct()
+            .count()
+        )
         bad = F.lit(False)
         for name in REQUIRED:
             bad = bad | F.col(name).isNull()
         bad = bad | (F.col("run_id") != args.run_id)
         bad = bad | (F.col("quantity") <= 0)
-        bad = bad | (F.col("line_gross_amount") - F.col("line_discount_amount")
-                     != F.col("line_net_amount"))
+        bad = bad | (
+            F.col("line_gross_amount") - F.col("line_discount_amount") != F.col("line_net_amount")
+        )
         counts = silver.agg(
             F.count("*").alias("rows"),
             F.sum(F.when(bad, 1).otherwise(0)).alias("invalid_rows"),
             F.countDistinct("order_id").alias("orders"),
         ).first()
-        duplicates = (silver.groupBy("order_id", "order_item_id").count()
-                      .filter(F.col("count") > 1).limit(1).count())
+        duplicates = (
+            silver.groupBy("order_id", "order_item_id")
+            .count()
+            .filter(F.col("count") > 1)
+            .limit(1)
+            .count()
+        )
         print(f"nguồn Bronze             = {source}")
         print(f"đích Silver              = {target}")
         print(f"Order nguồn duy nhất      = {source_orders:,}")
@@ -73,8 +91,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Order Line Silver         = {counts['rows']:,}")
         print(f"dòng lỗi                 = {counts['invalid_rows'] or 0:,}")
         print(f"có khóa Order Line trùng  = {bool(duplicates)}")
-        if (not source_orders or counts["orders"] != source_orders
-                or counts["invalid_rows"] or duplicates):
+        if (
+            not source_orders
+            or counts["orders"] != source_orders
+            or counts["invalid_rows"]
+            or duplicates
+        ):
             raise ValueError("Silver validate thất bại")
         print("Silver validate: PASS")
         return 0

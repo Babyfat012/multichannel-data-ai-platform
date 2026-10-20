@@ -1,4 +1,4 @@
-# Hook local (ADR-0012): báo sớm khi sửa contract theo cách phá vỡ. Không thay CI —
+# Hook local (ADR-0012): ruff + báo sớm khi sửa contract theo cách phá vỡ. Không thay CI —
 # `git commit --no-verify` bỏ qua được hook này. Cài: `uvx pre-commit install`.
 repos:
   - repo: local
@@ -9,3 +9,13 @@ repos:
         language: system
         pass_filenames: false
         files: ^(contracts/|spark_jobs/lib/data_contracts/)
+      - id: ruff-format
+        name: Ruff format
+        entry: uv run ruff format
+        language: system
+        types: [python]
+      - id: ruff-check
+        name: Ruff lint
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]

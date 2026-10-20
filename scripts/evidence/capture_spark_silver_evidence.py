@@ -30,7 +30,8 @@ async def main() -> None:
             execution = await response.json()
         plan = execution["planDescription"]
         if execution["status"] != "COMPLETED" or not all(
-            token in plan for token in ("AmazonOrderId", "orderId", "from_json", "Union", "row_number")
+            token in plan
+            for token in ("AmazonOrderId", "orderId", "from_json", "Union", "row_number")
         ):
             raise ValueError("Expected completed schema-normalization and dedup plan")
         (OUTPUT / "silver-amazon-execution-3.json").write_text(
@@ -38,18 +39,32 @@ async def main() -> None:
         )
         with tempfile.TemporaryDirectory(prefix="fsds-spark-proof-") as directory:
             profile = Path(directory)
-            chrome = subprocess.Popen([
-                "google-chrome", "--headless=new", "--no-sandbox", "--disable-gpu",
-                "--disable-dev-shm-usage", "--hide-scrollbars", "--window-size=1920,1600",
-                "--remote-debugging-port=0", "--remote-allow-origins=*",
-                f"--user-data-dir={profile}", "about:blank",
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            chrome = subprocess.Popen(
+                [
+                    "google-chrome",
+                    "--headless=new",
+                    "--no-sandbox",
+                    "--disable-gpu",
+                    "--disable-dev-shm-usage",
+                    "--hide-scrollbars",
+                    "--window-size=1920,1600",
+                    "--remote-debugging-port=0",
+                    "--remote-allow-origins=*",
+                    f"--user-data-dir={profile}",
+                    "about:blank",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
             try:
                 port = await wait_for_chrome(profile)
                 async with session.get(f"http://127.0.0.1:{port}/json") as response:
                     targets = await response.json()
                 tab = next(target for target in targets if target["type"] == "page")
-                async with session.ws_connect(tab["webSocketDebuggerUrl"], max_msg_size=30_000_000) as socket:
+                async with session.ws_connect(
+                    tab["webSocketDebuggerUrl"], max_msg_size=30_000_000
+                ) as socket:
                     page = ChromePage(socket)
                     await page.call("Page.enable")
                     await page.navigate(f"{BASE_URL}/history/{APP_ID}/SQL/execution/?id=3")
@@ -63,21 +78,46 @@ async def main() -> None:
                     await asyncio.sleep(1)
                     layout = await page.call("Page.getLayoutMetrics")
                     size = layout["cssContentSize"]
-                    screenshot = await page.call("Page.captureScreenshot", {
-                        "format": "png", "captureBeyondViewport": True,
-                        "clip": {"x": 0, "y": 0, "width": size["width"],
-                                 "height": size["height"], "scale": 1},
-                    })
-                    (OUTPUT / "12-silver-amazon-dedup-plan.png").write_bytes(base64.b64decode(screenshot["data"]))
-                    print(json.dumps({"application": APP_ID, "execution": 3,
-                                      "status": execution["status"], "page_size": size}))
+                    screenshot = await page.call(
+                        "Page.captureScreenshot",
+                        {
+                            "format": "png",
+                            "captureBeyondViewport": True,
+                            "clip": {
+                                "x": 0,
+                                "y": 0,
+                                "width": size["width"],
+                                "height": size["height"],
+                                "scale": 1,
+                            },
+                        },
+                    )
+                    (OUTPUT / "12-silver-amazon-dedup-plan.png").write_bytes(
+                        base64.b64decode(screenshot["data"])
+                    )
+                    print(
+                        json.dumps(
+                            {
+                                "application": APP_ID,
+                                "execution": 3,
+                                "status": execution["status"],
+                                "page_size": size,
+                            }
+                        )
+                    )
                     await page.evaluate("clickPhysicalPlanDetails()")
                     await page.evaluate("window.find('(4) Project', false, false, true)")
                     await asyncio.sleep(0.5)
-                    details = await page.call("Page.captureScreenshot", {
-                        "format": "png", "captureBeyondViewport": False,
-                    })
-                    (OUTPUT / "13-silver-amazon-schema-details.png").write_bytes(base64.b64decode(details["data"]))
+                    details = await page.call(
+                        "Page.captureScreenshot",
+                        {
+                            "format": "png",
+                            "captureBeyondViewport": False,
+                        },
+                    )
+                    (OUTPUT / "13-silver-amazon-schema-details.png").write_bytes(
+                        base64.b64decode(details["data"])
+                    )
             finally:
                 os.killpg(chrome.pid, signal.SIGTERM)
                 try:

@@ -1,35 +1,18 @@
-"""Chạy phần Batch: nối lõi mô phỏng, lớp export và renderer, rồi ghi ra đĩa.
+"""Chạy phần Batch: lõi mô phỏng -> lớp export -> renderer -> file.
 
-Luồng xử lý cho mỗi ngày mô phỏng `d` từ 1 tới `days_history`:
-
+Mỗi ngày mô phỏng `d`:
     1. Lõi sinh các Order tạo trong ngày d (kèm cả tương lai của chúng).
-    2. Lớp export quyết định mỗi Order nằm ở ngày export nào, có bản trùng không.
-    3. Renderer của Channel vẽ Order thành bản ghi gốc, ghi thẳng vào file của ngày
-       export — nhưng vào file RIÊNG của ngày d, tên `part-sim<d>.jsonl`.
-    4. Đóng mọi file ngày d vừa mở, rồi ghi tem `_checkpoint/day-<d>.json`.
+    2. Lớp export chọn ngày export cho từng Order và chèn bản trùng.
+    3. Renderer ghi bản ghi gốc vào `export_date=.../part-sim<d>.jsonl`.
+    4. Đóng mọi file của ngày d, rồi ghi tem `_checkpoint/day-<d>.json`.
 
-Vì sao mỗi ngày mô phỏng có file riêng: một Order tạo ngày d được export vào ngày
-nó đổi trạng thái lần cuối, muộn hơn d tới ~20 ngày (đo được: tối đa 18 trên
-736.129 Order, trần cứng từ hằng số vòng đời là 16 ngày + `overlap_days`). Nên nếu
-mỗi thư mục `export_date=` chỉ có một file dùng chung, file đó phải mở suốt ~20
-ngày mô phỏng và nhận dòng từ cả 20 ngày đó. Lúc ấy không có thời điểm nào nói được
-"ngày d đã xong và nằm trọn trên đĩa", nên không chạy tiếp được sau khi bị cắt.
-Cho mỗi ngày một file thì hết ngày d là đóng được hết phần của nó.
-
-Phân vùng KHÔNG đổi: thư mục vẫn là `export_date=`, tức ngày Channel giao file.
-Chỉ có tên file bên trong thư mục là mới, và mọi bên đọc đều dùng glob cả thư mục
-(`generator/report.py`, `generator/load_postgres.py`), nên tập dòng nhận được y như cũ.
-
-Vì sao ghi thẳng thay vì gom theo ngày: một Order có thể chỉ export sau hai tuần
-(lúc giao xong), nên gom lại thì RAM phải giữ hai tuần bản ghi — tỉ lệ với số đơn
-mỗi ngày, tức ~33 GB ở quy mô 100 GB. Giữ sẵn ~14 file mở thì RAM không đổi.
+Mỗi ngày mô phỏng ghi file riêng vì một Order có thể được export muộn hơn ngày tạo tới
+~20 ngày; file dùng chung thì không bao giờ nói được "ngày d đã xong". Bên đọc glob cả
+thư mục `export_date=` nên tập dòng không đổi.
 
 Bố cục đầu ra (dưới `storage.output_root`):
 
-    source-exports/channel=amazon/dataset=orders/export_date=YYYY-MM-DD/part-simNNNNN.jsonl
-    source-exports/channel=tiktok_shop/dataset=orders/export_date=YYYY-MM-DD/part-simNNNNN.jsonl
-    source-exports/channel=shopify/dataset=orders/export_date=YYYY-MM-DD/part-simNNNNN.jsonl
-    source-exports/channel=shopee/dataset=orders/export_date=YYYY-MM-DD/part-simNNNNN.jsonl
+    source-exports/channel=<channel>/dataset=orders/export_date=YYYY-MM-DD/part-simNNNNN.jsonl
     pg-load/walmart.orders/export_date=YYYY-MM-DD/part-simNNNNN.jsonl
     pg-load/seller.skus/part-00000.jsonl
     ground-truth/labels/part-simNNNNN.parquet
@@ -37,23 +20,11 @@ Bố cục đầu ra (dưới `storage.output_root`):
     _checkpoint/day-NNNNN.json
     run_manifest.json
 
-Chạy tiếp sau khi bị cắt (mất điện, tắt máy giữa lần chạy 100 GB ~3,2 giờ):
+Chạy tiếp sau khi bị cắt: tem ngày d chứa mọi bộ đếm tới hết ngày d. Tem chỉ được ghi
+sau khi file đã `fsync`, bằng ghi-tạm-rồi-đổi-tên. Khi khởi động, tìm d lớn nhất mà tem
+1..d đều có, xoá file của các ngày sau d, rồi chạy từ d+1. `--restart` làm lại từ đầu.
 
-    `_checkpoint/day-<d>.json` vừa là tem "ngày d xong" vừa là chỗ chứa mọi con số
-    dồn tới hết ngày d. Gộp làm một file nên tem và số không thể lệch nhịp nhau.
-
-    Thứ tự ghi là điều kiện sống còn: đóng file (có `fsync`) -> rồi mới ghi tem,
-    bằng ghi-tạm-rồi-đổi-tên. Làm ngược lại thì mất điện có thể để lại tem nói
-    "ngày d xong" trong khi file ngày d thiếu đuôi, và lần chạy sau sẽ bỏ qua ngày
-    d — mất dữ liệu mà manifest vẫn ghi đủ số và test vẫn xanh.
-
-    Khi khởi động: tìm `d` lớn nhất mà tem 1..d đều có, nạp số từ tem đó, xóa mọi
-    `part-sim<k>` với k > d (đó là file của ngày bị cắt, ghi dở), rồi chạy từ d+1.
-    `--restart` bỏ qua tem và làm lại từ ngày 1.
-
-`pg-load/` chứa đúng các dòng sẽ nạp vào PostgreSQL: đơn Walmart (cột
-`purchase_order_id`, `raw_payload`, `fetched_at`) và danh mục SKU của Seller.
-Bước nạp chạy riêng bằng lệnh `load-postgres` (xem `generator/load_postgres.py`).
+`pg-load/` được nạp vào PostgreSQL bằng lệnh `load-postgres` (xem `load_postgres.py`).
 """
 
 from __future__ import annotations
@@ -78,15 +49,13 @@ from generator.core.model import Order
 from generator.core.rngs import rng_for
 from generator.core.simulate import Simulator
 from generator.core.storefronts import STOREFRONTS
-from generator.delivery.batch_exports import PRIMARY, plan_exports
 from generator.dataset_identity import build_dataset_identity
+from generator.delivery.batch_exports import PRIMARY, plan_exports
 from generator.storage import JsonlWriterPool, OutputStore
 
 CHECKPOINT_DIR = "_checkpoint"
 DATASET_IDENTITY_PATH = "_dataset_identity.json"
-# Mọi file do một ngày mô phỏng ghi ra, và tem của ngày đó. Dùng để dọn file ghi dở
-# của ngày bị cắt. Liệt kê tường minh thay vì `**/part-sim*` để không vô tình xóa
-# thứ gì khác nằm dưới `output_root`.
+# Mọi file một ngày mô phỏng ghi ra, liệt kê tường minh để không xoá nhầm thứ khác.
 DAY_OWNED_PATTERNS = (
     "source-exports/channel=*/dataset=*/export_date=*/part-sim*.jsonl",
     "pg-load/*/export_date=*/part-sim*.jsonl",
@@ -96,23 +65,28 @@ DAY_OWNED_PATTERNS = (
 )
 SIM_DAY_IN_NAME = re.compile(r"(?:part-sim|day-)(\d+)\.")
 
+
 def _checkpoint_relative(day: int) -> str:
     """Đường dẫn tem của một ngày mô phỏng."""
     return f"{CHECKPOINT_DIR}/day-{day:05d}.json"
 
 
-LABELS_SCHEMA = pa.schema([
-    ("order_line_id", pa.string()),
-    ("label", pa.int8()),
-    ("delivered_at", pa.timestamp("us", tz="UTC")),
-    ("label_available_at", pa.timestamp("us", tz="UTC")),
-])
-LINE_KEYS_SCHEMA = pa.schema([
-    ("order_line_id", pa.string()),
-    ("storefront_id", pa.string()),
-    ("channel_order_id", pa.string()),
-    ("channel_line_id", pa.string()),
-])
+LABELS_SCHEMA = pa.schema(
+    [
+        ("order_line_id", pa.string()),
+        ("label", pa.int8()),
+        ("delivered_at", pa.timestamp("us", tz="UTC")),
+        ("label_available_at", pa.timestamp("us", tz="UTC")),
+    ]
+)
+LINE_KEYS_SCHEMA = pa.schema(
+    [
+        ("order_line_id", pa.string()),
+        ("storefront_id", pa.string()),
+        ("channel_order_id", pa.string()),
+        ("channel_line_id", pa.string()),
+    ]
+)
 
 
 @dataclass
@@ -154,14 +128,10 @@ class BatchRun:
             "walmart": WalmartOrdersRenderer(config),
             "shopee": ShopeeOrdersRenderer(config),
         }
-        # Không có bộ đệm bản ghi: `jsonl` giữ sẵn một file mở cho mỗi ngày export
-        # đang chờ dòng mới, nên RAM không tỉ lệ với số đơn mỗi ngày.
+        # Mỗi ngày export đang chờ dòng có sẵn một file mở, nên RAM không tăng theo số đơn.
         self.jsonl: JsonlWriterPool | None = None
         self.stats: dict[str, DatasetStats] = defaultdict(DatasetStats)
-        # `labels` và `line_keys` là bộ đệm của một ngày mô phỏng, không phải của cả
-        # lần chạy: `_flush` ghi chúng ra Parquet của riêng ngày đó rồi xóa. Tổng số
-        # nhãn phải đếm dần vì bộ đệm không còn giữ lịch sử — và mọi bộ đếm dồn kiểu
-        # này đều phải nằm trong tem, xem `_counters`.
+        # Bộ đệm của một ngày mô phỏng; bộ đếm dồn phải nằm trong tem (`_counters`).
         self.labels: dict[str, list[Any]] = self._empty_labels()
         self.line_keys: dict[str, list[dict[str, Any]]] = defaultdict(list)
         self.label_rows = 0
@@ -176,16 +146,10 @@ class BatchRun:
         self.amazon_labels: dict[bool, Counter] = {True: Counter(), False: Counter()}
 
     def run(self, restart: bool = False) -> dict[str, Any]:
-        """Sinh toàn bộ Batch, ghi file và trả về manifest.
+        """Sinh toàn bộ Batch và trả manifest; mặc định chạy tiếp từ tem gần nhất.
 
-        Mặc định chạy tiếp từ tem gần nhất nếu `output_root` đã có tem của một lần
-        chạy bị cắt. `restart=True` bỏ qua tem và làm lại từ ngày 1, xóa mọi file
-        của lần chạy cũ.
-
-        Kết quả không phụ thuộc việc có bị cắt hay không: mỗi ngày mô phỏng rút số
-        ngẫu nhiên riêng theo `(seed, "batch_exports", day)` và không đọc trạng thái
-        của ngày trước (xem `tests/unit/generator/core/test_simulate.py`), nên ngày d cho ra cùng dữ liệu dù
-        chạy từ ngày 1 hay nhảy vào từ ngày d.
+        `restart=True` xoá đầu ra cũ và làm lại từ ngày 1. Kết quả không phụ thuộc việc có bị cắt
+        hay không, vì mỗi ngày rút số ngẫu nhiên riêng theo `(seed, "batch_exports", day)`.
         """
         self._check_resume_identity(restart)
         resume_from = 0 if restart else self._last_complete_day()
@@ -193,7 +157,7 @@ class BatchRun:
             self._restore(self.store.read_json(_checkpoint_relative(resume_from)))
         self._discard_days_after(resume_from)
         if restart:
-            # A partial rebuild must not advertise the previous completed manifest.
+            # Đang chạy dở thì không được để manifest cũ trông như đã xong.
             self.store.remove("run_manifest.json")
         self.store.write_json_atomic(DATASET_IDENTITY_PATH, self.dataset_identity)
         with self.store.jsonl_writers() as jsonl:
@@ -211,11 +175,9 @@ class BatchRun:
         return manifest
 
     def _check_resume_identity(self, restart: bool) -> None:
-        """Reject incompatible or unversioned output before any mutation.
+        """Từ chối chạy tiếp trên đầu ra cũ hoặc khác thế giới, trước khi sửa gì.
 
-        Explicit restart regenerates generator-owned data, retaining its existing
-        CLI meaning. Ordinary resume never adopts a legacy or changed world.
-        This guard assumes a single writer; it is not a distributed writer lock.
+        `--restart` vẫn được sinh lại. Chỉ giả định một người ghi, không phải khoá phân tán.
         """
         if restart:
             return
@@ -244,12 +206,10 @@ class BatchRun:
         ):
             raise ValueError("Manifest dataset identity mismatch")
 
-    def _handle_order(self, order: Order, rng: np.random.Generator, sale_day: bool, sim_day: int) -> None:
-        """Xử lý một Order: đặt vào ngày export, vẽ bản ghi, gom nhãn.
-
-        `sim_day` là ngày mô phỏng đang chạy. Nó đi vào tên file để mỗi ngày ghi vào
-        file riêng của mình, kể cả khi hai ngày cùng rót vào một `export_date=`.
-        """
+    def _handle_order(
+        self, order: Order, rng: np.random.Generator, sale_day: bool, sim_day: int
+    ) -> None:
+        """Xử lý một Order: đặt vào ngày export, ghi bản ghi, gom nhãn."""
         self.orders_by_storefront[order.storefront_id] += 1
         self._collect_labels(order, sale_day)
         if STOREFRONTS[order.storefront_id].channel == "amazon":
@@ -259,24 +219,30 @@ class BatchRun:
         if renderer is None:
             return
         self.line_keys[renderer.channel].extend(
-            {**keys, "storefront_id": order.storefront_id} for keys in renderer.line_keys(order))
-        # Amazon/Walmart giữ đúng dãy RNG của bản 100 GB đã đo. Renderer của
-        # Channel mới dùng RNG riêng theo Order; nếu dùng chung `rng` thì chỉ
-        # việc thêm Channel sẽ đổi vị trí duplicate của Amazon/Walmart về sau.
-        placement_rng = (rng if renderer.channel in ("amazon", "walmart") else
-                         rng_for(self.config.seed, "batch_exports_new_channel",
-                                 sim_day, renderer.channel, order.order_id))
+            {**keys, "storefront_id": order.storefront_id} for keys in renderer.line_keys(order)
+        )
+        # Channel mới dùng RNG riêng theo Order để không đổi dãy số của Amazon/Walmart.
+        placement_rng = (
+            rng
+            if renderer.channel in ("amazon", "walmart")
+            else rng_for(
+                self.config.seed,
+                "batch_exports_new_channel",
+                sim_day,
+                renderer.channel,
+                order.order_id,
+            )
+        )
         for placement in plan_exports(order, self.config, placement_rng):
             rendered = renderer.render(order, placement.as_of, placement.export_day)
             key = (renderer.channel, placement.export_day, sim_day)
-            self.jsonl.write(key, self._export_path(renderer, placement.export_day, sim_day), rendered.record)
+            self.jsonl.write(
+                key, self._export_path(renderer, placement.export_day, sim_day), rendered.record
+            )
             stats = self.stats[f"{renderer.channel}.{renderer.dataset}"]
             stats.rows += 1
-            # Đếm khóa duy nhất bằng số bản chính, không bằng một set khóa: mỗi Order
-            # có đúng một placement `primary` (xem `plan_exports`) và `rendered.key`
-            # chỉ phụ thuộc Order, nên bản trùng luôn lặp lại khóa của bản chính.
-            # Set khóa ở quy mô 100 GB là ~117 triệu string trong RAM, chỉ để lấy
-            # `len()`. `tests/unit/generator/test_generate_order_snapshots.py` khóa bất biến này bằng một lần đối chiếu.
+            # Mỗi Order có đúng một bản `primary`, nên đếm bản chính là đếm khoá duy nhất
+            # mà không phải giữ một set khoá rất lớn trong RAM.
             stats.unique_keys += placement.kind == PRIMARY
             stats.placements[placement.kind] += 1
 
@@ -285,7 +251,8 @@ class BatchRun:
         self.amazon_orders[sale_day] += 1
         self.amazon_lines[sale_day] += len(order.lines)
         self.amazon_discount_sum[sale_day] += sum(
-            line.unit_discount / line.unit_price for line in order.lines if line.unit_price)
+            line.unit_discount / line.unit_price for line in order.lines if line.unit_price
+        )
 
     def _collect_labels(self, order: Order, sale_day: bool = False) -> None:
         """Gom nhãn của các Order Line mà tới `cutoff` đã biết nhãn."""
@@ -307,29 +274,20 @@ class BatchRun:
                 self.amazon_labels[sale_day][line.label] += 1
 
     def _export_path(self, renderer: ChannelRenderer, export_day: int, sim_day: int) -> str:
-        """Đường dẫn file của một ngày export, theo nơi lưu mà Channel dùng.
-
-        Thư mục là `export_date=` (ngày Channel giao file) và tên file là ngày mô
-        phỏng đã ghi nó. Một thư mục có nhiều file part, mỗi file của một ngày mô
-        phỏng; Spark, Iceberg và DuckDB đều đọc cả thư mục nên điều này không đổi
-        tập dòng mà bên đọc nhận được.
-        """
+        """Đường dẫn file: thư mục là `export_date=`, tên file là ngày mô phỏng đã ghi nó."""
         export_date = self.config.day_start(export_day).date().isoformat()
         part = f"part-sim{sim_day:05d}.jsonl"
         if renderer.storage == OBJECT_STORE:
-            return (f"source-exports/channel={renderer.channel}/dataset={renderer.dataset}/"
-                    f"export_date={export_date}/{part}")
+            return (
+                f"source-exports/channel={renderer.channel}/dataset={renderer.dataset}/"
+                f"export_date={export_date}/{part}"
+            )
         return f"pg-load/{renderer.channel}.{renderer.dataset}/export_date={export_date}/{part}"
 
     def _flush(self, day: int) -> None:
-        """Kết thúc ngày `day`: đóng hết file của nó, ghi Parquet, rồi dán tem.
+        """Kết thúc ngày `day`: đóng mọi file của nó, ghi Parquet, rồi dán tem.
 
-        Đóng được HẾT, không lọc theo ngày export, vì mọi file đang mở đều là file
-        của ngày `day` (tên chứa `sim<day>`) và không ngày nào khác ghi vào chúng.
-        Đóng cũng là lúc duy nhất biết số byte thật của một file.
-
-        Tem là việc CUỐI CÙNG. Mọi thứ nó nói "đã xong" phải đã nằm trên đĩa trước
-        đó: `JsonlAppender.close` và `OutputStore.parquet_writer` đều `fsync`.
+        Tem phải là bước cuối: mọi thứ nó báo "xong" đã được `fsync` trước đó.
         """
         for key in sorted(self.jsonl.keys()):
             channel = key[0]
@@ -342,21 +300,15 @@ class BatchRun:
         self.store.write_json_atomic(_checkpoint_relative(day), self._counters())
 
     def _flush_ground_truth(self, day: int) -> None:
-        """Ghi bộ đệm nhãn và ánh xạ khóa của ngày `day` thành file Parquet riêng.
+        """Ghi nhãn và ánh xạ khoá của ngày `day` thành một file Parquet riêng.
 
-        Một file mỗi ngày mô phỏng, một row group mỗi file. Trước đây là một file cho
-        cả lần chạy với một row group mỗi ngày; đổi vì footer Parquet chỉ được ghi lúc
-        đóng, nên một file mở suốt 180 ngày là thứ chắc chắn mất trắng khi bị cắt.
-
-        Kích cỡ row group không đổi: vẫn là dữ liệu của đúng một ngày mô phỏng, khoảng
-        một triệu dòng ở quy mô 100 GB, đúng vùng Spark đọc hiệu quả.
-
-        Ngày không có dòng nào thì không tạo file, để khỏi sinh file rỗng vô ích.
-        Không cần tạo: tem mới là thứ nói ngày đó đã xong, không phải sự có mặt của file.
+        Một file mỗi ngày vì footer Parquet chỉ ghi lúc đóng; file mở suốt kỳ sẽ mất trắng khi
+        bị cắt. Ngày không có dòng thì không tạo file.
         """
         if self.labels["order_line_id"]:
             with self.store.parquet_writer(
-                    f"ground-truth/labels/part-sim{day:05d}.parquet", LABELS_SCHEMA) as writer:
+                f"ground-truth/labels/part-sim{day:05d}.parquet", LABELS_SCHEMA
+            ) as writer:
                 writer.write(self.labels)
         self.labels = self._empty_labels()
         for channel, rows in self.line_keys.items():
@@ -364,8 +316,9 @@ class BatchRun:
                 continue
             columns = {name: [row[name] for row in rows] for name in LINE_KEYS_SCHEMA.names}
             with self.store.parquet_writer(
-                    f"ground-truth/order_line_keys/{channel}/part-sim{day:05d}.parquet",
-                    LINE_KEYS_SCHEMA) as writer:
+                f"ground-truth/order_line_keys/{channel}/part-sim{day:05d}.parquet",
+                LINE_KEYS_SCHEMA,
+            ) as writer:
                 writer.write(columns)
         self.line_keys.clear()
 
@@ -375,12 +328,9 @@ class BatchRun:
         return {name: [] for name in LABELS_SCHEMA.names}
 
     def _last_complete_day(self) -> int:
-        """Ngày `d` lớn nhất mà tem của MỌI ngày 1..d đều có mặt.
+        """Ngày `d` lớn nhất mà tem của mọi ngày 1..d đều có.
 
-        Lấy `d` lớn nhất liên tục chứ không lấy số lớn nhất tìm được: một tem đứng
-        lẻ sau một khoảng trống (ví dụ còn sót của lần chạy trước có cấu hình khác)
-        không chứng minh được các ngày trước nó đã xong. `_discard_days_after` sẽ
-        dọn mấy tem lẻ đó đi.
+        Tem lẻ sau một khoảng trống không chứng minh được các ngày trước đã xong.
         """
         present = {
             int(match.group(1))
@@ -393,13 +343,9 @@ class BatchRun:
         return day
 
     def _discard_days_after(self, day: int) -> list[str]:
-        """Xóa mọi file thuộc ngày mô phỏng > `day`, trả về danh sách đã xóa.
+        """Xoá mọi file của ngày mô phỏng > `day` (kể cả `.tmp` sót), trả danh sách đã xoá.
 
-        Đây là các file của ngày bị cắt giữa đường: đã có dòng trên đĩa nhưng chưa
-        có tem, nên không biết chúng đủ hay thiếu. Rẻ hơn và chắc hơn là bỏ đi rồi
-        sinh lại — ngày mô phỏng là tiền định nên sinh lại cho ra đúng dữ liệu đó.
-
-        Cũng xóa file `.tmp` còn sót: đó là tem đang ghi dở lúc bị cắt.
+        Các file đó chưa có tem nên không biết đủ hay thiếu; sinh lại cho ra đúng dữ liệu đó.
         """
         removed = []
         for pattern in DAY_OWNED_PATTERNS:
@@ -414,32 +360,37 @@ class BatchRun:
         return removed
 
     def _counters(self) -> dict[str, Any]:
-        """Mọi bộ đếm dồn theo thời gian, dạng JSON được, để ghi vào tem.
+        """Mọi bộ đếm dồn, dạng JSON được, để ghi vào tem.
 
-        Phải có ĐỦ mọi thứ mà `_manifest` đọc và `_handle_order`/`_collect_*` cộng
-        dồn. Thiếu một cái thì lần chạy tiếp cho ra manifest thiếu số, mà không có
-        lỗi nào báo. `tests/unit/generator/test_generate_order_snapshots.py` khóa chuyện này bằng cách so manifest của
-        một lần chạy liền mạch với một lần chạy bị cắt.
-
-        Khóa `bool` của `amazon_*` ghi thành "sale"/"normal" vì JSON chỉ có khóa
-        chuỗi; khóa số của các `Counter` nhãn ghi thành "0"/"1" rồi đổi lại khi nạp.
+        Phải đủ mọi thứ `_manifest` đọc, nếu không lần chạy tiếp ra manifest thiếu số mà không
+        báo lỗi. Khoá bool ghi thành "sale"/"normal", khoá số thành chuỗi.
         """
         return {
             "dataset_version": self.dataset_identity["dataset_version"],
             "datasets": {
-                name: {"rows": st.rows, "unique_keys": st.unique_keys,
-                       "placements": dict(st.placements), "files": st.files, "bytes": st.bytes}
+                name: {
+                    "rows": st.rows,
+                    "unique_keys": st.unique_keys,
+                    "placements": dict(st.placements),
+                    "files": st.files,
+                    "bytes": st.bytes,
+                }
                 for name, st in sorted(self.stats.items())
             },
             "label_rows": self.label_rows,
             "label_positives": self.label_positives,
-            "category_labels": {c: dict(counts) for c, counts in sorted(self.category_labels.items())},
+            "category_labels": {
+                c: dict(counts) for c, counts in sorted(self.category_labels.items())
+            },
             "orders_by_storefront": dict(self.orders_by_storefront),
             "sale_days": self.sale_days,
             "amazon": {
-                name: {"orders": self.amazon_orders[flag], "lines": self.amazon_lines[flag],
-                       "discount_sum": self.amazon_discount_sum[flag],
-                       "labels": dict(self.amazon_labels[flag])}
+                name: {
+                    "orders": self.amazon_orders[flag],
+                    "lines": self.amazon_lines[flag],
+                    "discount_sum": self.amazon_discount_sum[flag],
+                    "labels": dict(self.amazon_labels[flag]),
+                }
                 for name, flag in (("sale", True), ("normal", False))
             },
         }
@@ -455,10 +406,13 @@ class BatchRun:
             stats.bytes = values["bytes"]
         self.label_rows = data["label_rows"]
         self.label_positives = data["label_positives"]
-        self.category_labels = defaultdict(Counter, {
-            category: Counter({int(label): n for label, n in counts.items()})
-            for category, counts in data["category_labels"].items()
-        })
+        self.category_labels = defaultdict(
+            Counter,
+            {
+                category: Counter({int(label): n for label, n in counts.items()})
+                for category, counts in data["category_labels"].items()
+            },
+        )
         self.orders_by_storefront = Counter(data["orders_by_storefront"])
         self.sale_days = data["sale_days"]
         for name, flag in (("sale", True), ("normal", False)):
@@ -466,18 +420,20 @@ class BatchRun:
             self.amazon_orders[flag] = values["orders"]
             self.amazon_lines[flag] = values["lines"]
             self.amazon_discount_sum[flag] = values["discount_sum"]
-            self.amazon_labels[flag] = Counter({int(label): n for label, n in values["labels"].items()})
+            self.amazon_labels[flag] = Counter(
+                {int(label): n for label, n in values["labels"].items()}
+            )
 
     def _write_skus(self) -> None:
-        """Ghi danh mục SKU của Seller, sẽ nạp vào bảng `seller.skus`.
-
-        Đây là hệ thống của chính Seller nên có danh mục (`category`), thứ mà dữ liệu
-        đơn của Channel không có. Báo cáo skew theo danh mục join vào bảng này.
-        SKU Defect Propensity là giá trị ẩn nên không ghi ra.
-        """
+        """Ghi danh mục SKU của Seller (có `category`) để nạp vào `seller.skus`."""
         rows = [
-            {"sku": sku.sku_id, "name": sku.name, "category": sku.category,
-             "base_price_usd": sku.base_price_usd, "unit_cost_usd": sku.unit_cost_usd}
+            {
+                "sku": sku.sku_id,
+                "name": sku.name,
+                "category": sku.category,
+                "base_price_usd": sku.base_price_usd,
+                "unit_cost_usd": sku.unit_cost_usd,
+            }
             for sku in self.simulator.catalog.skus
         ]
         stats = self.stats["seller.skus"]
@@ -487,11 +443,9 @@ class BatchRun:
         stats.files = 1
 
     def _prime_day_summary(self) -> dict[str, Any] | None:
-        """Số đo thật của Sale Event, đặt cạnh cấu hình để đối chiếu.
+        """Số đo thật của Sale Event, chia ngày sale / ngày thường, để đối chiếu với cấu hình.
 
-        Mỗi chỉ số có hai giá trị: trong ngày sale (`sale`) và ngoài ngày sale
-        (`normal`). Tỷ lệ trả tính trên các dòng đã biết nhãn trước `cutoff`, nên
-        bằng `null` nếu đợt sale nằm trong 30 ngày cuối của lịch sử.
+        Tỷ lệ trả là `null` nếu đợt sale nằm trong 30 ngày cuối của lịch sử.
         """
         sale = self.config.drift.prime_day
         if sale is None or not self.sale_days:
@@ -515,9 +469,14 @@ class BatchRun:
             return round(counts[1] / total, 6) if total else None
 
         return {
-            "days": [self.config.day_start(sale.day + i).date().isoformat() for i in range(sale.days)],
+            "days": [
+                self.config.day_start(sale.day + i).date().isoformat() for i in range(sale.days)
+            ],
             "amazon_orders_per_day": {"sale": per_day(True), "normal": per_day(False)},
-            "amazon_mean_discount_fraction": {"sale": mean_discount(True), "normal": mean_discount(False)},
+            "amazon_mean_discount_fraction": {
+                "sale": mean_discount(True),
+                "normal": mean_discount(False),
+            },
             "amazon_positive_rate": {"sale": positive_rate(True), "normal": positive_rate(False)},
         }
 
@@ -548,7 +507,12 @@ class BatchRun:
                 },
             },
             "drift": {"prime_day": self._prime_day_summary()},
-            "not_rendered_yet": sorted({s.channel for s in STOREFRONTS.values()} - set(self.renderers)),
-            "placement_kinds": {PRIMARY: "bản chính", "identical_copy": "bản trùng y hệt",
-                                "older_version": "bản cũ hơn cùng khóa"},
+            "not_rendered_yet": sorted(
+                {s.channel for s in STOREFRONTS.values()} - set(self.renderers)
+            ),
+            "placement_kinds": {
+                PRIMARY: "bản chính",
+                "identical_copy": "bản trùng y hệt",
+                "older_version": "bản cũ hơn cùng khóa",
+            },
         }

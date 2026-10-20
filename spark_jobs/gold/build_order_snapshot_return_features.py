@@ -42,10 +42,8 @@ def main(argv: list[str] | None = None) -> int:
             F.col("country"),
             F.col("quantity"),
             F.col("line_net_amount"),
-            (F.col("line_net_amount") / quantity)
-            .cast("decimal(14,2)").alias("unit_net_amount"),
-            F.when(gross > 0, (discount / gross).cast("decimal(8,4)"))
-            .alias("discount_fraction"),
+            (F.col("line_net_amount") / quantity).cast("decimal(14,2)").alias("unit_net_amount"),
+            F.when(gross > 0, (discount / gross).cast("decimal(8,4)")).alias("discount_fraction"),
             F.hour(created_at).alias("order_hour_utc"),
             F.dayofweek(created_at).alias("order_day_of_week"),
             F.month(created_at).alias("order_month"),

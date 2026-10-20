@@ -3,17 +3,19 @@
 Chỉ --publish mới gửi mạng. --dry-run xuất đúng danh sách MCP dùng khi gửi thật,
 không import SDK và không tự chạy Spark hoặc biến số cách ly thành check lỗi.
 """
+
 from __future__ import annotations
 
 import argparse
 import ast
+import contextlib
 import hashlib
 import json
 import math
 import os
-from pathlib import Path
 import re
 from datetime import datetime
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DAG_ID = "dp_order_lifecycle"
@@ -27,10 +29,8 @@ def constants(filename):
     values = {}
     for node in tree.body:
         if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name):
-            try:
+            with contextlib.suppress(ValueError, TypeError):
                 values[node.targets[0].id] = ast.literal_eval(node.value)
-            except (ValueError, TypeError):
-                pass
     return values
 
 
@@ -40,14 +40,25 @@ def inventory():
     silver = constants("silver/build_order_lifecycle.py")
     gold = constants("lib/order_lifecycle_gold.py")
     tree = ast.parse((ROOT / "spark_jobs/bronze/ingest_order_lifecycle.py").read_text())
-    default = next(ast.literal_eval(k.value) for n in ast.walk(tree) if isinstance(n, ast.Call)
-                   and isinstance(n.func, ast.Attribute) and n.func.attr == "add_argument"
-                   and any(isinstance(a, ast.Constant) and a.value == "--table" for a in n.args)
-                   for k in n.keywords if k.arg == "default")
+    default = next(
+        ast.literal_eval(k.value)
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Call)
+        and isinstance(n.func, ast.Attribute)
+        and n.func.attr == "add_argument"
+        and any(isinstance(a, ast.Constant) and a.value == "--table" for a in n.args)
+        for k in n.keywords
+        if k.arg == "default"
+    )
     bronze_name = f"lakehouse.{bronze['NAMESPACE']}.{default}"
-    silver_names = {n: f"lakehouse.{silver['NAMESPACE']}." + ("lifecycle_quarantine_records" if n == "quarantine_records" else f"lifecycle_stg_{n}")
-                    for n in (*silver["TABLES"], "build_info")}
-    gold_names = {n: f"lakehouse.gold.lifecycle_{n.removesuffix('_v2')}" for n in gold["GOLD_TABLES"]}
+    silver_names = {
+        n: f"lakehouse.{silver['NAMESPACE']}."
+        + ("lifecycle_quarantine_records" if n == "quarantine_records" else f"lifecycle_stg_{n}")
+        for n in (*silver["TABLES"], "build_info")
+    }
+    gold_names = {
+        n: f"lakehouse.gold.lifecycle_{n.removesuffix('_v2')}" for n in gold["GOLD_TABLES"]
+    }
     # Gold đọc CHỈ Silver (lịch sử quan sát + coverage validity nằm ở Silver), không còn Bronze.
     gold_inputs = [silver_names[n] for n in gold["SILVER_TABLES"]]
     return bronze_name, silver_names, gold_names, gold_inputs
@@ -60,18 +71,30 @@ def dataset_urn(name, platform="iceberg"):
 
 def mcp(entity_type, urn, aspect_name, value):
     """Đóng gói MetadataChangeProposal đúng dạng REST JSON của DataHub."""
-    return {"entityType": entity_type, "entityUrn": urn, "changeType": "UPSERT",
-            "aspectName": aspect_name,
-            "aspect": {"value": json.dumps(value, ensure_ascii=False, sort_keys=True),
-                       "contentType": "application/json"}}
+    return {
+        "entityType": entity_type,
+        "entityUrn": urn,
+        "changeType": "UPSERT",
+        "aspectName": aspect_name,
+        "aspect": {
+            "value": json.dumps(value, ensure_ascii=False, sort_keys=True),
+            "contentType": "application/json",
+        },
+    }
 
 
 def schema_fields(schema, prefix="", optional=False):
     """Trải JSON Schema hoặc Spark StructType, giữ đường dẫn và nullable gốc."""
     fields = []
     spark = schema.get("type") == "struct"
-    entries = ((f["name"], f["type"], f.get("nullable", True)) for f in schema.get("fields", [])) if spark else (
-        (key, value, key not in schema.get("required", [])) for key, value in schema.get("properties", {}).items())
+    entries = (
+        ((f["name"], f["type"], f.get("nullable", True)) for f in schema.get("fields", []))
+        if spark
+        else (
+            (key, value, key not in schema.get("required", []))
+            for key, value in schema.get("properties", {}).items()
+        )
+    )
     for name, child, nullable in entries:
         child = {"type": child} if isinstance(child, str) else child
         path = f"{prefix}.{name}" if prefix else name
@@ -80,12 +103,30 @@ def schema_fields(schema, prefix="", optional=False):
             child, kind = kind, kind.get("type", "string")
         kinds = kind if isinstance(kind, list) else [kind]
         primary = next((t for t in kinds if t != "null"), "null")
-        avro = {"object": "Record", "struct": "Record", "array": "Array", "boolean": "Boolean",
-                "integer": "Number", "number": "Number", "long": "Number", "int": "Number",
-                "double": "Number", "float": "Number", "date": "Date", "timestamp": "Time",
-                "null": "Null", "binary": "Bytes"}.get(primary, "String")
-        fields.append({"fieldPath": path, "type": {"type": {f"com.linkedin.schema.{avro}Type": {}}},
-                       "nativeDataType": json.dumps(kind), "nullable": optional or nullable or "null" in kinds})
+        avro = {
+            "object": "Record",
+            "struct": "Record",
+            "array": "Array",
+            "boolean": "Boolean",
+            "integer": "Number",
+            "number": "Number",
+            "long": "Number",
+            "int": "Number",
+            "double": "Number",
+            "float": "Number",
+            "date": "Date",
+            "timestamp": "Time",
+            "null": "Null",
+            "binary": "Bytes",
+        }.get(primary, "String")
+        fields.append(
+            {
+                "fieldPath": path,
+                "type": {"type": {f"com.linkedin.schema.{avro}Type": {}}},
+                "nativeDataType": json.dumps(kind),
+                "nullable": optional or nullable or "null" in kinds,
+            }
+        )
         if primary in ("object", "struct"):
             fields.extend(schema_fields(child, path, optional or nullable))
         if primary == "array":
@@ -113,26 +154,42 @@ def source_inventory(contracts_dir, source_root, walmart_jdbc):
         schemas = [json.loads((contracts_dir / v["schema_path"]).read_text()) for v in selected]
         # Nhiều version đăng ký: hợp các đường dẫn, giữ native type của từng version.
         fields = {}
-        for version, schema in zip(selected, schemas):
+        for schema in schemas:
             for field in schema_fields(schema):
                 key = field["fieldPath"]
                 if key in fields and fields[key]["nativeDataType"] != field["nativeDataType"]:
                     fields[key]["nativeDataType"] += " | " + field["nativeDataType"]
                 else:
                     fields[key] = field
-                fields[key]["description"] = "Hợp đồng: " + ", ".join(v["schema_id"] for v in selected)
+                fields[key]["description"] = "Hợp đồng: " + ", ".join(
+                    v["schema_id"] for v in selected
+                )
         paths = [str(source_root / "dataset_version=*" / "producer=*" / f"feed={feed}")]
         if manifest:
-            paths = sorted({str(source_root / str(Path(f["path"]).parent.parent)) for f in manifest["files"]
-                            if f["role"] == "source" and f["feed"] == feed})
+            paths = sorted(
+                {
+                    str(source_root / str(Path(f["path"]).parent.parent))
+                    for f in manifest["files"]
+                    if f["role"] == "source" and f["feed"] == feed
+                }
+            )
         for path in paths:
-            feeds[path] = {"platform": "file", "feed": feed, "fields": list(fields.values()),
-                           "schemas": schemas, "active": not (walmart_jdbc and feed == "walmart.orders")}
+            feeds[path] = {
+                "platform": "file",
+                "feed": feed,
+                "fields": list(fields.values()),
+                "schemas": schemas,
+                "active": not (walmart_jdbc and feed == "walmart.orders"),
+            }
         if feed == "walmart.orders":
             # Luôn đăng ký bảng v2; chỉ nối input khi DAG bật JDBC.
             feeds[walmart_jdbc or "walmart_lifecycle.orders"] = {
-                "platform": "postgres", "feed": feed, "fields": list(fields.values()),
-                "schemas": schemas, "active": bool(walmart_jdbc)}
+                "platform": "postgres",
+                "feed": feed,
+                "fields": list(fields.values()),
+                "schemas": schemas,
+                "active": bool(walmart_jdbc),
+            }
     return feeds
 
 
@@ -142,15 +199,22 @@ def load_receipts(args):
     if args.receipt_dir:
         if not args.receipt_dir.is_dir():
             raise ValueError(f"Không có thư mục receipt: {args.receipt_dir}")
-        paths.update({t: args.receipt_dir / f"{t}.json" for t in TASKS
-                      if (args.receipt_dir / f"{t}.json").is_file()})
+        paths.update(
+            {
+                t: args.receipt_dir / f"{t}.json"
+                for t in TASKS
+                if (args.receipt_dir / f"{t}.json").is_file()
+            }
+        )
     for value in args.receipt:
         task, filename = value.split("=", 1)
         if task not in TASKS:
             raise ValueError(f"Task receipt không thuộc DAG: {task}")
         paths[task] = Path(filename)
     if not paths:
-        raise ValueError("Cần ít nhất một receipt đã chạy qua --receipt-dir hoặc --receipt TASK=PATH")
+        raise ValueError(
+            "Cần ít nhất một receipt đã chạy qua --receipt-dir hoặc --receipt TASK=PATH"
+        )
     receipts = {}
     schemas = {}
     for task, path in paths.items():
@@ -173,77 +237,184 @@ def build_mcps(args):
     sources = source_inventory(args.contracts_dir, args.source_root, args.walmart_jdbc)
     datasets = {dataset_urn(name, meta["platform"]): (name, meta) for name, meta in sources.items()}
     for name in (bronze, *silver.values(), *gold.values()):
-        datasets[dataset_urn(name)] = (name, {"platform": "iceberg", "fields": schema_fields(schemas.get(name, {})),
-                                            "schemas": [schemas[name]] if name in schemas else []})
+        datasets[dataset_urn(name)] = (
+            name,
+            {
+                "platform": "iceberg",
+                "fields": schema_fields(schemas.get(name, {})),
+                "schemas": [schemas[name]] if name in schemas else [],
+            },
+        )
     result = []
     for urn, (name, meta) in datasets.items():
         description = f"FSDS v2 {meta['platform']}: {name}"
         if not meta["fields"]:
             description += "; chưa có schema field (job chưa xuất schema JSON trong receipt)."
-        result.append(mcp("dataset", urn, "datasetProperties", {"name": name, "description": description,
-                          "customProperties": {"pipeline": DAG_ID, "schema_source": "receipt" if name in schemas else
-                                                "contracts" if meta["fields"] else "unavailable"}}))
+        result.append(
+            mcp(
+                "dataset",
+                urn,
+                "datasetProperties",
+                {
+                    "name": name,
+                    "description": description,
+                    "customProperties": {
+                        "pipeline": DAG_ID,
+                        "schema_source": "receipt"
+                        if name in schemas
+                        else "contracts"
+                        if meta["fields"]
+                        else "unavailable",
+                    },
+                },
+            )
+        )
         if meta["fields"]:
             raw = json.dumps(meta["schemas"], sort_keys=True)
-            result.append(mcp("dataset", urn, "schemaMetadata", {
-                "schemaName": name, "platform": "urn:li:dataPlatform:" + meta["platform"],
-                "version": 0, "hash": hashlib.sha256(raw.encode()).hexdigest(),
-                "platformSchema": {"com.linkedin.schema.OtherSchema": {"rawSchema": raw}},
-                "fields": meta["fields"],
-            }))
-    source_inputs = [dataset_urn(name, meta["platform"]) for name, meta in sources.items() if meta["active"]]
+            result.append(
+                mcp(
+                    "dataset",
+                    urn,
+                    "schemaMetadata",
+                    {
+                        "schemaName": name,
+                        "platform": "urn:li:dataPlatform:" + meta["platform"],
+                        "version": 0,
+                        "hash": hashlib.sha256(raw.encode()).hexdigest(),
+                        "platformSchema": {"com.linkedin.schema.OtherSchema": {"rawSchema": raw}},
+                        "fields": meta["fields"],
+                    },
+                )
+            )
+    source_inputs = [
+        dataset_urn(name, meta["platform"]) for name, meta in sources.items() if meta["active"]
+    ]
     jobs = {
         "check_contracts": ([], []),
         "ingest_bronze": (source_inputs, [dataset_urn(bronze)]),
         "build_silver": ([dataset_urn(bronze)], [dataset_urn(n) for n in silver.values()]),
-        "build_gold": ([dataset_urn(n) for n in gold_inputs], [dataset_urn(n) for n in gold.values()]),
+        "build_gold": (
+            [dataset_urn(n) for n in gold_inputs],
+            [dataset_urn(n) for n in gold.values()],
+        ),
         "validate_gold": ([dataset_urn(n) for n in [*gold_inputs, *gold.values()]], []),
     }
-    result.append(mcp("dataFlow", FLOW, "dataFlowInfo", {"name": DAG_ID, "description": "DAG nguồn v2 chạy tay"}))
+    result.append(
+        mcp(
+            "dataFlow",
+            FLOW,
+            "dataFlowInfo",
+            {"name": DAG_ID, "description": "DAG nguồn v2 chạy tay"},
+        )
+    )
     upstreams = {}
     previous = None
     for task, (inputs, outputs) in jobs.items():
         urn = f"urn:li:dataJob:({FLOW},{task})"
-        result.append(mcp("dataJob", urn, "dataJobInfo", {"name": task, "type": "COMMAND", "flowUrn": FLOW}))
-        result.append(mcp("dataJob", urn, "dataJobInputOutput", {
-            "inputDatasets": inputs, "outputDatasets": outputs, "inputDatajobs": [previous] if previous else [],
-        }))
+        result.append(
+            mcp("dataJob", urn, "dataJobInfo", {"name": task, "type": "COMMAND", "flowUrn": FLOW})
+        )
+        result.append(
+            mcp(
+                "dataJob",
+                urn,
+                "dataJobInputOutput",
+                {
+                    "inputDatasets": inputs,
+                    "outputDatasets": outputs,
+                    "inputDatajobs": [previous] if previous else [],
+                },
+            )
+        )
         previous = urn
         for target in outputs:
             upstreams.setdefault(target, set()).update(inputs)
     for target, inputs in upstreams.items():
-        result.append(mcp("dataset", target, "upstreamLineage", {
-            "upstreams": [{"dataset": source, "type": "TRANSFORMED"} for source in sorted(inputs)],
-        }))
+        result.append(
+            mcp(
+                "dataset",
+                target,
+                "upstreamLineage",
+                {
+                    "upstreams": [
+                        {"dataset": source, "type": "TRANSFORMED"} for source in sorted(inputs)
+                    ],
+                },
+            )
+        )
     for task, (doc, path) in receipts.items():
         checks = doc.get("checks", {})
         if not isinstance(checks, dict):
             raise ValueError(f"checks không phải object: {path}")
-        timestamp = int(datetime.fromisoformat(doc["completed_at"].replace("Z", "+00:00")).timestamp() * 1000
-                        ) if doc.get("completed_at") else int(path.stat().st_mtime * 1000)
-        assertee = dataset_urn(silver["line_lifecycle"] if task == "build_silver" else
-                               bronze if task == "ingest_bronze" else gold["fact_order_lines"])
+        timestamp = (
+            int(
+                datetime.fromisoformat(doc["completed_at"].replace("Z", "+00:00")).timestamp()
+                * 1000
+            )
+            if doc.get("completed_at")
+            else int(path.stat().st_mtime * 1000)
+        )
+        assertee = dataset_urn(
+            silver["line_lifecycle"]
+            if task == "build_silver"
+            else bronze
+            if task == "ingest_bronze"
+            else gold["fact_order_lines"]
+        )
         for check, value in sorted(checks.items()):
-            if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
+            if (
+                not isinstance(value, (int, float))
+                or isinstance(value, bool)
+                or not math.isfinite(value)
+            ):
                 raise ValueError(f"Check cần số hữu hạn theo job v2: {path}: {check}={value!r}")
             check_id = re.sub(r"[^A-Za-z0-9_-]", "_", check)
             if check_id != check:
                 check_id += "-" + hashlib.sha256(check.encode()).hexdigest()[:12]
             urn = f"urn:li:assertion:fsds-{DAG_ID}-{task}-{check_id}-v2"
-            result.append(mcp("assertion", urn, "assertionInfo", {
-                "type": "CUSTOM", "description": f"{task}: {check} = 0; số vi phạm khác 0 là FAIL",
-                "customAssertion": {"type": "FSDS v2 reconcile/validate", "entity": assertee,
-                                    "logic": f"{check} == 0"},
-                "customProperties": {"task_id": task, "receipt": str(path)},
-            }))
-            result.append(mcp("assertion", urn, "assertionRunEvent", {
-                "timestampMillis": timestamp, "runId": doc["run_id"], "asserteeUrn": assertee,
-                "status": "COMPLETE", "assertionUrn": urn,
-                "result": {"type": "SUCCESS" if value == 0 else "FAILURE",
-                           "nativeResults": {"run_id": doc["run_id"], "check": check, "value": str(value),
-                                             "timestamp_source": "completed_at" if doc.get("completed_at") else "receipt_mtime",
-                                             "receipt_status": str(doc.get("status", "not_recorded"))}},
-            }))
+            result.append(
+                mcp(
+                    "assertion",
+                    urn,
+                    "assertionInfo",
+                    {
+                        "type": "CUSTOM",
+                        "description": f"{task}: {check} = 0; số vi phạm khác 0 là FAIL",
+                        "customAssertion": {
+                            "type": "FSDS v2 reconcile/validate",
+                            "entity": assertee,
+                            "logic": f"{check} == 0",
+                        },
+                        "customProperties": {"task_id": task, "receipt": str(path)},
+                    },
+                )
+            )
+            result.append(
+                mcp(
+                    "assertion",
+                    urn,
+                    "assertionRunEvent",
+                    {
+                        "timestampMillis": timestamp,
+                        "runId": doc["run_id"],
+                        "asserteeUrn": assertee,
+                        "status": "COMPLETE",
+                        "assertionUrn": urn,
+                        "result": {
+                            "type": "SUCCESS" if value == 0 else "FAILURE",
+                            "nativeResults": {
+                                "run_id": doc["run_id"],
+                                "check": check,
+                                "value": str(value),
+                                "timestamp_source": "completed_at"
+                                if doc.get("completed_at")
+                                else "receipt_mtime",
+                                "receipt_status": str(doc.get("status", "not_recorded")),
+                            },
+                        },
+                    },
+                )
+            )
     return result
 
 
@@ -260,7 +431,9 @@ def main():
     parser.add_argument("--walmart-jdbc", default=None)
     parser.add_argument("--server", default=os.getenv("DATAHUB_GMS_URL", "http://localhost:8089"))
     args = parser.parse_args()
-    if args.walmart_jdbc and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*", args.walmart_jdbc):
+    if args.walmart_jdbc and not re.fullmatch(
+        r"[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*", args.walmart_jdbc
+    ):
         parser.error("--walmart-jdbc cần SCHEMA.TABLE")
     proposals = build_mcps(args)
     if not args.publish:
@@ -269,6 +442,7 @@ def main():
     # SDK chỉ được nạp khi gửi; emitter nhận đúng MCP đã xuất trong dry-run.
     from datahub.emitter.rest_emitter import DatahubRestEmitter
     from datahub.metadata.schema_classes import MetadataChangeProposalClass
+
     emitter = DatahubRestEmitter(gms_server=args.server, token=os.getenv("DATAHUB_GMS_TOKEN"))
     for proposal in proposals:
         emitter.emit_mcp(MetadataChangeProposalClass.from_obj(proposal))

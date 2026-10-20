@@ -1,10 +1,11 @@
 """Thiết lập connector riêng cho Walmart v2, không thay đổi CDC v1."""
+
 from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import urllib.request
+from pathlib import Path
 
 from scripts.setup.setup_order_snapshots_debezium import load_settings
 
@@ -17,12 +18,19 @@ def connector_config(settings):
     """Dựng cấu hình no_data vì bootstrap đã vào Bronze qua JDBC."""
     return {
         "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
-        "tasks.max": "1", "database.hostname": settings.get("POSTGRES_CONNECT_HOST", "postgres"),
-        "database.port": "5432", "database.user": settings["POSTGRES_USER"],
-        "database.password": settings["POSTGRES_PASSWORD"], "database.dbname": settings["POSTGRES_DB"],
-        "topic.prefix": "fsds_cdc_order_lifecycle", "table.include.list": "walmart_lifecycle.orders",
-        "plugin.name": "pgoutput", "slot.name": SLOT, "publication.name": PUBLICATION,
-        "publication.autocreate.mode": "disabled", "snapshot.mode": "no_data",
+        "tasks.max": "1",
+        "database.hostname": settings.get("POSTGRES_CONNECT_HOST", "postgres"),
+        "database.port": "5432",
+        "database.user": settings["POSTGRES_USER"],
+        "database.password": settings["POSTGRES_PASSWORD"],
+        "database.dbname": settings["POSTGRES_DB"],
+        "topic.prefix": "fsds_cdc_order_lifecycle",
+        "table.include.list": "walmart_lifecycle.orders",
+        "plugin.name": "pgoutput",
+        "slot.name": SLOT,
+        "publication.name": PUBLICATION,
+        "publication.autocreate.mode": "disabled",
+        "snapshot.mode": "no_data",
         "tombstones.on.delete": "false",
         "key.converter": "org.apache.kafka.connect.json.JsonConverter",
         "key.converter.schemas.enable": "false",
@@ -36,10 +44,14 @@ def configure(settings):
     import psycopg
     from confluent_kafka.admin import AdminClient, NewTopic
 
-    with psycopg.connect(host=settings.get("POSTGRES_HOST", "127.0.0.1"),
-                         port=int(settings.get("POSTGRES_PORT", "5432")),
-                         dbname=settings["POSTGRES_DB"], user=settings["POSTGRES_USER"],
-                         password=settings["POSTGRES_PASSWORD"], autocommit=True) as conn:
+    with psycopg.connect(
+        host=settings.get("POSTGRES_HOST", "127.0.0.1"),
+        port=int(settings.get("POSTGRES_PORT", "5432")),
+        dbname=settings["POSTGRES_DB"],
+        user=settings["POSTGRES_USER"],
+        password=settings["POSTGRES_PASSWORD"],
+        autocommit=True,
+    ) as conn:
         if conn.execute("SHOW wal_level").fetchone()[0] != "logical":
             raise ValueError("Cần wal_level=logical")
         columns = conn.execute("""SELECT a.attname FROM pg_index i
@@ -49,13 +61,19 @@ def configure(settings):
         if [r[0] for r in columns] != ["dataset_version", "purchase_order_id"]:
             raise ValueError("Khóa chính khác DDL loader; từ chối thiết lập")
         conn.execute("ALTER TABLE walmart_lifecycle.orders REPLICA IDENTITY DEFAULT")
-        if not conn.execute("SELECT 1 FROM pg_publication WHERE pubname=%s", (PUBLICATION,)).fetchone():
+        if not conn.execute(
+            "SELECT 1 FROM pg_publication WHERE pubname=%s", (PUBLICATION,)
+        ).fetchone():
             conn.execute(f"CREATE PUBLICATION {PUBLICATION} FOR TABLE walmart_lifecycle.orders")
-        tables = conn.execute("SELECT schemaname, tablename FROM pg_publication_tables WHERE pubname=%s",
-                              (PUBLICATION,)).fetchall()
+        tables = conn.execute(
+            "SELECT schemaname, tablename FROM pg_publication_tables WHERE pubname=%s",
+            (PUBLICATION,),
+        ).fetchall()
         if tables != [("walmart_lifecycle", "orders")]:
             raise ValueError("Publication v2 phải chỉ chứa walmart_lifecycle.orders")
-    admin = AdminClient({"bootstrap.servers": settings.get("KAFKA_BOOTSTRAP_SERVERS", "127.0.0.1:9094")})
+    admin = AdminClient(
+        {"bootstrap.servers": settings.get("KAFKA_BOOTSTRAP_SERVERS", "127.0.0.1:9094")}
+    )
     try:
         admin.create_topics([NewTopic(TOPIC, 1, 1)])[TOPIC].result(30)
     except Exception as exc:
@@ -64,9 +82,12 @@ def configure(settings):
     if len(admin.list_topics(TOPIC, timeout=30).topics[TOPIC].partitions) != 1:
         raise ValueError("Topic v2 cần đúng một partition để đối soát thứ tự")
     url = settings.get("DEBEZIUM_URL", "http://127.0.0.1:8084")
-    request = urllib.request.Request(f"{url}/connectors/{CONNECTOR_NAME}/config",
+    request = urllib.request.Request(
+        f"{url}/connectors/{CONNECTOR_NAME}/config",
         data=json.dumps(connector_config(settings)).encode(),
-        headers={"Content-Type": "application/json"}, method="PUT")
+        headers={"Content-Type": "application/json"},
+        method="PUT",
+    )
     with urllib.request.urlopen(request, timeout=30) as response:
         if response.status not in (200, 201):
             raise RuntimeError(f"Kafka Connect HTTP {response.status}")

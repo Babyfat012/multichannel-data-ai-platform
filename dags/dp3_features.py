@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from airflow import DAG
 from fsds_spark_operator import FsdsSparkSubmitOperator as SparkSubmitOperator
@@ -20,7 +20,7 @@ SPARK_CONF = {
 with DAG(
     dag_id="dp3_features",
     description="Gold fact năm Channel → feature offline lúc đặt Order; kiểm độ đầy đủ",
-    start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    start_date=datetime(2026, 1, 1, tzinfo=UTC),
     schedule=None,
     catchup=False,
     is_paused_upon_creation=False,
@@ -31,8 +31,7 @@ with DAG(
     build = SparkSubmitOperator(
         task_id="build_return_features",
         application="/opt/spark_jobs/gold/build_order_snapshot_return_features.py",
-        application_args=["--source-table", SOURCE, "--table", TARGET,
-                          "--run-id", RUN_ID],
+        application_args=["--source-table", SOURCE, "--table", TARGET, "--run-id", RUN_ID],
         conn_id="spark_default",
         packages=PACKAGES,
         driver_memory="600m",
@@ -41,8 +40,7 @@ with DAG(
     validate = SparkSubmitOperator(
         task_id="validate_return_features",
         application="/opt/spark_jobs/gold/validate_order_snapshot_return_features.py",
-        application_args=["--source-table", SOURCE, "--table", TARGET,
-                          "--run-id", RUN_ID],
+        application_args=["--source-table", SOURCE, "--table", TARGET, "--run-id", RUN_ID],
         conn_id="spark_default",
         packages=PACKAGES,
         driver_memory="600m",

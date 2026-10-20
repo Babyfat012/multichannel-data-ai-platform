@@ -24,26 +24,32 @@ def resolve_runtime_env(
     env: dict[str, str] = {}
     if "iceberg" in groups:
         conn = connections[_GROUPS["iceberg"]]
-        env.update({
-            "AWS_ACCESS_KEY_ID": str(conn["login"]),
-            "AWS_SECRET_ACCESS_KEY": str(conn["password"]),
-            "MINIO_INTERNAL_ENDPOINT": variables["fsds_minio_internal_endpoint"],
-            "WAREHOUSE_NAME": variables["fsds_warehouse_name"],
-            "LAKEKEEPER_CATALOG_URI": variables["fsds_lakekeeper_catalog_uri"],
-        })
+        env.update(
+            {
+                "AWS_ACCESS_KEY_ID": str(conn["login"]),
+                "AWS_SECRET_ACCESS_KEY": str(conn["password"]),
+                "MINIO_INTERNAL_ENDPOINT": variables["fsds_minio_internal_endpoint"],
+                "WAREHOUSE_NAME": variables["fsds_warehouse_name"],
+                "LAKEKEEPER_CATALOG_URI": variables["fsds_lakekeeper_catalog_uri"],
+            }
+        )
     if "postgres" in groups:
         conn = connections[_GROUPS["postgres"]]
-        env.update({
-            "POSTGRES_HOST": str(conn["host"]),
-            "POSTGRES_PORT": str(conn["port"] or 5432),
-            "POSTGRES_DB": str(conn["schema"]),
-            "POSTGRES_USER": str(conn["login"]),
-            "POSTGRES_PASSWORD": str(conn["password"]),
-        })
+        env.update(
+            {
+                "POSTGRES_HOST": str(conn["host"]),
+                "POSTGRES_PORT": str(conn["port"] or 5432),
+                "POSTGRES_DB": str(conn["schema"]),
+                "POSTGRES_USER": str(conn["login"]),
+                "POSTGRES_PASSWORD": str(conn["password"]),
+            }
+        )
     if "kafka" in groups:
         conn = connections[_GROUPS["kafka"]]
-        env.update({
-            "KAFKA_BOOTSTRAP_SERVERS": f"{conn['host']}:{conn['port'] or 9092}",
-            "KAFKA_TOPIC": variables["fsds_dp1_cdc_topic"],
-        })
+        env.update(
+            {
+                "KAFKA_BOOTSTRAP_SERVERS": f"{conn['host']}:{conn['port'] or 9092}",
+                "KAFKA_TOPIC": variables["fsds_dp1_cdc_topic"],
+            }
+        )
     return env

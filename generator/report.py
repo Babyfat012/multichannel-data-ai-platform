@@ -105,7 +105,9 @@ class QualityReport:
 
     def _create_views(self) -> None:
         """Khai báo view chuẩn hóa: đơn và dòng đơn của Amazon và Walmart, danh mục SKU."""
-        marketplace_map = " ".join(f"WHEN {_quote(mid)} THEN {_quote(sf)}" for sf, (mid, _) in MARKETPLACES.items())
+        marketplace_map = " ".join(
+            f"WHEN {_quote(mid)} THEN {_quote(sf)}" for sf, (mid, _) in MARKETPLACES.items()
+        )
         self.con.execute(f"""
             CREATE VIEW amazon_raw AS
             SELECT json, regexp_extract(filename, 'export_date=([0-9-]+)', 1)::DATE AS export_date
@@ -141,8 +143,10 @@ class QualityReport:
         """)
 
         if self.dsn:
-            walmart_source = "SELECT purchase_order_id, fetched_at::TIMESTAMP AS fetched_at, export_date, " \
-                             "raw_payload::JSON AS payload FROM pg.walmart.orders"
+            walmart_source = (
+                "SELECT purchase_order_id, fetched_at::TIMESTAMP AS fetched_at, export_date, "
+                "raw_payload::JSON AS payload FROM pg.walmart.orders"
+            )
             skus_source = "SELECT sku, category FROM pg.seller.skus"
         else:
             walmart_source = (
@@ -150,9 +154,12 @@ class QualityReport:
                 "(json->>'fetched_at')::TIMESTAMP AS fetched_at, "
                 "regexp_extract(filename, 'export_date=([0-9-]+)', 1)::DATE AS export_date, "
                 "json->'raw_payload' AS payload "
-                f"FROM read_ndjson_objects({self._glob(WALMART_GLOB)}, filename = true)")
-            skus_source = f"SELECT json->>'sku' AS sku, json->>'category' AS category " \
-                          f"FROM read_ndjson_objects({self._glob(SKUS_GLOB)})"
+                f"FROM read_ndjson_objects({self._glob(WALMART_GLOB)}, filename = true)"
+            )
+            skus_source = (
+                f"SELECT json->>'sku' AS sku, json->>'category' AS category "
+                f"FROM read_ndjson_objects({self._glob(SKUS_GLOB)})"
+            )
 
         self.con.execute(f"""
             CREATE VIEW walmart_orders AS
@@ -203,9 +210,12 @@ class QualityReport:
             (sf, weights.get(sf), n, round(100 * n / total, 2), measured_by_sf.get(sf))
             for sf, n in sorted(truth.items(), key=lambda kv: -kv[1])
         ]
-        return Table("storefront_skew",
-                     "Order theo Storefront. `orders_exported` trống nghĩa là Channel chưa có renderer.",
-                     ("storefront_id", "config_weight", "orders_truth", "pct_truth", "orders_exported"), rows)
+        return Table(
+            "storefront_skew",
+            "Order theo Storefront. `orders_exported` trống nghĩa là Channel chưa có renderer.",
+            ("storefront_id", "config_weight", "orders_truth", "pct_truth", "orders_exported"),
+            rows,
+        )
 
     def city_skew(self) -> Table:
         """Tỷ trọng Order theo thành phố trong từng Storefront (skew địa lý)."""
@@ -213,7 +223,9 @@ class QualityReport:
             SELECT storefront_id, city, count(*) AS orders,
                    round(100 * count(*) / sum(count(*)) OVER (PARTITION BY storefront_id), 2) AS pct
             FROM all_orders GROUP BY storefront_id, city ORDER BY storefront_id, orders DESC""")
-        return Table("city_skew", "Vài thành phố lớn chiếm phần lớn Order của mỗi Storefront.", columns, rows)
+        return Table(
+            "city_skew", "Vài thành phố lớn chiếm phần lớn Order của mỗi Storefront.", columns, rows
+        )
 
     def category_skew(self) -> Table:
         """Tỷ trọng Order Line theo danh mục (join `seller.skus`), kèm tỷ lệ trả thật."""
@@ -222,16 +234,24 @@ class QualityReport:
             FROM all_lines l JOIN skus s USING (sku) GROUP BY s.category ORDER BY order_lines DESC""")
         return_rates = self.manifest["labels"]["positive_rate_by_category"]
         rows = [(*row, _pct(return_rates.get(row[0]))) for row in rows]
-        return Table("category_skew", "Order Line theo danh mục. `return_pct_truth` là tỷ lệ trả thật từ manifest.",
-                     (*columns, "return_pct_truth"), rows)
+        return Table(
+            "category_skew",
+            "Order Line theo danh mục. `return_pct_truth` là tỷ lệ trả thật từ manifest.",
+            (*columns, "return_pct_truth"),
+            rows,
+        )
 
     def top_skus(self, n: int = 10) -> Table:
         """Các SKU bán chạy nhất và phần trăm Order Line của chúng (phân phối Zipf)."""
         columns, rows = self._query(f"""
             SELECT sku, count(*) AS order_lines, round(100 * count(*) / sum(count(*)) OVER (), 2) AS pct
             FROM all_lines GROUP BY sku ORDER BY order_lines DESC LIMIT {int(n)}""")
-        return Table("top_skus", "SKU bán chạy nhất nên chiếm khoảng 5% Order Line: tạo task chậm cho Spark.",
-                     columns, rows)
+        return Table(
+            "top_skus",
+            "SKU bán chạy nhất nên chiếm khoảng 5% Order Line: tạo task chậm cho Spark.",
+            columns,
+            rows,
+        )
 
     def daily_orders(self, n: int = 5) -> Table:
         """Các ngày nhiều Order nhất so với trung vị (Sale Event làm lệch theo ngày)."""
@@ -240,9 +260,12 @@ class QualityReport:
             SELECT day, orders, round(orders / (SELECT median(orders) FROM daily), 2) AS x_median
             FROM daily ORDER BY orders DESC LIMIT {int(n)}""")
         sale = (self.manifest.get("drift") or {}).get("prime_day") or {}
-        return Table("daily_orders",
-                     f"Ngày nhiều Order nhất (Amazon và Walmart). Ngày Sale Event trong manifest: {sale.get('days')}.",
-                     columns, rows)
+        return Table(
+            "daily_orders",
+            f"Ngày nhiều Order nhất (Amazon và Walmart). Ngày Sale Event trong manifest: {sale.get('days')}.",
+            columns,
+            rows,
+        )
 
     # --- High cardinality ---------------------------------------------------
 
@@ -260,14 +283,26 @@ class QualityReport:
         )
         rows = []
         for dataset, column, view in checks:
-            (approx, exact, n), = self.con.sql(
-                f"SELECT approx_count_distinct({column}), count(DISTINCT {column}), count(*) FROM {view}").fetchall()
-            rows.append((dataset, column.replace("payload->>", "").strip("'"), approx, exact,
-                         _pct(approx / exact - 1) if exact else None, n))
-        return Table("cardinality",
-                     "Số giá trị khác nhau: ước lượng HyperLogLog của DuckDB và số đếm chính xác. "
-                     "HyperLogLog của DuckDB dùng ít bộ đếm nên có thể lệch hơn 10%.",
-                     ("dataset", "column", "approx_distinct", "exact_distinct", "approx_err_pct", "rows"), rows)
+            ((approx, exact, n),) = self.con.sql(
+                f"SELECT approx_count_distinct({column}), count(DISTINCT {column}), count(*) FROM {view}"
+            ).fetchall()
+            rows.append(
+                (
+                    dataset,
+                    column.replace("payload->>", "").strip("'"),
+                    approx,
+                    exact,
+                    _pct(approx / exact - 1) if exact else None,
+                    n,
+                )
+            )
+        return Table(
+            "cardinality",
+            "Số giá trị khác nhau: ước lượng HyperLogLog của DuckDB và số đếm chính xác. "
+            "HyperLogLog của DuckDB dùng ít bộ đếm nên có thể lệch hơn 10%.",
+            ("dataset", "column", "approx_distinct", "exact_distinct", "approx_err_pct", "rows"),
+            rows,
+        )
 
     # --- Schema evolution ---------------------------------------------------
 
@@ -282,9 +317,12 @@ class QualityReport:
                    round(100 * avg(is_prime_null::INT), 2) AS pct_null_IsPrime,
                    round(100 * avg(order_id_v0_null::INT), 2) AS pct_null_AmazonOrderId
             FROM amazon_orders GROUP BY ALL ORDER BY period DESC""")
-        return Table("schema_evolution",
-                     f"amazon.orders đổi schema từ export_date {switch}: field mới null ở partition cũ và ngược lại.",
-                     columns, rows)
+        return Table(
+            "schema_evolution",
+            f"amazon.orders đổi schema từ export_date {switch}: field mới null ở partition cũ và ngược lại.",
+            columns,
+            rows,
+        )
 
     def schema_evolution_daily(self, days: int = 3) -> Table:
         """Tỷ lệ null theo từng `export_date` quanh ngày đổi schema."""
@@ -297,31 +335,63 @@ class QualityReport:
             WHERE export_date BETWEEN DATE '{switch}' - INTERVAL {int(days)} DAY
                                   AND DATE '{switch}' + INTERVAL {int(days) - 1} DAY
             GROUP BY ALL ORDER BY export_date""")
-        return Table("schema_evolution_daily", f"Tỷ lệ null theo export_date quanh ngày đổi schema {switch}.",
-                     columns, rows)
+        return Table(
+            "schema_evolution_daily",
+            f"Tỷ lệ null theo export_date quanh ngày đổi schema {switch}.",
+            columns,
+            rows,
+        )
 
     # --- Duplicate ----------------------------------------------------------
 
     def duplicates(self) -> Table:
         """Tỷ lệ trùng theo khóa trước và sau dedup, tách bản y hệt và bản cũ hơn."""
         rows = []
-        for dataset, raw, latest in (("amazon.orders", "amazon_orders", "amazon_latest"),
-                                     ("walmart.orders", "walmart_orders", "walmart_latest")):
-            (n, keys, older), = self.con.sql(f"""
+        for dataset, raw, latest in (
+            ("amazon.orders", "amazon_orders", "amazon_latest"),
+            ("walmart.orders", "walmart_orders", "walmart_latest"),
+        ):
+            ((n, keys, older),) = self.con.sql(f"""
                 SELECT count(*), count(DISTINCT order_id),
                        count(*) FILTER (WHERE updated_at < max_updated)
                 FROM (SELECT order_id, updated_at, max(updated_at) OVER (PARTITION BY order_id) AS max_updated
                       FROM {raw})""").fetchall()
-            (n_after, keys_after), = self.con.sql(
-                f"SELECT count(*), count(DISTINCT order_id) FROM {latest}").fetchall()
+            ((n_after, keys_after),) = self.con.sql(
+                f"SELECT count(*), count(DISTINCT order_id) FROM {latest}"
+            ).fetchall()
             truth = self.manifest["datasets"][dataset]["duplicate_rate"]
-            rows.append((dataset, n, keys, _pct(1 - keys / n), n - keys - older, older,
-                         n_after, _pct(1 - keys_after / n_after), _pct(truth)))
-        return Table("duplicates",
-                     ("Tỷ lệ trùng = 1 - count(distinct khóa) / count(*). Dedup giữ bản cập nhật mới nhất theo khóa. "
-                      "Walmart: mỗi lần kéo có `fetched_at` riêng, nên bản trùng nào cũng thành bản cũ hơn."),
-                     ("dataset", "rows_before", "distinct_keys", "dup_pct_before", "identical_copies",
-                      "older_versions", "rows_after", "dup_pct_after", "dup_pct_truth"), rows)
+            rows.append(
+                (
+                    dataset,
+                    n,
+                    keys,
+                    _pct(1 - keys / n),
+                    n - keys - older,
+                    older,
+                    n_after,
+                    _pct(1 - keys_after / n_after),
+                    _pct(truth),
+                )
+            )
+        return Table(
+            "duplicates",
+            (
+                "Tỷ lệ trùng = 1 - count(distinct khóa) / count(*). Dedup giữ bản cập nhật mới nhất theo khóa. "
+                "Walmart: mỗi lần kéo có `fetched_at` riêng, nên bản trùng nào cũng thành bản cũ hơn."
+            ),
+            (
+                "dataset",
+                "rows_before",
+                "distinct_keys",
+                "dup_pct_before",
+                "identical_copies",
+                "older_versions",
+                "rows_after",
+                "dup_pct_after",
+                "dup_pct_truth",
+            ),
+            rows,
+        )
 
     # --- Dung lượng ---------------------------------------------------------
 
@@ -330,40 +400,73 @@ class QualityReport:
         rows = []
         for name, prefix, where, fmt in DATASET_PREFIXES:
             full = self.store.path(prefix)
-            sizes = [info["size"] for info in self.store.fs.find(full, detail=True).values()] \
-                if self.store.fs.exists(full) else []
+            sizes = (
+                [info["size"] for info in self.store.fs.find(full, detail=True).values()]
+                if self.store.fs.exists(full)
+                else []
+            )
             rows.append((name, where, fmt, len(sizes), _mb(sum(sizes))))
         if self.dsn:
             for table, fmt in (("walmart.orders", "heap, cột JSONB"), ("seller.skus", "heap")):
-                (size,), = self.con.execute(
-                    "SELECT * FROM postgres_query('pg', ?)", [f"SELECT pg_total_relation_size('{table}')"]).fetchall()
+                ((size,),) = self.con.execute(
+                    "SELECT * FROM postgres_query('pg', ?)",
+                    [f"SELECT pg_total_relation_size('{table}')"],
+                ).fetchall()
                 rows.append((table, "PostgreSQL (bảng, gồm index)", fmt, None, _mb(size)))
-        return Table("volume", "Dung lượng sau khi lưu, theo nơi lưu và định dạng.",
-                     ("dataset", "storage", "format", "files", "size_mb"), rows)
+        return Table(
+            "volume",
+            "Dung lượng sau khi lưu, theo nơi lưu và định dạng.",
+            ("dataset", "storage", "format", "files", "size_mb"),
+            rows,
+        )
 
     def all_tables(self) -> list[Table]:
         """Mọi bảng của báo cáo, theo thứ tự in."""
-        return [self.storefront_skew(), self.city_skew(), self.category_skew(), self.top_skus(),
-                self.daily_orders(), self.cardinality(), self.schema_evolution(), self.schema_evolution_daily(),
-                self.duplicates(), self.volume()]
+        return [
+            self.storefront_skew(),
+            self.city_skew(),
+            self.category_skew(),
+            self.top_skus(),
+            self.daily_orders(),
+            self.cardinality(),
+            self.schema_evolution(),
+            self.schema_evolution_daily(),
+            self.duplicates(),
+            self.volume(),
+        ]
 
 
 def render_text(table: Table) -> str:
     """Định dạng bảng thành chữ canh cột, để in ra terminal và chụp màn hình."""
     cells = [tuple("" if v is None else str(v) for v in row) for row in table.rows]
-    widths = [max(len(c), *(len(r[i]) for r in cells)) if cells else len(c) for i, c in enumerate(table.columns)]
+    widths = [
+        max(len(c), *(len(r[i]) for r in cells)) if cells else len(c)
+        for i, c in enumerate(table.columns)
+    ]
     line = "  ".join("-" * w for w in widths)
-    out = [f"== {table.title} ==", table.note,
-           "  ".join(c.ljust(w) for c, w in zip(table.columns, widths)), line]
+    out = [
+        f"== {table.title} ==",
+        table.note,
+        "  ".join(c.ljust(w) for c, w in zip(table.columns, widths)),
+        line,
+    ]
     out += ["  ".join(v.ljust(w) for v, w in zip(row, widths)) for row in cells]
     return "\n".join(out)
 
 
 def render_markdown(table: Table) -> str:
     """Định dạng bảng thành Markdown, để dán vào tài liệu trong `docs/`."""
-    out = [f"#### {table.title}", "", table.note, "",
-           "| " + " | ".join(table.columns) + " |", "|" + "---|" * len(table.columns)]
-    out += ["| " + " | ".join("" if v is None else str(v) for v in row) + " |" for row in table.rows]
+    out = [
+        f"#### {table.title}",
+        "",
+        table.note,
+        "",
+        "| " + " | ".join(table.columns) + " |",
+        "|" + "---|" * len(table.columns),
+    ]
+    out += [
+        "| " + " | ".join("" if v is None else str(v) for v in row) + " |" for row in table.rows
+    ]
     return "\n".join(out)
 
 

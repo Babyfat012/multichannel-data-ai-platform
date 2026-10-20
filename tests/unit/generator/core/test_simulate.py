@@ -18,14 +18,22 @@ from generator.core.simulate import Simulator, postal_code
 
 def _fingerprint(orders):
     """Tóm tắt các Order thành tuple để so sánh hai lần sinh."""
-    return [(o.order_id, o.storefront_id, o.created_at, [(l.sku_id, l.quantity, l.label) for l in o.lines])
-            for o in orders]
+    return [
+        (
+            o.order_id,
+            o.storefront_id,
+            o.created_at,
+            [(line.sku_id, line.quantity, line.label) for line in o.lines],
+        )
+        for o in orders
+    ]
 
 
 def test_same_seed_gives_same_orders(tiny_config):
     """Chứng minh cùng seed sinh ra đúng cùng một tập Order (tái lập được)."""
-    assert _fingerprint(Simulator(tiny_config).simulate_day(3)) == \
-        _fingerprint(Simulator(tiny_config).simulate_day(3))
+    assert _fingerprint(Simulator(tiny_config).simulate_day(3)) == _fingerprint(
+        Simulator(tiny_config).simulate_day(3)
+    )
 
 
 def test_a_day_does_not_depend_on_previous_days(tiny_config):
@@ -35,7 +43,9 @@ def test_a_day_does_not_depend_on_previous_days(tiny_config):
         # Phải duyệt hết: `simulate_day` là generator, không duyệt thì không sinh gì
         # và test trở thành rỗng ruột.
         assert list(warm.simulate_day(day))
-    assert _fingerprint(warm.simulate_day(5)) == _fingerprint(Simulator(tiny_config).simulate_day(5))
+    assert _fingerprint(warm.simulate_day(5)) == _fingerprint(
+        Simulator(tiny_config).simulate_day(5)
+    )
 
 
 def test_orders_are_created_inside_their_day(tiny_config):
@@ -100,12 +110,15 @@ def test_catalog_has_requested_size_and_unique_ids(tiny_config):
     assert len(catalog.skus_by_id) == tiny_config.scale.n_skus
 
 
-@pytest.mark.parametrize("country, city, pattern", [
-    ("US", "New York", r"100\d{2}"),
-    ("DE", "Berlin", r"10\d{3}"),
-    ("GB", "London", r"SW\d{1,2} \d[A-Z]{2}"),
-    ("VN", "Hanoi", r"10\d{3}"),
-])
+@pytest.mark.parametrize(
+    "country, city, pattern",
+    [
+        ("US", "New York", r"100\d{2}"),
+        ("DE", "Berlin", r"10\d{3}"),
+        ("GB", "London", r"SW\d{1,2} \d[A-Z]{2}"),
+        ("VN", "Hanoi", r"10\d{3}"),
+    ],
+)
 def test_postal_code_follows_country_format(country, city, pattern):
     """Chứng minh mã bưu chính sinh ra khớp định dạng của từng quốc gia."""
     for suffix in (0, 248, 999):
@@ -115,7 +128,9 @@ def test_postal_code_follows_country_format(country, city, pattern):
 def _sale_config(tiny_config, **overrides):
     """Bản sao của cấu hình với một Sale Event ở ngày 5."""
     prime_day = PrimeDayConfig(day=5, days=2, order_multiplier=4, discount_share=0.7, deal_skus=3)
-    return dataclasses.replace(tiny_config, drift=DriftConfig(prime_day=dataclasses.replace(prime_day, **overrides)))
+    return dataclasses.replace(
+        tiny_config, drift=DriftConfig(prime_day=dataclasses.replace(prime_day, **overrides))
+    )
 
 
 def test_sale_day_multiplies_amazon_orders_only(tiny_config):
@@ -133,8 +148,13 @@ def test_sale_day_discounts_amazon_lines_deeper(tiny_config):
 
     def discounted_share(day):
         """Tỷ lệ Order Line Amazon có giảm giá trong một ngày."""
-        lines = [l for o in sim.simulate_day(day) if o.storefront_id.startswith("amazon") for l in o.lines]
-        return sum(l.unit_discount > 0 for l in lines) / len(lines)
+        lines = [
+            line
+            for o in sim.simulate_day(day)
+            if o.storefront_id.startswith("amazon")
+            for line in o.lines
+        ]
+        return sum(line.unit_discount > 0 for line in lines) / len(lines)
 
     assert discounted_share(5) > 0.5
     assert discounted_share(8) < 0.4
@@ -142,5 +162,6 @@ def test_sale_day_discounts_amazon_lines_deeper(tiny_config):
 
 def test_days_outside_the_sale_are_untouched(tiny_config):
     """Ngày thường phải ra đúng dữ liệu như khi không cấu hình Sale Event."""
-    assert _fingerprint(Simulator(_sale_config(tiny_config)).simulate_day(8)) == \
-        _fingerprint(Simulator(tiny_config).simulate_day(8))
+    assert _fingerprint(Simulator(_sale_config(tiny_config)).simulate_day(8)) == _fingerprint(
+        Simulator(tiny_config).simulate_day(8)
+    )

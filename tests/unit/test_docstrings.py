@@ -1,26 +1,34 @@
 """Kiểm mô tả mã nguồn, liên kết tương đối và độ phủ tài liệu theo rubric A2."""
 
 import ast
-from pathlib import Path
 import re
 import subprocess
+from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 import pytest
 
-
 ROOT = Path(__file__).resolve().parents[2]
 PYTHON_ROOTS = ("generator", "spark_jobs", "dags", "scripts", "tests", "infra")
 SKIP_PARTS = {".git", ".venv", "out", "__pycache__", ".pytest_cache"}
-COMMENT_PREFIXES = {".sh": ("#",), ".sql": ("--", "/*"),
-                    ".yml": ("#",), ".yaml": ("#",),
-                    ".tf": ("#", "//", "/*"), ".properties": ("#", "!")}
+COMMENT_PREFIXES = {
+    ".sh": ("#",),
+    ".sql": ("--", "/*"),
+    ".yml": ("#",),
+    ".yaml": ("#",),
+    ".tf": ("#", "//", "/*"),
+    ".properties": ("#", "!"),
+}
 
 
 def python_files():
     """Liệt kê Python trong phạm vi brief, kể cả file chưa được Git theo dõi."""
-    return sorted(path for name in PYTHON_ROOTS for path in (ROOT / name).rglob("*.py")
-                  if not SKIP_PARTS.intersection(path.relative_to(ROOT).parts))
+    return sorted(
+        path
+        for name in PYTHON_ROOTS
+        for path in (ROOT / name).rglob("*.py")
+        if not SKIP_PARTS.intersection(path.relative_to(ROOT).parts)
+    )
 
 
 def documented_nodes(tree):
@@ -39,18 +47,32 @@ def test_python_docstrings(path):
     """Mọi module, class, hàm và method ngoài hàm lồng phải có docstring."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     missing = [] if ast.get_docstring(tree) else ["module:1"]
-    missing.extend(f"{node.name}:{node.lineno}" for node in documented_nodes(tree)
-                   if not ast.get_docstring(node))
+    missing.extend(
+        f"{node.name}:{node.lineno}"
+        for node in documented_nodes(tree)
+        if not ast.get_docstring(node)
+    )
     assert not missing, f"{path.relative_to(ROOT)}: thiếu docstring {', '.join(missing)}"
 
 
 def described_files():
     """Tìm script/cấu hình thuộc repo, dùng Git để bỏ qua tài liệu cá nhân và output."""
-    result = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
-                            cwd=ROOT, check=True, capture_output=True)
-    return sorted({ROOT / name for name in result.stdout.decode().split("\0") if name
-                   and Path(name).suffix in COMMENT_PREFIXES
-                   and not SKIP_PARTS.intersection(Path(name).parts) and (ROOT / name).is_file()})
+    result = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    )
+    return sorted(
+        {
+            ROOT / name
+            for name in result.stdout.decode().split("\0")
+            if name
+            and Path(name).suffix in COMMENT_PREFIXES
+            and not SKIP_PARTS.intersection(Path(name).parts)
+            and (ROOT / name).is_file()
+        }
+    )
 
 
 @pytest.mark.parametrize("path", described_files(), ids=lambda p: str(p.relative_to(ROOT)))
@@ -61,8 +83,9 @@ def test_file_purpose_comment(path):
         lines = lines[1:]
     first = next((line.strip() for line in lines if line.strip()), "")
     prefixes = COMMENT_PREFIXES[path.suffix]
-    assert any(first.startswith(prefix) and re.search(r"\w", first[len(prefix):])
-               for prefix in prefixes), f"{path.relative_to(ROOT)}: thiếu mô tả đầu file"
+    assert any(
+        first.startswith(prefix) and re.search(r"\w", first[len(prefix) :]) for prefix in prefixes
+    ), f"{path.relative_to(ROOT)}: thiếu mô tả đầu file"
 
 
 def markdown_targets(path):
@@ -83,21 +106,31 @@ def ignored_targets(targets):
     relative = [str(path.relative_to(ROOT)) for path in targets if path.is_relative_to(ROOT)]
     if not relative:
         return set()
-    result = subprocess.run(["git", "check-ignore", "--no-index", "--stdin", "-z"],
-                            cwd=ROOT, input="\0".join(relative) + "\0", text=True,
-                            capture_output=True)
+    result = subprocess.run(
+        ["git", "check-ignore", "--no-index", "--stdin", "-z"],
+        cwd=ROOT,
+        input="\0".join(relative) + "\0",
+        text=True,
+        capture_output=True,
+    )
     assert result.returncode in (0, 1), result.stderr
     return {ROOT / name for name in result.stdout.split("\0") if name}
 
 
 def test_relative_markdown_links(record_property):
     """Link tương đối phải tồn tại; đếm riêng lượt link bị ignore theo yêu cầu brief."""
-    links = [(source, target) for source in [ROOT / "README.md", *sorted((ROOT / "docs").glob("*.md"))]
-             for target in markdown_targets(source)]
+    links = [
+        (source, target)
+        for source in [ROOT / "README.md", *sorted((ROOT / "docs").glob("*.md"))]
+        for target in markdown_targets(source)
+    ]
     ignored = ignored_targets({target for _, target in links})
     record_property("ignored_markdown_link_count", sum(target in ignored for _, target in links))
-    missing = [f"{source.relative_to(ROOT)} -> {target.relative_to(ROOT) if target.is_relative_to(ROOT) else target}"
-               for source, target in links if target not in ignored and not target.is_file()]
+    missing = [
+        f"{source.relative_to(ROOT)} -> {target.relative_to(ROOT) if target.is_relative_to(ROOT) else target}"
+        for source, target in links
+        if target not in ignored and not target.is_file()
+    ]
     assert not missing, "Link tương đối hỏng:\n" + "\n".join(missing)
 
 
@@ -112,8 +145,15 @@ def test_readme_reaches_all_public_docs():
         if source in visited:
             continue
         visited.add(source)
-        pending.extend(target for target in markdown_targets(source)
-                       if target.is_relative_to(ROOT) and target.suffix == ".md" and target.is_file()
-                       and target not in visited and target not in ignored_targets({target}))
+        pending.extend(
+            target
+            for target in markdown_targets(source)
+            if target.is_relative_to(ROOT)
+            and target.suffix == ".md"
+            and target.is_file()
+            and target not in visited
+            and target not in ignored_targets({target})
+        )
     assert not (public - visited), "Thiếu link tài liệu: " + ", ".join(
-        str(path.relative_to(ROOT)) for path in sorted(public - visited))
+        str(path.relative_to(ROOT)) for path in sorted(public - visited)
+    )

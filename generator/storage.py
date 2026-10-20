@@ -1,15 +1,7 @@
 """Ghi dữ liệu ra thư mục local hoặc object storage (MinIO, S3) qua fsspec.
 
-fsspec cho cùng một cách mở file với mọi nơi lưu: `./out/a.json` hay
-`s3://bucket/a.json` đều dùng `fs.open(...)`. Nhờ vậy code sinh dữ liệu
-không cần biết đang ghi vào đâu, chỉ cần đổi `storage.output_root` trong cấu hình.
-
-Về độ bền (durability): `write` của Python chỉ đưa dữ liệu vào bộ nhớ đệm của hệ
-điều hành, chưa chắc xuống đĩa. Mất điện lúc đó là mất phần chưa xuống. Nên mọi
-chỗ ghi mà sau đó có thứ khác dựa vào ("đã ghi xong") đều gọi `_fsync`, và
-`write_json_atomic` dùng ghi-tạm-rồi-đổi-tên để không bao giờ để lại file ghi dở.
-Trên object store thì không có khái niệm này: dữ liệu bền ngay khi `close` tải xong,
-nên `_fsync` trả về False và đó là đúng, không phải lỗi.
+Chỗ nào có thứ khác dựa vào "đã ghi xong" thì gọi `_fsync`; `write_json_atomic` ghi tạm rồi
+đổi tên để không để lại file ghi dở. Trên object store dữ liệu bền khi `close` tải xong.
 """
 
 from __future__ import annotations
@@ -17,8 +9,9 @@ from __future__ import annotations
 import io
 import json
 import os
-from contextlib import contextmanager
-from typing import Any, Iterable, Iterator
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager, suppress
+from typing import Any
 
 import fsspec
 import pyarrow as pa
@@ -26,11 +19,7 @@ import pyarrow.parquet as pq
 
 
 def _fsync(handle: Any) -> bool:
-    """Ép hệ điều hành ghi nội dung của `handle` xuống đĩa thật, ngay.
-
-    Trả về True nếu làm được. File trên object store không có `fileno()` nên trả
-    về False — ở đó độ bền đến từ lúc `close` tải xong, không từ `fsync`.
-    """
+    """Ép OS ghi `handle` xuống đĩa; trả False với file trên object store (không có `fileno()`)."""
     try:
         handle.flush()
         os.fsync(handle.fileno())
@@ -58,11 +47,9 @@ class JsonlAppender:
         return len(data)
 
     def close(self) -> tuple[int, int]:
-        """Ép dữ liệu xuống đĩa rồi đóng file, trả về `(số dòng, số byte)` đã ghi.
+        """`fsync` rồi đóng file, trả `(số dòng, số byte)`.
 
-        `fsync` trước khi đóng vì bên gọi dùng lúc đóng làm mốc "ngày này xong rồi"
-        và ghi một dấu hiệu bền ngay sau đó. Không `fsync` thì mất điện có thể để
-        lại dấu hiệu "xong" mà file thì thiếu đuôi — mất dữ liệu mà không ai báo.
+        Bên gọi ghi dấu "ngày này xong" ngay sau đó, nên file phải bền trước.
         """
         _fsync(self._handle)
         self._handle.close()
@@ -70,15 +57,10 @@ class JsonlAppender:
 
 
 class JsonlWriterPool:
-    """Giữ nhiều file JSON Lines mở cùng lúc, mỗi file một khóa do bên gọi đặt.
+    """Giữ nhiều file JSON Lines mở cùng lúc, mỗi file một khóa.
 
-    Dùng khi các file phải nhận dòng xen kẽ nhau nên không file nào gom trọn được
-    trong RAM. Ví dụ ở Batch: một Order tạo hôm nay có thể chỉ export sau hai tuần
-    (lúc giao xong), nên cả hai tuần ngày export đều đang chờ dòng mới. Gom theo
-    ngày thì RAM tỉ lệ với số đơn mỗi ngày; mở sẵn file thì RAM không đổi.
-
-    Bên gọi đóng từng khóa khi biết nó không còn nhận dòng nào nữa. Pool đóng mọi
-    file còn lại khi ra khỏi khối `with` của `OutputStore.jsonl_writers`.
+    Dùng khi các file nhận dòng xen kẽ: một Order hôm nay có thể export sau hai tuần, nên
+    mở sẵn file giữ RAM không đổi thay vì gom theo ngày.
     """
 
     def __init__(self, store: OutputStore) -> None:
@@ -92,11 +74,9 @@ class JsonlWriterPool:
         return list(self._open)
 
     def write(self, key: Any, relative: str, record: dict[str, Any]) -> int:
-        """Ghi `record` vào file của `key`, mở `relative` nếu đây là dòng đầu tiên.
+        """Ghi `record` vào file của `key`, mở `relative` ở dòng đầu tiên.
 
-        Ghi vào một khóa đã đóng là lỗi lập trình, không phải việc cần làm lại: mở
-        lại `relative` sẽ xóa trắng file đã ghi xong. Nên ném lỗi ngay thay vì âm
-        thầm mất dữ liệu — bên gọi chỉ được đóng khóa khi chắc nó hết dòng.
+        Ghi vào khóa đã đóng thì ném lỗi: mở lại sẽ xóa trắng file đã xong.
         """
         appender = self._open.get(key)
         if appender is None:
@@ -118,13 +98,7 @@ class JsonlWriterPool:
 
 
 class ParquetAppender:
-    """Bút ghi dần vào một file Parquet đang mở: mỗi lần `write` là một row group.
-
-    Row group là khối dữ liệu độc lập mà Spark đọc hoặc bỏ qua theo thống kê
-    min/max của nó. Nhiều khối bé thì metadata nở và Spark phải mở nhiều khối;
-    một khối khổng lồ thì bên ghi phải giữ cả khối trong RAM. Mốc thường dùng là
-    khoảng một triệu dòng mỗi khối.
-    """
+    """Ghi dần vào một file Parquet: mỗi lần `write` là một row group."""
 
     def __init__(self, writer: pq.ParquetWriter, schema: pa.Schema) -> None:
         """Bọc một `ParquetWriter` đã mở. Vòng đời file do `OutputStore` giữ."""
@@ -168,18 +142,9 @@ class OutputStore:
 
     def write_json(self, relative: str, obj: Any) -> int:
         """Ghi một đối tượng thành file JSON dễ đọc (thụt lề). Trả về số byte."""
-        return self._write_bytes(relative, json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8"))
-
-    def write_parquet(self, relative: str, columns: dict[str, list[Any]], schema: pa.Schema | None = None) -> int:
-        """Ghi bảng dạng cột (tên cột → danh sách giá trị) thành file Parquet.
-
-        Nên truyền `schema` để kiểu cột cố định. Không có schema thì pyarrow tự đoán
-        kiểu, và một bảng rỗng sẽ bị đoán thành kiểu `null`.
-        """
-        table = pa.table(columns, schema=schema)
-        sink = pa.BufferOutputStream()
-        pq.write_table(table, sink)
-        return self._write_bytes(relative, sink.getvalue().to_pybytes())
+        return self._write_bytes(
+            relative, json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
+        )
 
     def open_write(self, relative: str) -> Any:
         """Mở `relative` để ghi nhị phân, tự tạo thư mục cha. Bên gọi phải đóng."""
@@ -198,34 +163,22 @@ class OutputStore:
 
     @contextmanager
     def parquet_writer(self, relative: str, schema: pa.Schema) -> Iterator[ParquetAppender]:
-        """Mở `relative` để ghi dần, trả về `ParquetAppender` dùng trong khối `with`.
+        """Mở `relative` để ghi dần, trả `ParquetAppender` dùng trong khối `with`.
 
-        Dùng khi bảng quá lớn để giữ trọn trong RAM (xem `write_parquet` cho bảng
-        nhỏ). `OutputStore` giữ trách nhiệm đóng file: footer Parquet chỉ được ghi
-        lúc `close`, nên một writer không đóng sẽ để lại file Spark đọc không được.
-        Khối `with` đảm bảo điều đó cả khi thân vòng lặp ném lỗi.
+        Footer Parquet chỉ được ghi lúc `close`, nên khối `with` đóng file cả khi có lỗi.
         """
         full = self.path(relative)
         self.fs.makedirs(full.rsplit("/", 1)[0], exist_ok=True)
         with self.fs.open(full, "wb") as sink:
             with pq.ParquetWriter(sink, schema) as writer:
                 yield ParquetAppender(writer, schema)
-            # Sau khối `with` của ParquetWriter là lúc footer đã nằm trong `sink`;
-            # `fsync` ở đây để file đọc được sau khi mất điện, cùng lý do như
-            # `JsonlAppender.close`.
+            # Footer đã nằm trong `sink`; fsync như `JsonlAppender.close`.
             _fsync(sink)
 
     def write_json_atomic(self, relative: str, obj: Any) -> int:
-        """Ghi JSON theo kiểu "ghi tạm rồi đổi tên": không bao giờ để lại file ghi dở.
+        """Ghi JSON kiểu ghi tạm rồi đổi tên, để người đọc không thấy file ghi dở.
 
-        Ghi thẳng vào `relative` có một khoảng thời gian file đã tồn tại nhưng nội
-        dung còn thiếu. Ai đọc đúng lúc đó sẽ thấy JSON vỡ — hoặc tệ hơn, thấy một
-        file hợp lệ nhưng thiếu dữ liệu. Đổi tên thì khác: hệ thống file làm nó xong
-        hẳn hoặc không làm, không có trạng thái giữa. Nên `relative` chỉ hiện ra khi
-        nội dung đã đầy đủ và đã nằm trên đĩa.
-
-        Thứ tự bắt buộc: ghi tạm -> `fsync` file tạm -> đổi tên -> `fsync` thư mục
-        cha. Thiếu bước cuối thì cái tên mới có thể chưa bền dù nội dung đã bền.
+        Thứ tự: ghi tạm -> `fsync` file tạm -> đổi tên -> `fsync` thư mục cha.
         """
         data = json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
         full = self.path(relative)
@@ -248,15 +201,13 @@ class OutputStore:
             return json.load(f)
 
     def exists(self, relative: str) -> bool:
-        """Check for an output object without creating or modifying it."""
+        """Kiểm file đầu ra có tồn tại không, không tạo hay sửa gì."""
         return self.fs.exists(self.path(relative))
 
     def remove(self, relative: str) -> None:
         """Xóa một file. Không có file thì coi như xong, không ném lỗi."""
-        try:
+        with suppress(FileNotFoundError):
             self.fs.rm_file(self.path(relative))
-        except FileNotFoundError:
-            pass
 
     @property
     def _is_local(self) -> bool:

@@ -23,12 +23,22 @@ builder = load("scripts.evidence.build_order_snapshots_datahub_validation")
 publisher = load("scripts.run.publish_order_snapshots_datahub")
 
 CDC_V1_LOG = "Kafka=6, Bronze=6, offsets duy nhất=6, thiếu=0, lỗi=0\n"
-CDC_V2_LOG = ("Kafka=6, Bronze=6, offsets duy nhất=6, thiếu=0, thừa=0, sai payload=0, lỗi=0\n"
-              "Validate CDC Bronze: PASS\n")
+CDC_V2_LOG = (
+    "Kafka=6, Bronze=6, offsets duy nhất=6, thiếu=0, thừa=0, sai payload=0, lỗi=0\n"
+    "Validate CDC Bronze: PASS\n"
+)
 FEATURE_V1_LOG = "Gold fact=10, feature=10, feature invalid=0, duplicate_order_line_key=0\n"
-FEATURE_V2 = dict(fact_rows=10, feature_rows=10, invalid=0, duplicate_keys=0,
-                  source_invalid=0, source_duplicates=0, missing=0, extra=0,
-                  wrong_event_time=0)
+FEATURE_V2 = dict(
+    fact_rows=10,
+    feature_rows=10,
+    invalid=0,
+    duplicate_keys=0,
+    source_invalid=0,
+    source_duplicates=0,
+    missing=0,
+    extra=0,
+    wrong_event_time=0,
+)
 
 
 def feature_v2_log(**changes) -> str:
@@ -40,8 +50,13 @@ def test_cdc_v1_log_keeps_legacy_metrics():
     """Kiểm parser CDC v1 giữ các metric cũ."""
     metrics, _, log_format = builder.metrics_for("dp1_cdc", "validate_walmart_cdc", CDC_V1_LOG)
     assert log_format == "cdc-v1"
-    assert metrics == {"source_rows": 6, "dataset_rows": 6, "unique_offsets": 6,
-                       "missing_rows": 0, "invalid_rows": 0}
+    assert metrics == {
+        "source_rows": 6,
+        "dataset_rows": 6,
+        "unique_offsets": 6,
+        "missing_rows": 0,
+        "invalid_rows": 0,
+    }
 
 
 def test_cdc_v2_log_adds_extra_and_payload():
@@ -72,19 +87,29 @@ def test_cdc_log_format_must_match_table():
 
 def test_feature_v1_log_still_parses():
     """Kiểm parser tiếp tục nhận log feature v1."""
-    metrics, _, log_format = builder.metrics_for("dp3_features", "validate_return_features", FEATURE_V1_LOG)
+    metrics, _, log_format = builder.metrics_for(
+        "dp3_features", "validate_return_features", FEATURE_V1_LOG
+    )
     assert log_format == "feature-v1"
     assert metrics["source_rows"] == metrics["dataset_rows"] == 10
 
 
 def test_feature_v2_dict_log_parses_all_checks():
     """Kiểm parser đọc toàn bộ check trong dictionary log feature v2."""
-    metrics, _, log_format = builder.metrics_for("dp3_features", "validate_return_features", feature_v2_log())
+    metrics, _, log_format = builder.metrics_for(
+        "dp3_features", "validate_return_features", feature_v2_log()
+    )
     assert log_format == "feature-v2"
     assert metrics == {
-        "source_rows": 10, "dataset_rows": 10, "invalid_rows": 0,
-        "duplicate_order_line_key": 0, "source_invalid_rows": 0, "source_duplicate_keys": 0,
-        "missing_rows": 0, "extra_rows": 0, "wrong_event_time_rows": 0,
+        "source_rows": 10,
+        "dataset_rows": 10,
+        "invalid_rows": 0,
+        "duplicate_order_line_key": 0,
+        "source_invalid_rows": 0,
+        "source_duplicate_keys": 0,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "wrong_event_time_rows": 0,
     }
 
 
@@ -92,7 +117,9 @@ def test_feature_v2_dict_log_parses_all_checks():
 def test_feature_v2_nonzero_failure_is_rejected(field):
     """Kiểm feature v2 bị từ chối khi có metric lỗi khác không."""
     with pytest.raises(ValueError, match="Validation failed"):
-        builder.metrics_for("dp3_features", "validate_return_features", feature_v2_log(**{field: 1}))
+        builder.metrics_for(
+            "dp3_features", "validate_return_features", feature_v2_log(**{field: 1})
+        )
 
 
 def test_run_override_replaces_only_named_dag():
@@ -125,8 +152,12 @@ def test_assertion_urn_separates_v1_and_v2():
 
 def test_publisher_rejects_new_failure_metrics():
     """Kiểm publisher từ chối các metric lỗi mới."""
-    item = {"dataset": publisher.CDC, "state": "success", "task_id": "validate_walmart_cdc",
-            "metrics": {"dataset_rows": 6, "payload_mismatch_rows": 1}}
+    item = {
+        "dataset": publisher.CDC,
+        "state": "success",
+        "task_id": "validate_walmart_cdc",
+        "metrics": {"dataset_rows": 6, "payload_mismatch_rows": 1},
+    }
     with pytest.raises(ValueError, match="không PASS"):
         publisher.check_passed(item)
 
@@ -134,6 +165,7 @@ def test_publisher_rejects_new_failure_metrics():
 def test_legacy_manifest_still_publishable():
     """Manifest lịch sử (CDC v1, feature v1) vẫn qua kiểm tra publish, URN không đổi."""
     import json
+
     manifest = json.loads((SCRIPTS.parent / "docs/evidence/datahub-validation.json").read_text())
     for item in manifest["checks"]:
         publisher.check_passed(item)

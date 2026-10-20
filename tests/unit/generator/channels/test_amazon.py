@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-
-
 from generator.channels.amazon import AmazonOrdersRenderer
 from generator.core.model import FULFILLED_BY_CHANNEL
 from generator.core.simulate import Simulator
@@ -13,7 +11,12 @@ from generator.delivery.batch_exports import end_of_day
 def _orders_of(config, storefront_prefix, days=range(1, 4)):
     """Các Order của những Storefront có mã bắt đầu bằng `storefront_prefix`."""
     sim = Simulator(config)
-    return [o for d in days for o in sim.simulate_day(d) if o.storefront_id.startswith(storefront_prefix)]
+    return [
+        o
+        for d in days
+        for o in sim.simulate_day(d)
+        if o.storefront_id.startswith(storefront_prefix)
+    ]
 
 
 def test_amazon_schema_switches_on_configured_day(tiny_config):
@@ -53,4 +56,3 @@ def test_amazon_never_shows_delivered_and_only_mfn_has_delivery_window(tiny_conf
         assert record["OrderStatus"] in {"Pending", "Unshipped", "Shipped", "Canceled"}
         has_window = "EarliestDeliveryDate" in record
         assert has_window == (order.fulfillment != FULFILLED_BY_CHANNEL)
-

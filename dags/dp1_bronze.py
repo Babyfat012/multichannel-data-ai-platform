@@ -5,7 +5,7 @@ Chạy tay trên bảng thử `_dp1`, một Spark task mỗi lần để vừa R
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from airflow import DAG
 from fsds_spark_operator import FsdsSparkSubmitOperator
@@ -38,7 +38,7 @@ SPARK_CONF = {
 with DAG(
     dag_id="dp1_bronze",
     description="Raw 5 Channel -> Bronze; kiểm số dòng, payload và provenance",
-    start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    start_date=datetime(2026, 1, 1, tzinfo=UTC),
     schedule=None,
     catchup=False,
     is_paused_upon_creation=False,
@@ -49,8 +49,16 @@ with DAG(
     ingest_amazon = SparkSubmitOperator(
         task_id="ingest_amazon",
         application="/opt/spark_jobs/bronze/ingest_amazon_order_snapshots.py",
-        application_args=["--window-days", WINDOW_DAYS, "--window-start", WINDOW_START,
-                          "--table", AMAZON_TABLE, "--run-id", RUN_ID],
+        application_args=[
+            "--window-days",
+            WINDOW_DAYS,
+            "--window-start",
+            WINDOW_START,
+            "--table",
+            AMAZON_TABLE,
+            "--run-id",
+            RUN_ID,
+        ],
         conn_id="spark_default",
         packages=PACKAGES,
         driver_memory="600m",
@@ -59,9 +67,18 @@ with DAG(
     validate_amazon = SparkSubmitOperator(
         task_id="validate_amazon",
         application="/opt/spark_jobs/bronze/validate_order_snapshots.py",
-        application_args=["--channel", "amazon", "--window-days", WINDOW_DAYS,
-                          "--window-start", WINDOW_START, "--table", AMAZON_TABLE,
-                          "--run-id", RUN_ID],
+        application_args=[
+            "--channel",
+            "amazon",
+            "--window-days",
+            WINDOW_DAYS,
+            "--window-start",
+            WINDOW_START,
+            "--table",
+            AMAZON_TABLE,
+            "--run-id",
+            RUN_ID,
+        ],
         conn_id="spark_default",
         packages=PACKAGES,
         driver_memory="600m",
@@ -70,8 +87,7 @@ with DAG(
     ingest_walmart = SparkSubmitOperator(
         task_id="ingest_walmart",
         application="/opt/spark_jobs/bronze/ingest_walmart_order_snapshots.py",
-        application_args=["--num-partitions", "16", "--table", WALMART_TABLE,
-                          "--run-id", RUN_ID],
+        application_args=["--num-partitions", "16", "--table", WALMART_TABLE, "--run-id", RUN_ID],
         conn_id="spark_default",
         packages=PACKAGES,
         driver_memory="600m",
@@ -80,8 +96,7 @@ with DAG(
     validate_walmart = SparkSubmitOperator(
         task_id="validate_walmart",
         application="/opt/spark_jobs/bronze/validate_order_snapshots.py",
-        application_args=["--channel", "walmart", "--table", WALMART_TABLE,
-                          "--run-id", RUN_ID],
+        application_args=["--channel", "walmart", "--table", WALMART_TABLE, "--run-id", RUN_ID],
         conn_id="spark_default",
         packages=PACKAGES,
         driver_memory="600m",
@@ -95,8 +110,16 @@ with DAG(
         ingest = SparkSubmitOperator(
             task_id=f"ingest_{channel}",
             application="/opt/spark_jobs/bronze/ingest_file_order_snapshots.py",
-            application_args=["--channel", channel, "--source-root", SOURCE_ROOT,
-                              "--table", table, "--run-id", RUN_ID],
+            application_args=[
+                "--channel",
+                channel,
+                "--source-root",
+                SOURCE_ROOT,
+                "--table",
+                table,
+                "--run-id",
+                RUN_ID,
+            ],
             conn_id="spark_default",
             packages=PACKAGES,
             driver_memory="600m",
@@ -105,8 +128,16 @@ with DAG(
         validate = SparkSubmitOperator(
             task_id=f"validate_{channel}",
             application="/opt/spark_jobs/bronze/validate_file_order_snapshots.py",
-            application_args=["--channel", channel, "--source-root", SOURCE_ROOT,
-                              "--table", table, "--run-id", RUN_ID],
+            application_args=[
+                "--channel",
+                channel,
+                "--source-root",
+                SOURCE_ROOT,
+                "--table",
+                table,
+                "--run-id",
+                RUN_ID,
+            ],
             conn_id="spark_default",
             packages=PACKAGES,
             driver_memory="600m",

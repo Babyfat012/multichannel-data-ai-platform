@@ -39,8 +39,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     """Trả mã lỗi nếu bảng/cột, số dòng, ID hoặc provenance không đạt."""
     args = parse_args(argv)
-    source = (f"{args.source_root.rstrip('/')}/channel={args.channel}"
-              "/dataset=orders")
+    source = f"{args.source_root.rstrip('/')}/channel={args.channel}/dataset=orders"
     target = f"{CATALOG}.bronze.{args.table}"
     spark = build_spark(f"validate-bronze-{args.channel}")
     try:

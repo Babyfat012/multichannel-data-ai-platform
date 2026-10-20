@@ -5,7 +5,7 @@ Các Spark task chạy tuần tự để vừa RAM máy dev.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from airflow import DAG
 from fsds_spark_operator import FsdsSparkSubmitOperator as SparkSubmitOperator
@@ -27,7 +27,7 @@ SPARK_CONF = {
 with DAG(
     dag_id="dp2_silver",
     description="Bronze 5 Channel -> Silver Order Line; kiểm đầu ra từng kênh",
-    start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    start_date=datetime(2026, 1, 1, tzinfo=UTC),
     schedule=None,
     catchup=False,
     is_paused_upon_creation=False,
@@ -38,8 +38,14 @@ with DAG(
     ingest_amazon = SparkSubmitOperator(
         task_id="ingest_amazon_silver",
         application="/opt/spark_jobs/silver/build_amazon_order_snapshots.py",
-        application_args=["--source-table", AMAZON_BRONZE, "--table", AMAZON_SILVER,
-                          "--run-id", RUN_ID],
+        application_args=[
+            "--source-table",
+            AMAZON_BRONZE,
+            "--table",
+            AMAZON_SILVER,
+            "--run-id",
+            RUN_ID,
+        ],
         conn_id="spark_default",
         packages=PACKAGES,
         driver_memory="600m",
@@ -48,8 +54,16 @@ with DAG(
     validate_amazon = SparkSubmitOperator(
         task_id="validate_amazon_silver",
         application="/opt/spark_jobs/silver/validate_order_snapshots.py",
-        application_args=["--channel", "amazon", "--source-table", AMAZON_BRONZE,
-                          "--table", AMAZON_SILVER, "--run-id", RUN_ID],
+        application_args=[
+            "--channel",
+            "amazon",
+            "--source-table",
+            AMAZON_BRONZE,
+            "--table",
+            AMAZON_SILVER,
+            "--run-id",
+            RUN_ID,
+        ],
         conn_id="spark_default",
         packages=PACKAGES,
         driver_memory="600m",
@@ -58,8 +72,14 @@ with DAG(
     ingest_walmart = SparkSubmitOperator(
         task_id="ingest_walmart_silver",
         application="/opt/spark_jobs/silver/build_walmart_order_snapshots.py",
-        application_args=["--source-table", WALMART_BRONZE, "--table", WALMART_SILVER,
-                          "--run-id", RUN_ID],
+        application_args=[
+            "--source-table",
+            WALMART_BRONZE,
+            "--table",
+            WALMART_SILVER,
+            "--run-id",
+            RUN_ID,
+        ],
         conn_id="spark_default",
         packages=PACKAGES,
         driver_memory="600m",
@@ -70,8 +90,16 @@ with DAG(
     validate_walmart = SparkSubmitOperator(
         task_id="validate_walmart_silver",
         application="/opt/spark_jobs/silver/validate_order_snapshots.py",
-        application_args=["--channel", "walmart", "--source-table", WALMART_BRONZE,
-                          "--table", WALMART_SILVER, "--run-id", RUN_ID],
+        application_args=[
+            "--channel",
+            "walmart",
+            "--source-table",
+            WALMART_BRONZE,
+            "--table",
+            WALMART_SILVER,
+            "--run-id",
+            RUN_ID,
+        ],
         conn_id="spark_default",
         packages=PACKAGES,
         driver_memory="600m",
@@ -86,8 +114,16 @@ with DAG(
         ingest = SparkSubmitOperator(
             task_id=f"ingest_{channel}_silver",
             application="/opt/spark_jobs/silver/build_file_order_snapshots.py",
-            application_args=["--channel", channel, "--source-table", bronze_table,
-                              "--table", silver_table, "--run-id", RUN_ID],
+            application_args=[
+                "--channel",
+                channel,
+                "--source-table",
+                bronze_table,
+                "--table",
+                silver_table,
+                "--run-id",
+                RUN_ID,
+            ],
             conn_id="spark_default",
             packages=PACKAGES,
             driver_memory="600m",
@@ -96,8 +132,16 @@ with DAG(
         validate = SparkSubmitOperator(
             task_id=f"validate_{channel}_silver",
             application="/opt/spark_jobs/silver/validate_file_order_snapshots.py",
-            application_args=["--channel", channel, "--source-table", bronze_table,
-                              "--table", silver_table, "--run-id", RUN_ID],
+            application_args=[
+                "--channel",
+                channel,
+                "--source-table",
+                bronze_table,
+                "--table",
+                silver_table,
+                "--run-id",
+                RUN_ID,
+            ],
             conn_id="spark_default",
             packages=PACKAGES,
             driver_memory="600m",
@@ -107,8 +151,10 @@ with DAG(
         previous = validate
 
     gold_sources = [
-        "--amazon-source", AMAZON_SILVER,
-        "--walmart-source", WALMART_SILVER,
+        "--amazon-source",
+        AMAZON_SILVER,
+        "--walmart-source",
+        WALMART_SILVER,
     ]
     for channel in ("tiktok_shop", "shopify", "shopee"):
         gold_sources += [
@@ -137,8 +183,14 @@ with DAG(
     build_dim = SparkSubmitOperator(
         task_id="build_amazon_order_dim",
         application="/opt/spark_jobs/gold/build_amazon_order_status_scd2.py",
-        application_args=["--source-table", AMAZON_BRONZE,
-                          "--table", AMAZON_DIM, "--run-id", RUN_ID],
+        application_args=[
+            "--source-table",
+            AMAZON_BRONZE,
+            "--table",
+            AMAZON_DIM,
+            "--run-id",
+            RUN_ID,
+        ],
         conn_id="spark_default",
         packages=PACKAGES,
         driver_memory="600m",
@@ -149,8 +201,7 @@ with DAG(
     validate_dim = SparkSubmitOperator(
         task_id="validate_amazon_order_dim",
         application="/opt/spark_jobs/gold/validate_amazon_order_status_scd2.py",
-        application_args=["--table", AMAZON_DIM, "--fact-table", GOLD_TABLE,
-                          "--run-id", RUN_ID],
+        application_args=["--table", AMAZON_DIM, "--fact-table", GOLD_TABLE, "--run-id", RUN_ID],
         conn_id="spark_default",
         packages=PACKAGES,
         driver_memory="600m",

@@ -81,8 +81,10 @@ class StreamMessage:
 def stream_messages(config: GeneratorConfig) -> Iterator[StreamMessage]:
     """Sinh mọi message của Stream, theo thứ tự thời điểm đến."""
     sim = Simulator(config)
-    renderers = {"amazon": AmazonOrderNotificationRenderer(config),
-                 "tiktok_shop": TikTokOrderWebhookRenderer(config)}
+    renderers = {
+        "amazon": AmazonOrderNotificationRenderer(config),
+        "tiktok_shop": TikTokOrderWebhookRenderer(config),
+    }
     rng = rng_for(config.seed, "stream_delivery")
     seq = itertools.count()  # phá hòa trong heap, giữ thứ tự tái lập được
 
@@ -111,8 +113,13 @@ def stream_messages(config: GeneratorConfig) -> Iterator[StreamMessage]:
         yield heapq.heappop(messages)[2]
 
 
-def _deliver(config: GeneratorConfig, renderers: dict[str, Any], rng: np.random.Generator,
-             order: Order, change: StatusChange) -> list[StreamMessage]:
+def _deliver(
+    config: GeneratorConfig,
+    renderers: dict[str, Any],
+    rng: np.random.Generator,
+    order: Order,
+    change: StatusChange,
+) -> list[StreamMessage]:
     """Vẽ một lần đổi trạng thái rồi quyết định lúc đến và bản trùng."""
     channel = STOREFRONTS[order.storefront_id].channel
     rendered = renderers[channel].render_event(order, change)
@@ -126,13 +133,25 @@ def _deliver(config: GeneratorConfig, renderers: dict[str, Any], rng: np.random.
         value = rendered.record
         key = value["data"]["order_id"]
 
-    original = StreamMessage(TOPICS[channel], key, rendered.key, value, order.storefront_id, change.at, arrive)
+    original = StreamMessage(
+        TOPICS[channel], key, rendered.key, value, order.storefront_id, change.at, arrive
+    )
     out = [original]
     rate = config.streaming_problems.duplicate_rate.get(order.storefront_id, 0.0)
     if rate and rng.random() < rate / (1 - rate):
         retry = float(rng.choice(TIKTOK_RETRY_MINUTES, p=TIKTOK_RETRY_WEIGHTS))
-        out.append(StreamMessage(original.topic, key, rendered.key, value, order.storefront_id,
-                                 change.at, arrive + timedelta(minutes=retry), is_duplicate=True))
+        out.append(
+            StreamMessage(
+                original.topic,
+                key,
+                rendered.key,
+                value,
+                order.storefront_id,
+                change.at,
+                arrive + timedelta(minutes=retry),
+                is_duplicate=True,
+            )
+        )
     return out
 
 

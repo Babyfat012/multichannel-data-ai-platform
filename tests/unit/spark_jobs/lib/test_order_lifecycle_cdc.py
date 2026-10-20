@@ -1,19 +1,20 @@
 """Kiểm CDC v2 không service: seed, contract, đối soát oracle và cấu trúc DAG/harness."""
+
 from __future__ import annotations
 
 import ast
-from copy import deepcopy
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
 
 from generator.generate_order_lifecycle_fixture import generate_fixture
-from scripts.setup.load_order_lifecycle_walmart import bootstrap_rows
 from scripts.run.mutate_order_lifecycle_cdc import mutation_plan
-from spark_jobs.lib.order_lifecycle_cdc import compare_events, payload_sha256
+from scripts.setup.load_order_lifecycle_walmart import bootstrap_rows
 from spark_jobs.lib.data_contracts.registry import Registry
 from spark_jobs.lib.data_contracts.schema import validate_record
+from spark_jobs.lib.order_lifecycle_cdc import compare_events, payload_sha256
 
 ROOT = Path(__file__).resolve().parents[4]
 EPOCH = "cluster/topic-uuid"
@@ -30,10 +31,20 @@ def plan(tmp_path):
 
 def bronze_rows(plan):
     """Dựng dữ liệu Bronze sạch theo định dạng thật để kiểm hàm thuần."""
-    return [{**e, "payload_after": e["raw_payload"], "record_sha256": e["after_sha256"],
-             "source_epoch": EPOCH, "source_lsn": 100 + n, "source_ts": 123456,
-             "topic": "topic", "kafka_partition": 0, "kafka_offset": n}
-            for n, e in enumerate(plan)]
+    return [
+        {
+            **e,
+            "payload_after": e["raw_payload"],
+            "record_sha256": e["after_sha256"],
+            "source_epoch": EPOCH,
+            "source_lsn": 100 + n,
+            "source_ts": 123456,
+            "topic": "topic",
+            "kafka_partition": 0,
+            "kafka_offset": n,
+        }
+        for n, e in enumerate(plan)
+    ]
 
 
 def test_seed_and_contract(plan):
@@ -41,11 +52,17 @@ def test_seed_and_contract(plan):
     events, sample = plan
     assert events == mutation_plan(sample, 11)
     assert events[0]["purchase_order_id"] != mutation_plan(sample, 12)[0]["purchase_order_id"]
-    schema = Registry(ROOT / "contracts").lookup("sim-native-v2/walmart/1")["schema"]
+    schema = Registry(ROOT / "contracts").entries.get("sim-native-v2/walmart/1")["schema"]
     for event in events[:2]:
         payload = json.loads(event["raw_payload"])
-        assert not validate_record({"fetched_at": sample["fetched_at"],
-            "purchase_order_id": event["purchase_order_id"], "raw_payload": payload}, schema)
+        assert not validate_record(
+            {
+                "fetched_at": sample["fetched_at"],
+                "purchase_order_id": event["purchase_order_id"],
+                "raw_payload": payload,
+            },
+            schema,
+        )
         assert payload["purchaseOrderId"] == event["purchase_order_id"]
         assert event["after_sha256"] == payload_sha256(event["raw_payload"])
     assert events[0]["raw_payload"] != events[1]["raw_payload"]
@@ -60,7 +77,9 @@ def test_clean_and_arrival_order(plan):
     assert not any(compare_events(events, rows[::-1], EPOCH).values())
 
 
-@pytest.mark.parametrize("kind", ["missing", "extra", "payload_mismatch", "order_mismatch", "epoch_mismatch"])
+@pytest.mark.parametrize(
+    "kind", ["missing", "extra", "payload_mismatch", "order_mismatch", "epoch_mismatch"]
+)
 def test_oracle_detects_errors(plan, kind):
     """Từng lỗi độc lập phải được đối soát phát hiện, kể cả hash cột bị giả mạo."""
     events, _ = plan
@@ -98,7 +117,10 @@ def test_duplicate_delete_payload_and_boundary(plan):
 def test_contract_rejects_bad_sample(plan):
     """Mutation không được tạo oracle cho payload thiếu trường required."""
     _, sample = plan
-    sample = {**sample, "raw_payload": json.dumps({"purchaseOrderId": "x", "orderLines": {"orderLine": [{}]}})}
+    sample = {
+        **sample,
+        "raw_payload": json.dumps({"purchaseOrderId": "x", "orderLines": {"orderLine": [{}]}}),
+    }
     with pytest.raises(ValueError, match="contract"):
         mutation_plan(sample, 11)
 
@@ -116,28 +138,60 @@ def test_dag_ast_and_setup():
     """DAG paused, trigger tay, hai task đúng thứ tự và Variables được setup đủ."""
     source = (ROOT / "dags/dp_order_lifecycle_cdc.py").read_text()
     tree = ast.parse(source)
-    dag = next(n for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "DAG")
+    dag = next(
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "DAG"
+    )
     kwargs = {kw.arg: kw.value for kw in dag.keywords}
     assert ast.literal_eval(kwargs["schedule"]) is None
     assert ast.literal_eval(kwargs["is_paused_upon_creation"]) is True
-    dependencies = [n.value for n in ast.walk(tree) if isinstance(n, ast.Expr) and isinstance(n.value, ast.BinOp)]
-    assert any(isinstance(n.op, ast.RShift) and n.left.id == "ingest_cdc" and n.right.id == "validate_cdc" for n in dependencies)
-    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "OrderLifecycleCdcSparkSubmitOperator"]
+    dependencies = [
+        n.value
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Expr) and isinstance(n.value, ast.BinOp)
+    ]
+    assert any(
+        isinstance(n.op, ast.RShift) and n.left.id == "ingest_cdc" and n.right.id == "validate_cdc"
+        for n in dependencies
+    )
+    calls = [
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Call)
+        and isinstance(n.func, ast.Name)
+        and n.func.id == "OrderLifecycleCdcSparkSubmitOperator"
+    ]
     assert len(calls) == 2
     setup = (ROOT / "scripts/setup/setup_airflow.sh").read_text()
-    for variable in ("fsds_order_lifecycle_driver_memory", "fsds_order_lifecycle_executor_memory", "fsds_order_lifecycle_executor_cores",
-                     "fsds_order_lifecycle_cdc_spark_packages", "fsds_order_lifecycle_cdc_oracle", "fsds_order_lifecycle_cdc_control_dir"):
+    for variable in (
+        "fsds_order_lifecycle_driver_memory",
+        "fsds_order_lifecycle_executor_memory",
+        "fsds_order_lifecycle_executor_cores",
+        "fsds_order_lifecycle_cdc_spark_packages",
+        "fsds_order_lifecycle_cdc_oracle",
+        "fsds_order_lifecycle_cdc_control_dir",
+    ):
         assert variable in source and f"variables set {variable}" in setup
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef))
-    assert all(f'"{field}"' in ast.get_source_segment(source, cls)
-               for field in ("driver_memory", "executor_memory", "executor_cores"))
+    assert all(
+        f'"{field}"' in ast.get_source_segment(source, cls)
+        for field in ("driver_memory", "executor_memory", "executor_cores")
+    )
 
 
 def test_all_new_python_functions_have_vietnamese_docstrings():
-    """Các hàm mới đều có docstring, theo luật brief; parse không cần Airflow/Spark."""
-    files = ["scripts/setup/setup_order_lifecycle_debezium.py", "scripts/run/mutate_order_lifecycle_cdc.py", "spark_jobs/lib/order_lifecycle_cdc.py",
-             "spark_jobs/cdc/ingest_order_lifecycle_changes.py", "spark_jobs/cdc/validate_order_lifecycle_changes.py",
-             "dags/dp_order_lifecycle_cdc.py", "tests/harness/control_order_lifecycle_cdc.py", "tests/unit/spark_jobs/lib/test_order_lifecycle_cdc.py"]
+    """Các hàm mới đều có docstring; parse không cần Airflow/Spark."""
+    files = [
+        "scripts/setup/setup_order_lifecycle_debezium.py",
+        "scripts/run/mutate_order_lifecycle_cdc.py",
+        "spark_jobs/lib/order_lifecycle_cdc.py",
+        "spark_jobs/cdc/ingest_order_lifecycle_changes.py",
+        "spark_jobs/cdc/validate_order_lifecycle_changes.py",
+        "dags/dp_order_lifecycle_cdc.py",
+        "tests/harness/control_order_lifecycle_cdc.py",
+        "tests/unit/spark_jobs/lib/test_order_lifecycle_cdc.py",
+    ]
     for name in files:
         tree = ast.parse((ROOT / name).read_text())
         assert ast.get_docstring(tree), name
@@ -150,7 +204,12 @@ def test_two_updates_same_key_reordered(plan):
     """Đảo hai UPDATE vẫn phải báo sai thứ tự dù chuỗi op c/u/u/d không đổi."""
     events, _ = plan
     events = deepcopy(events)
-    second_update = {**events[1], "raw_payload": "another payload", "after_sha256": payload_sha256("another payload"), "commit_order": 3}
+    second_update = {
+        **events[1],
+        "raw_payload": "another payload",
+        "after_sha256": payload_sha256("another payload"),
+        "commit_order": 3,
+    }
     events[-1]["commit_order"] = 4
     events.insert(2, second_update)
     rows = bronze_rows(events)

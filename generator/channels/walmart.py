@@ -18,7 +18,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from generator.channels.base import POSTGRES, RenderedRecord, epoch_millis, iso_z, native_code, native_digits
+from generator.channels.base import (
+    POSTGRES,
+    RenderedRecord,
+    epoch_millis,
+    iso_z,
+    native_code,
+    native_digits,
+)
 from generator.config import GeneratorConfig
 from generator.core.model import (
     AWAITING_SHIPMENT,
@@ -65,12 +72,18 @@ class WalmartOrdersRenderer:
         # Hàm băm chỉ cho 64 bit (khoảng 12 ký tự chữ và số, hoặc 19 chữ số), nên mã dài
         # được ghép từ hai nửa băm với `kind` khác nhau.
         if carrier == "UPS":
-            return ("1Z" + native_code(self.seed, "tracking", po_id, 8)
-                    + native_code(self.seed, "tracking_2", po_id, 8))
+            return (
+                "1Z"
+                + native_code(self.seed, "tracking", po_id, 8)
+                + native_code(self.seed, "tracking_2", po_id, 8)
+            )
         if carrier == "FedEx":
             return native_digits(self.seed, "tracking", po_id, 12)
-        return ("94" + native_digits(self.seed, "tracking", po_id, 10)
-                + native_digits(self.seed, "tracking_2", po_id, 10))
+        return (
+            "94"
+            + native_digits(self.seed, "tracking", po_id, 10)
+            + native_digits(self.seed, "tracking_2", po_id, 10)
+        )
 
     def render(self, order: Order, as_of: datetime, export_day: int) -> RenderedRecord:
         """Vẽ `order` tại `as_of`. Mọi dòng của đơn cùng trạng thái (đơn giản hóa)."""
@@ -93,33 +106,50 @@ class WalmartOrdersRenderer:
                     "carrierName": {"carrier": carrier},
                     "trackingNumber": self.tracking_number(carrier, po_id),
                 }
-            lines.append({
-                "lineNumber": str(line.line_number),
-                "item": {"productName": f"ACME {line.sku_id}", "sku": line.sku_id},
-                "charges": {"charge": [{
-                    "chargeType": "PRODUCT",
-                    "chargeName": "ItemPrice",
-                    "chargeAmount": {"currency": order.currency,
-                                     "amount": round((line.unit_price - line.unit_discount) * line.quantity,
-                                                     decimals)},
-                }]},
-                "orderLineQuantity": {"unitOfMeasurement": "EACH", "amount": str(line.quantity)},
-                "statusDate": epoch_millis(change.at),
-                "orderLineStatuses": {"orderLineStatus": [line_status]},
-            })
+            lines.append(
+                {
+                    "lineNumber": str(line.line_number),
+                    "item": {"productName": f"ACME {line.sku_id}", "sku": line.sku_id},
+                    "charges": {
+                        "charge": [
+                            {
+                                "chargeType": "PRODUCT",
+                                "chargeName": "ItemPrice",
+                                "chargeAmount": {
+                                    "currency": order.currency,
+                                    "amount": round(
+                                        (line.unit_price - line.unit_discount) * line.quantity,
+                                        decimals,
+                                    ),
+                                },
+                            }
+                        ]
+                    },
+                    "orderLineQuantity": {
+                        "unitOfMeasurement": "EACH",
+                        "amount": str(line.quantity),
+                    },
+                    "statusDate": epoch_millis(change.at),
+                    "orderLineStatuses": {"orderLineStatus": [line_status]},
+                }
+            )
 
         payload = {
             "purchaseOrderId": po_id,
             "customerOrderId": native_digits(self.seed, "walmart_co", order.order_id, 13),
             "customerEmailId": native_code(self.seed, "walmart_mail", buyer.buyer_id, 12).lower()
-                               + "@relay.walmart.com",
+            + "@relay.walmart.com",
             "orderDate": epoch_millis(order.created_at),
             "buyerId": native_code(self.seed, "walmart_buyer", buyer.buyer_id, 12).lower(),
             "isGuest": buyer.is_guest,
             "orderType": "REGULAR",
             "shippingInfo": {
                 "estimatedDeliveryDate": epoch_millis(order.promised_delivery[1]),
-                "postalAddress": {"city": buyer.city, "postalCode": buyer.postal_code, "country": "USA"},
+                "postalAddress": {
+                    "city": buyer.city,
+                    "postalCode": buyer.postal_code,
+                    "country": "USA",
+                },
             },
             "orderLines": {"orderLine": lines},
         }
@@ -129,5 +159,11 @@ class WalmartOrdersRenderer:
     def line_keys(self, order: Order) -> list[dict[str, Any]]:
         """Ánh xạ Order Line chuẩn sang `purchaseOrderId` và `lineNumber`."""
         po_id = self.purchase_order_id(order)
-        return [{"order_line_id": line.order_line_id, "channel_order_id": po_id,
-                 "channel_line_id": str(line.line_number)} for line in order.lines]
+        return [
+            {
+                "order_line_id": line.order_line_id,
+                "channel_order_id": po_id,
+                "channel_line_id": str(line.line_number),
+            }
+            for line in order.lines
+        ]

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from airflow import DAG
 from fsds_spark_operator import FsdsSparkSubmitOperator
@@ -31,7 +31,7 @@ SPARK_CONF = {
 with DAG(
     dag_id="dp1_cdc",
     description="Nguồn Walmart CDC qua Kafka → Bronze và kiểm đủ offset",
-    start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    start_date=datetime(2026, 1, 1, tzinfo=UTC),
     schedule=None,
     catchup=False,
     is_paused_upon_creation=False,
@@ -42,10 +42,18 @@ with DAG(
     ingest = SparkSubmitOperator(
         task_id="ingest_walmart_cdc",
         application="/opt/spark_jobs/cdc/ingest_walmart_order_changes.py",
-        application_args=["--bootstrap", "{{ conn.fsds_kafka.host }}:{{ conn.fsds_kafka.port }}",
-                          "--topic", "{{ var.value.fsds_dp1_cdc_topic }}",
-                          "--table", TABLE, "--run-id", "{{ run_id }}",
-                          "--boundary-dir", BOUNDARY_DIR],
+        application_args=[
+            "--bootstrap",
+            "{{ conn.fsds_kafka.host }}:{{ conn.fsds_kafka.port }}",
+            "--topic",
+            "{{ var.value.fsds_dp1_cdc_topic }}",
+            "--table",
+            TABLE,
+            "--run-id",
+            "{{ run_id }}",
+            "--boundary-dir",
+            BOUNDARY_DIR,
+        ],
         conn_id="spark_default",
         packages=PACKAGES,
         driver_memory="600m",
@@ -54,9 +62,18 @@ with DAG(
     validate = SparkSubmitOperator(
         task_id="validate_walmart_cdc",
         application="/opt/spark_jobs/cdc/validate_walmart_order_changes.py",
-        application_args=["--bootstrap", "{{ conn.fsds_kafka.host }}:{{ conn.fsds_kafka.port }}",
-                          "--topic", "{{ var.value.fsds_dp1_cdc_topic }}", "--table", TABLE,
-                          "--run-id", "{{ run_id }}", "--boundary-dir", BOUNDARY_DIR],
+        application_args=[
+            "--bootstrap",
+            "{{ conn.fsds_kafka.host }}:{{ conn.fsds_kafka.port }}",
+            "--topic",
+            "{{ var.value.fsds_dp1_cdc_topic }}",
+            "--table",
+            TABLE,
+            "--run-id",
+            "{{ run_id }}",
+            "--boundary-dir",
+            BOUNDARY_DIR,
+        ],
         conn_id="spark_default",
         packages=PACKAGES,
         driver_memory="600m",

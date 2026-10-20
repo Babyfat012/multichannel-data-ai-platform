@@ -29,30 +29,49 @@ def main() -> None:
     batch = sub.add_parser("batch", help="Sinh dữ liệu Batch (lịch sử tới cutoff)")
     batch.add_argument("--config", required=True, help="Đường dẫn file cấu hình YAML")
     batch.add_argument("--output", help="Ghi đè storage.output_root trong cấu hình")
-    batch.add_argument("--restart", action="store_true",
-                       help="Bỏ qua tem của lần chạy cũ và sinh lại từ ngày 1 (mặc định là chạy tiếp)")
+    batch.add_argument(
+        "--restart",
+        action="store_true",
+        help="Bỏ qua tem của lần chạy cũ và sinh lại từ ngày 1 (mặc định là chạy tiếp)",
+    )
 
     load = sub.add_parser("load-postgres", help="Nạp pg-load/ của một lần chạy vào PostgreSQL")
-    load.add_argument("--source", required=True, help="Gốc đầu ra của lần chạy (thư mục hoặc s3://...)")
+    load.add_argument(
+        "--source", required=True, help="Gốc đầu ra của lần chạy (thư mục hoặc s3://...)"
+    )
     load.add_argument("--dsn", required=True, help="Chuỗi kết nối PostgreSQL")
-    load.add_argument("--sample-days", type=int, default=0,
-                      help="Chỉ nạp N ngày export RẢI ĐỀU thay vì cả dải. Rải đều (không "
-                           "phải N ngày cuối) vì dữ liệu lớn dần theo thời gian, lấy liền "
-                           "nhau ở cuối thì tập mẫu không đại diện. 0 = nạp hết. "
-                           "Bảng seller.skus không chia theo ngày nên luôn nạp đủ.")
+    load.add_argument(
+        "--sample-days",
+        type=int,
+        default=0,
+        help="Chỉ nạp N ngày export RẢI ĐỀU thay vì cả dải. Rải đều (không "
+        "phải N ngày cuối) vì dữ liệu lớn dần theo thời gian, lấy liền "
+        "nhau ở cuối thì tập mẫu không đại diện. 0 = nạp hết. "
+        "Bảng seller.skus không chia theo ngày nên luôn nạp đủ.",
+    )
 
     report = sub.add_parser("report", help="In báo cáo chất lượng dữ liệu của một lần chạy")
-    report.add_argument("--source", required=True, help="Gốc đầu ra của lần chạy (thư mục hoặc s3://...)")
+    report.add_argument(
+        "--source", required=True, help="Gốc đầu ra của lần chạy (thư mục hoặc s3://...)"
+    )
     report.add_argument("--dsn", help="Đọc Walmart và SKU từ PostgreSQL thay vì từ pg-load/")
     report.add_argument("--markdown", action="store_true", help="In dạng Markdown để dán vào docs/")
 
     stream = sub.add_parser("stream", help="Phát Stream sau cutoff vào Kafka hoặc ra file")
     stream.add_argument("--config", required=True, help="Đường dẫn file cấu hình YAML")
-    stream.add_argument("--output", help="Ghi đè storage.output_root (nơi ghi stream_manifest.json)")
+    stream.add_argument(
+        "--output", help="Ghi đè storage.output_root (nơi ghi stream_manifest.json)"
+    )
     stream.add_argument("--sink", choices=["kafka", "file"], default="kafka")
-    stream.add_argument("--bootstrap", default="localhost:9092", help="Địa chỉ Kafka khi --sink kafka")
-    stream.add_argument("--speed", type=float, default=1.0,
-                        help="1 là đúng nhịp cấu hình, 60 là nhanh gấp 60 lần, 0 là không chờ")
+    stream.add_argument(
+        "--bootstrap", default="localhost:9092", help="Địa chỉ Kafka khi --sink kafka"
+    )
+    stream.add_argument(
+        "--speed",
+        type=float,
+        default=1.0,
+        help="1 là đúng nhịp cấu hình, 60 là nhanh gấp 60 lần, 0 là không chờ",
+    )
 
     args = parser.parse_args()
     started = time.perf_counter()
@@ -74,28 +93,37 @@ def main() -> None:
 
 def _run_batch(args: argparse.Namespace) -> None:
     """Sinh Batch theo cấu hình, in tóm tắt manifest."""
-    from generator.generate_order_snapshots import BatchRun
     from generator.config import load_config
+    from generator.generate_order_snapshots import BatchRun
 
     config = load_config(args.config)
     if args.output:
-        config = dataclasses.replace(config, storage=dataclasses.replace(config.storage, output_root=args.output))
+        config = dataclasses.replace(
+            config, storage=dataclasses.replace(config.storage, output_root=args.output)
+        )
     manifest = BatchRun(config).run(restart=args.restart)
-    print(json.dumps({k: manifest[k] for k in ("datasets", "labels")}, indent=2, ensure_ascii=False))
+    print(
+        json.dumps({k: manifest[k] for k in ("datasets", "labels")}, indent=2, ensure_ascii=False)
+    )
     print(f"Ghi tại {config.storage.output_root}")
 
 
 def _run_stream(args: argparse.Namespace) -> None:
     """Phát Stream theo cấu hình, in số đo."""
     from generator.config import load_config
-    from generator.storage import OutputStore
     from generator.publish_order_snapshot_events import FileSink, KafkaSink, run_stream
+    from generator.storage import OutputStore
 
     config = load_config(args.config)
     if args.output:
-        config = dataclasses.replace(config, storage=dataclasses.replace(config.storage, output_root=args.output))
-    sink = (FileSink(OutputStore(config.storage.output_root)) if args.sink == "file"
-            else KafkaSink(args.bootstrap))
+        config = dataclasses.replace(
+            config, storage=dataclasses.replace(config.storage, output_root=args.output)
+        )
+    sink = (
+        FileSink(OutputStore(config.storage.output_root))
+        if args.sink == "file"
+        else KafkaSink(args.bootstrap)
+    )
     print(json.dumps(run_stream(config, sink, args.speed), indent=2, ensure_ascii=False))
 
 

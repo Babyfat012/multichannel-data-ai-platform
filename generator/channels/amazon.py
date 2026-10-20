@@ -28,7 +28,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from generator.channels.base import OBJECT_STORE, RenderedRecord, iso_z, money, native_code, native_digits
+from generator.channels.base import (
+    OBJECT_STORE,
+    RenderedRecord,
+    iso_z,
+    money,
+    native_code,
+    native_digits,
+)
 from generator.config import GeneratorConfig
 from generator.core.model import (
     AWAITING_SHIPMENT,
@@ -114,8 +121,14 @@ class AmazonOrdersRenderer:
     def line_keys(self, order: Order) -> list[dict[str, Any]]:
         """Ánh xạ Order Line chuẩn sang `AmazonOrderId` và `OrderItemId`."""
         amazon_id = self.amazon_order_id(order)
-        return [{"order_line_id": line.order_line_id, "channel_order_id": amazon_id,
-                 "channel_line_id": self.order_item_id(line)} for line in order.lines]
+        return [
+            {
+                "order_line_id": line.order_line_id,
+                "channel_order_id": amazon_id,
+                "channel_line_id": self.order_item_id(line),
+            }
+            for line in order.lines
+        ]
 
     # --- Hai phiên bản schema ---------------------------------------------
 
@@ -135,7 +148,10 @@ class AmazonOrdersRenderer:
             "FulfillmentChannel": "AFN" if order.fulfillment == FULFILLED_BY_CHANNEL else "MFN",
             "SalesChannel": sales_channel,
             "MarketplaceId": marketplace_id,
-            "OrderTotal": {"CurrencyCode": order.currency, "Amount": money(_order_total(order), decimals)},
+            "OrderTotal": {
+                "CurrencyCode": order.currency,
+                "Amount": money(_order_total(order), decimals),
+            },
             "NumberOfItemsShipped": shipped_qty,
             "NumberOfItemsUnshipped": total_qty - shipped_qty if change.status != CANCELLED else 0,
             "IsPrime": order.is_prime,
@@ -153,10 +169,14 @@ class AmazonOrdersRenderer:
                     "SellerSKU": line.sku_id,
                     "QuantityOrdered": line.quantity,
                     "QuantityShipped": line.quantity if shipped_qty else 0,
-                    "ItemPrice": {"CurrencyCode": order.currency,
-                                  "Amount": money(line.unit_price * line.quantity, decimals)},
-                    "PromotionDiscount": {"CurrencyCode": order.currency,
-                                          "Amount": money(line.unit_discount * line.quantity, decimals)},
+                    "ItemPrice": {
+                        "CurrencyCode": order.currency,
+                        "Amount": money(line.unit_price * line.quantity, decimals),
+                    },
+                    "PromotionDiscount": {
+                        "CurrencyCode": order.currency,
+                        "Amount": money(line.unit_discount * line.quantity, decimals),
+                    },
                 }
                 for line in order.lines
             ],
@@ -178,8 +198,10 @@ class AmazonOrdersRenderer:
             "fulfilledBy": "AMAZON" if order.fulfillment == FULFILLED_BY_CHANNEL else "MERCHANT",
         }
         if order.fulfillment != FULFILLED_BY_CHANNEL:
-            fulfillment["deliverByWindow"] = {"startTime": iso_z(order.promised_delivery[0]),
-                                              "endTime": iso_z(order.promised_delivery[1])}
+            fulfillment["deliverByWindow"] = {
+                "startTime": iso_z(order.promised_delivery[0]),
+                "endTime": iso_z(order.promised_delivery[1]),
+            }
 
         return {
             "orderId": self.amazon_order_id(order),
@@ -188,8 +210,12 @@ class AmazonOrdersRenderer:
             "salesChannel": {"marketplaceId": marketplace_id, "channelName": sales_channel},
             "programs": ["PRIME"] if order.is_prime else [],
             "fulfillment": fulfillment,
-            "proceeds": {"grandTotal": {"currencyCode": order.currency,
-                                        "amount": money(_order_total(order), decimals)}},
+            "proceeds": {
+                "grandTotal": {
+                    "currencyCode": order.currency,
+                    "amount": money(_order_total(order), decimals),
+                }
+            },
             "shippingAddress": {
                 "city": order.buyer.city,
                 "postalCode": order.buyer.postal_code,
@@ -200,10 +226,14 @@ class AmazonOrdersRenderer:
                     "orderItemId": self.order_item_id(line),
                     "product": {"asin": self.asin(line.sku_id), "sellerSku": line.sku_id},
                     "quantityOrdered": line.quantity,
-                    "price": {"currencyCode": order.currency,
-                              "amount": money(line.unit_price * line.quantity, decimals)},
-                    "promotion": {"currencyCode": order.currency,
-                                  "amount": money(line.unit_discount * line.quantity, decimals)},
+                    "price": {
+                        "currencyCode": order.currency,
+                        "amount": money(line.unit_price * line.quantity, decimals),
+                    },
+                    "promotion": {
+                        "currencyCode": order.currency,
+                        "amount": money(line.unit_discount * line.quantity, decimals),
+                    },
                 }
                 for line in order.lines
             ],
@@ -244,7 +274,9 @@ class AmazonOrderNotificationRenderer:
 
     def notification_id(self, order: Order, change: StatusChange) -> str:
         """Mã notification dạng UUID, cố định cho một lần đổi trạng thái."""
-        h = native_code(self.seed, "amazon_notification", f"{order.order_id}:{change.status}", 32).lower()
+        h = native_code(
+            self.seed, "amazon_notification", f"{order.order_id}:{change.status}", 32
+        ).lower()
         return f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:]}"
 
     def render_event(self, order: Order, change: StatusChange) -> RenderedRecord:
@@ -266,7 +298,9 @@ class AmazonOrderNotificationRenderer:
                         "MarketplaceId": marketplace_id,
                         "OrderStatus": STATUS_V0[change.status],
                         "PurchaseDate": iso_z(order.created_at),
-                        "FulfillmentType": "AFN" if order.fulfillment == FULFILLED_BY_CHANNEL else "MFN",
+                        "FulfillmentType": "AFN"
+                        if order.fulfillment == FULFILLED_BY_CHANNEL
+                        else "MFN",
                     },
                 },
             },

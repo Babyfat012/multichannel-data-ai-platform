@@ -1,5 +1,6 @@
 # Mục đích: kiểm các ràng buộc an toàn Terraform K1 bằng text/regex, hoàn toàn offline.
 """Kiểm ràng buộc an toàn và hợp đồng Terraform GCP hoàn toàn offline."""
+
 from __future__ import annotations
 
 import fnmatch
@@ -7,7 +8,6 @@ import re
 from pathlib import Path
 
 import pytest
-
 
 ROOT = Path(__file__).resolve().parents[4]
 TF_DIR = ROOT / "infra/gcp/terraform"
@@ -19,9 +19,7 @@ CODE = re.sub(r"(?m)^\s*#.*$", "", TF)
 
 def blocks(kind: str, name: str, text: str = CODE) -> list[str]:
     """Lấy block cấp cao, dùng dấu } ở đầu dòng để giữ cả các block lồng nhau."""
-    return re.findall(
-        rf'(?ms)^{kind}\s+"{re.escape(name)}"[^\n]*\{{\n.*?^\}}', text
-    )
+    return re.findall(rf'(?ms)^{kind}\s+"{re.escape(name)}"[^\n]*\{{\n.*?^\}}', text)
 
 
 def variable(name: str) -> str:
@@ -50,14 +48,16 @@ def test_no_service_account_keys_or_broad_vm_storage_iam() -> None:
     project_roles = blocks("resource", "google_project_iam_member")
     assert len(project_roles) == 1
     assert set(re.findall(r'"(roles/[^\"]+)"', project_roles[0])) == {
-        "roles/logging.logWriter", "roles/monitoring.metricWriter"
+        "roles/logging.logWriter",
+        "roles/monitoring.metricWriter",
     }
     assert not blocks("resource", "google_project_iam_binding")
     assert not blocks("resource", "google_project_iam_policy")
     bucket_roles = blocks("resource", "google_storage_bucket_iam_member")
     assert len(bucket_roles) == 2
     assert set(re.findall(r'role\s*=\s*"([^\"]+)"', "\n".join(bucket_roles))) == {
-        "roles/storage.objectAdmin", "roles/storage.legacyBucketReader"
+        "roles/storage.objectAdmin",
+        "roles/storage.legacyBucketReader",
     }
     for role in bucket_roles:
         assert "for_each = google_storage_bucket.data" in role
@@ -73,7 +73,10 @@ def test_two_private_regional_buckets_and_limited_lifecycle() -> None:
     assert re.search(r'public_access_prevention\s*=\s*"enforced"', bucket)
     assert re.search(r"uniform_bucket_level_access\s*=\s*true", bucket)
     assert re.search(r"location\s*=\s*var.region", bucket)
-    assert 'name                        = "${var.name_prefix}-${var.project_id}-${each.value}"' in bucket
+    assert (
+        'name                        = "${var.name_prefix}-${var.project_id}-${each.value}"'
+        in bucket
+    )
     assert re.search(r"force_destroy\s*=\s*var.force_destroy", bucket)
     assert re.search(r'with_state\s*=\s*"ARCHIVED"', bucket)
     assert re.search(r"days_since_noncurrent_time\s*=\s*var.noncurrent_retention_days", bucket)
@@ -88,7 +91,9 @@ def test_machine_default_and_every_allowed_type_fit_trial_limit() -> None:
     # Bảng CPU độc lập: E2 shared-core vẫn có 2 vCPU nhìn thấy, standard/high có suffix CPU.
     """Kiểm mọi machine type cho phép nằm trong giới hạn CPU trial."""
     cpus = {"e2-micro": 2, "e2-small": 2, "e2-medium": 2}
-    cpus.update({f"e2-{family}-{n}": n for family in ("standard", "highmem", "highcpu") for n in (2, 4, 8)})
+    cpus.update(
+        {f"e2-{family}-{n}": n for family in ("standard", "highmem", "highcpu") for n in (2, 4, 8)}
+    )
     config = variable("machine_type")
     default = re.search(r'default\s*=\s*"([^\"]+)"', config)
     assert default is not None
@@ -104,12 +109,19 @@ def test_machine_default_and_every_allowed_type_fit_trial_limit() -> None:
 
 @pytest.mark.parametrize(
     ("name", "default"),
-    [("region", '"asia-southeast1"'), ("zone", '"asia-southeast1-b"'),
-     ("name_prefix", '"fsds"'), ("boot_disk_gb", "50"), ("data_disk_gb", "200"),
-     ("enable_budget", "false"), ("billing_account_id", "null"), ("budget_amount_usd", "50")],
+    [
+        ("region", '"asia-southeast1"'),
+        ("zone", '"asia-southeast1-b"'),
+        ("name_prefix", '"fsds"'),
+        ("boot_disk_gb", "50"),
+        ("data_disk_gb", "200"),
+        ("enable_budget", "false"),
+        ("billing_account_id", "null"),
+        ("budget_amount_usd", "50"),
+    ],
 )
 def test_brief_defaults(name: str, default: str) -> None:
-    """Kiểm giá trị mặc định khớp brief Terraform."""
+    """Kiểm giá trị mặc định của Terraform."""
     assert re.search(rf"(?m)^\s*default\s*=\s*{re.escape(default)}\s*$", variable(name))
 
 
@@ -117,11 +129,18 @@ def test_no_real_project_or_billing_values_in_deliverables() -> None:
     """Kiểm deliverable không chứa project hoặc thông tin billing thật."""
     assert not re.search(r"\bdefault\s*=", variable("project_id"))
     # Chỉ kiểm file K1 sở hữu, không suy ra repo lịch sử hoặc file K2 không có ID thật.
-    paths = [*TF_FILES, TF_DIR / "terraform.tfvars.example", TF_DIR / "README.md", ROOT / "docs/gcp-deploy.md"]
+    paths = [
+        *TF_FILES,
+        TF_DIR / "terraform.tfvars.example",
+        TF_DIR / "README.md",
+        ROOT / "docs/gcp-deploy.md",
+    ]
     for path in paths:
         content = path.read_text(encoding="utf-8")
         assert not re.search(r"\b[0-9A-Fa-f]{6}-[0-9A-Fa-f]{6}-[0-9A-Fa-f]{6}\b", content)
-        for name, literal in re.findall(r'\b(project_id|billing_account(?:_id)?)\s*=\s*"([^\"]+)"', content):
+        for name, literal in re.findall(
+            r'\b(project_id|billing_account(?:_id)?)\s*=\s*"([^\"]+)"', content
+        ):
             # ${...} là tham chiếu Terraform; YOUR_... là placeholder cố ý không hợp lệ.
             assert "${" in literal or literal.startswith("YOUR_"), (path, name, literal)
         assert "BEGIN PRIVATE KEY" not in content
@@ -129,16 +148,35 @@ def test_no_real_project_or_billing_values_in_deliverables() -> None:
     example = (TF_DIR / "terraform.tfvars.example").read_text(encoding="utf-8")
     assert 'project_id = "YOUR_PROJECT_ID"' in example
     # project trong labels chỉ là nhãn; chỉ kiểm literal project trên resource/data.
-    resource_text = "\n".join(re.findall(r'(?ms)^(?:resource|data)\s+"[^\"]+"[^\n]*\{\n.*?^\}', CODE))
+    resource_text = "\n".join(
+        re.findall(r'(?ms)^(?:resource|data)\s+"[^\"]+"[^\n]*\{\n.*?^\}', CODE)
+    )
     assert not re.search(r'(?m)^\s*project\s*=\s*"', resource_text)
 
 
-@pytest.mark.parametrize("name", ["terraform.tfstate", "terraform.tfstate.backup", "other.tfstate.123", "terraform.tfvars", "secret.tfvars", "secret.tfvars.json", ".terraform/providers/registry/plugin", "de.tfplan"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "terraform.tfstate",
+        "terraform.tfstate.backup",
+        "other.tfstate.123",
+        "terraform.tfvars",
+        "secret.tfvars",
+        "secret.tfvars.json",
+        ".terraform/providers/registry/plugin",
+        "de.tfplan",
+    ],
+)
 def test_gitignore_blocks_local_state_vars_and_provider_cache(name: str) -> None:
     """Kiểm gitignore loại bỏ state, biến local và cache provider."""
-    patterns = [line.strip() for line in (TF_DIR / ".gitignore").read_text(encoding="utf-8").splitlines() if line.strip() and not line.startswith("#")]
+    patterns = [
+        line.strip()
+        for line in (TF_DIR / ".gitignore").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
     assert any(
-        name.startswith(pattern.rstrip("/") + "/") if pattern.endswith("/")
+        name.startswith(pattern.rstrip("/") + "/")
+        if pattern.endswith("/")
         else fnmatch.fnmatchcase(name, pattern)
         for pattern in patterns
     ), name
@@ -192,7 +230,17 @@ def test_provider_pinned_local_backend_and_k2_output_contract() -> None:
     assert re.search(r'version\s*=\s*"6\.\d+\.\d+"', versions)
     assert re.search(r'required_version\s*=\s*">= 1\.6\.0', versions)
     assert not re.search(r'backend\s+"', CODE)
-    for output in ("raw_bucket", "lakehouse_bucket", "vm_name", "zone", "service_account_email", "raw_bucket_uri", "lakehouse_bucket_uri", "ssh_command", "port_forward_command"):
+    for output in (
+        "raw_bucket",
+        "lakehouse_bucket",
+        "vm_name",
+        "zone",
+        "service_account_email",
+        "raw_bucket_uri",
+        "lakehouse_bucket_uri",
+        "ssh_command",
+        "port_forward_command",
+    ):
         assert len(blocks("output", output)) == 1
     ports = blocks("output", "port_forward_command")[0]
     assert "--tunnel-through-iap" in ports
@@ -202,7 +250,14 @@ def test_provider_pinned_local_backend_and_k2_output_contract() -> None:
 
 def test_every_new_file_starts_with_vietnamese_purpose_comment() -> None:
     """Kiểm file hạ tầng mới mở đầu bằng chú thích mục đích tiếng Việt."""
-    paths = [*TF_FILES, TF_DIR / ".gitignore", TF_DIR / "terraform.tfvars.example", TF_DIR / "README.md", ROOT / "docs/gcp-deploy.md", Path(__file__)]
+    paths = [
+        *TF_FILES,
+        TF_DIR / ".gitignore",
+        TF_DIR / "terraform.tfvars.example",
+        TF_DIR / "README.md",
+        ROOT / "docs/gcp-deploy.md",
+        Path(__file__),
+    ]
     for path in paths:
         first = path.read_text(encoding="utf-8").splitlines()[0]
         assert first.startswith(("# ", "<!-- ")), path

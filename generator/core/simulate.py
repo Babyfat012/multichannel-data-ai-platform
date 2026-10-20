@@ -21,9 +21,9 @@ sinh riêng, nên các Order còn lại của ngày đó giống hệt khi khôn
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Iterator
 
 import numpy as np
 
@@ -114,14 +114,19 @@ class Simulator:
         self.catalog: Catalog = build_catalog(config)
         self.storefronts = [STOREFRONTS[s] for s in config.storefront_weights]
         self.storefront_weights = np.array(list(config.storefront_weights.values()))
-        self.buyer_pools = {s.storefront_id: self._build_buyer_pool(s, w)
-                            for s, w in zip(self.storefronts, self.storefront_weights)}
+        self.buyer_pools = {
+            s.storefront_id: self._build_buyer_pool(s, w)
+            for s, w in zip(self.storefronts, self.storefront_weights)
+        }
         # Sale Event chỉ diễn ra ở các Storefront Amazon.
         self.is_amazon = np.array([s.channel == "amazon" for s in self.storefronts])
         # Hệ số burst của livestream, rút một lần cho cả lần chạy.
         live = config.drift.tiktok_live
-        self.live_multiplier = (float(rng_for(config.seed, "tiktok_live").uniform(*live.burst_multiplier))
-                                if live is not None else 1.0)
+        self.live_multiplier = (
+            float(rng_for(config.seed, "tiktok_live").uniform(*live.burst_multiplier))
+            if live is not None
+            else 1.0
+        )
 
     def is_sale_day(self, day: int) -> bool:
         """Ngày mô phỏng `day` có thuộc một Sale Event (Prime Day) không."""
@@ -146,19 +151,10 @@ class Simulator:
         )
 
     def simulate_day(self, day: int) -> Iterator[Order]:
-        """Sinh mọi Order được tạo trong ngày mô phỏng `day`, theo thứ tự `created_at`.
+        """Sinh mọi Order được tạo trong ngày `day`, theo thứ tự `created_at`.
 
-        Các lựa chọn "lớn" (bao nhiêu Order, Storefront nào, SKU nào) rút một lần
-        cho cả ngày bằng numpy cho nhanh. Chi tiết từng Order rút trong vòng lặp.
-
-        Trả về iterator, không phải list: ở quy mô 100 GB một ngày có ~850.000 Order
-        và giữ cả ngày trong RAM là ~1,4 GB — đo được là 82% đỉnh RAM của `BatchRun`.
-        Mọi bên gọi chỉ duyệt một lượt nên không mất gì. Kết quả vẫn tiền định theo
-        seed vì `rng` rút riêng cho từng ngày, không phụ thuộc lúc nào bắt đầu duyệt.
-
-        Ngoại lệ là ngày TikTok livestream: Order của buổi live phải trộn vào đúng
-        thứ tự `created_at`, nên ngày đó vẫn gom cả ngày để sắp xếp. Ngày đó nằm sau
-        `cutoff` (thuộc khoảng Stream) nên không rơi vào lần chạy Batch.
+        Trả iterator để không giữ cả ngày trong RAM; vẫn tiền định vì mỗi ngày có `rng` riêng.
+        Ngày TikTok livestream là ngoại lệ: phải gom cả ngày để trộn Order của buổi live đúng thứ tự.
         """
         rng = rng_for(self.config.seed, "orders", day)
         day_start = self.config.day_start(day)
@@ -169,19 +165,24 @@ class Simulator:
         weights = self.storefront_weights
         expected = self.config.scale.orders_per_day
         if sale_day:
-            weights = weights * np.where(self.is_amazon, self.config.drift.prime_day.order_multiplier, 1.0)
+            weights = weights * np.where(
+                self.is_amazon, self.config.drift.prime_day.order_multiplier, 1.0
+            )
             expected *= weights.sum()
             weights = weights / weights.sum()
 
         n_orders = int(rng.poisson(expected))
         storefront_idx = rng.choice(len(self.storefronts), size=n_orders, p=weights)
         n_lines = 1 + np.minimum(rng.poisson(EXTRA_LINES_MEAN, size=n_orders), MAX_LINES - 1)
-        sku_idx = rng.choice(len(self.catalog.skus), size=int(n_lines.sum()), p=self.catalog.popularity)
+        sku_idx = rng.choice(
+            len(self.catalog.skus), size=int(n_lines.sum()), p=self.catalog.popularity
+        )
         if sale_day:
             # Dòng của Storefront Amazon rút lại theo phân phối SKU của ngày sale.
             on_sale = self.is_amazon[np.repeat(storefront_idx, n_lines)]
-            sku_idx[on_sale] = rng.choice(len(self.catalog.skus), size=int(on_sale.sum()),
-                                          p=self.catalog.sale_popularity)
+            sku_idx[on_sale] = rng.choice(
+                len(self.catalog.skus), size=int(on_sale.sum()), p=self.catalog.sale_popularity
+            )
         created_offsets = np.sort(rng.uniform(0, 86_400, size=n_orders))
 
         def created_orders() -> Iterator[Order]:
@@ -190,10 +191,16 @@ class Simulator:
             for i in range(n_orders):
                 storefront = self.storefronts[storefront_idx[i]]
                 created_at = day_start + timedelta(seconds=float(created_offsets[i]))
-                skus_of_order = sku_idx[next_sku: next_sku + n_lines[i]]
+                skus_of_order = sku_idx[next_sku : next_sku + n_lines[i]]
                 next_sku += n_lines[i]
-                yield self._make_order(f"ORD-{day:03d}-{i + 1:05d}", storefront,
-                                       created_at, skus_of_order, rng, sale_day)
+                yield self._make_order(
+                    f"ORD-{day:03d}-{i + 1:05d}",
+                    storefront,
+                    created_at,
+                    skus_of_order,
+                    rng,
+                    sale_day,
+                )
 
         live = self.config.drift.tiktok_live
         if live is None or live.day != day:
@@ -211,7 +218,9 @@ class Simulator:
         gấp `live_multiplier` lần.
         """
         live = self.config.drift.tiktok_live
-        idx = next((i for i, s in enumerate(self.storefronts) if s.storefront_id == "tiktok_shop_us"), None)
+        idx = next(
+            (i for i, s in enumerate(self.storefronts) if s.storefront_id == "tiktok_shop_us"), None
+        )
         if idx is None:
             return []
         storefront = self.storefronts[idx]
@@ -226,8 +235,11 @@ class Simulator:
             n_lines = 1 + min(int(rng.poisson(EXTRA_LINES_MEAN)), MAX_LINES - 1)
             skus = rng.choice(len(self.catalog.skus), size=n_lines, p=self.catalog.popularity)
             created_at = start + timedelta(seconds=float(offsets[i]))
-            orders.append(self._make_order(f"ORD-{day:03d}-{first_number + i:05d}", storefront,
-                                           created_at, skus, rng))
+            orders.append(
+                self._make_order(
+                    f"ORD-{day:03d}-{first_number + i:05d}", storefront, created_at, skus, rng
+                )
+            )
         return orders
 
     def _make_order(
@@ -249,22 +261,33 @@ class Simulator:
 
         # Ngày giao dự kiến Channel hứa lúc đặt hàng.
         promise_days = (1, 3) if is_prime else (3, 5) if by_channel else (4, 8)
-        promised = (created_at + timedelta(days=promise_days[0]), created_at + timedelta(days=promise_days[1]))
+        promised = (
+            created_at + timedelta(days=promise_days[0]),
+            created_at + timedelta(days=promise_days[1]),
+        )
 
         # Vòng đời thật.
         paid_at = created_at + timedelta(minutes=float(rng.exponential(10)))
-        timeline = [StatusChange(created_at, PENDING_PAYMENT), StatusChange(paid_at, AWAITING_SHIPMENT)]
+        timeline = [
+            StatusChange(created_at, PENDING_PAYMENT),
+            StatusChange(paid_at, AWAITING_SHIPMENT),
+        ]
         delivered_at = None
         if rng.random() < CANCEL_RATE:
-            timeline.append(StatusChange(paid_at + timedelta(hours=float(rng.uniform(0, 24))), CANCELLED))
+            timeline.append(
+                StatusChange(paid_at + timedelta(hours=float(rng.uniform(0, 24))), CANCELLED)
+            )
         else:
             handling = rng.uniform(0.3, 1.5) if by_channel else rng.uniform(0.5, 3.0)
             transit = rng.uniform(1.0, 3.0) if by_channel else rng.uniform(2.0, 6.0)
             shipped_at = paid_at + timedelta(days=float(handling))
             delivered_at = shipped_at + timedelta(days=float(transit))
             completed_at = delivered_at + timedelta(days=float(rng.uniform(3, 7)))
-            timeline += [StatusChange(shipped_at, SHIPPED), StatusChange(delivered_at, DELIVERED),
-                         StatusChange(completed_at, COMPLETED)]
+            timeline += [
+                StatusChange(shipped_at, SHIPPED),
+                StatusChange(delivered_at, DELIVERED),
+                StatusChange(completed_at, COMPLETED),
+            ]
 
         order = Order(
             order_id=order_id,
@@ -316,5 +339,7 @@ class Simulator:
         )
         if order.delivered_at is not None:
             p = return_probability(sku, storefront, order.fulfillment, discount_fraction, quantity)
-            decide_return(line, p, order.delivered_at, storefront, self.config.labels.window_days, rng)
+            decide_return(
+                line, p, order.delivered_at, storefront, self.config.labels.window_days, rng
+            )
         return line

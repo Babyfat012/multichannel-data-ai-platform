@@ -53,25 +53,27 @@ class TikTokOrdersRenderer:
         self.seed = config.seed
         self.webhook = TikTokOrderWebhookRenderer(config)
 
-    def order_id(self, order: Order) -> str:
-        """Trả mã Order TikTok dùng chung ở Batch và Stream."""
-        return self.webhook.tiktok_order_id(order)
-
     def line_id(self, line: OrderLine) -> str:
         """Sinh mã Order Line ổn định từ mã lõi, không từ ngày export."""
         return "7" + native_digits(self.seed, "tiktok_line", line.order_line_id, 18)
 
     def line_keys(self, order: Order) -> list[dict[str, Any]]:
         """Nối ID lõi với mã Order và Order Line của TikTok Shop."""
-        order_id = self.order_id(order)
-        return [{"order_line_id": line.order_line_id, "channel_order_id": order_id,
-                 "channel_line_id": self.line_id(line)} for line in order.lines]
+        order_id = self.webhook.tiktok_order_id(order)
+        return [
+            {
+                "order_line_id": line.order_line_id,
+                "channel_order_id": order_id,
+                "channel_line_id": self.line_id(line),
+            }
+            for line in order.lines
+        ]
 
     def render(self, order: Order, as_of: datetime, export_day: int) -> RenderedRecord:
         """Vẽ một snapshot Get Order Detail; `export_day` chỉ quyết định đường dẫn."""
         del export_day
         status_change = order.status_at(as_of)
-        order_id = self.order_id(order)
+        order_id = self.webhook.tiktok_order_id(order)
         decimals = CURRENCY_DECIMALS[order.currency]
         gross = sum(line.unit_price * line.quantity for line in order.lines)
         discount = sum(line.unit_discount * line.quantity for line in order.lines)
@@ -79,19 +81,21 @@ class TikTokOrdersRenderer:
         items = []
         for line in order.lines:
             sale_price = line.unit_price - line.unit_discount
-            items.append({
-                "id": self.line_id(line),
-                "sku_id": "7" + native_digits(self.seed, "tiktok_sku", line.sku_id, 18),
-                "product_id": "7" + native_digits(self.seed, "tiktok_product", line.sku_id, 18),
-                "seller_sku": line.sku_id,
-                "product_name": f"ACME {line.sku_id}",
-                "quantity": line.quantity,
-                "original_price": money(line.unit_price, decimals),
-                "sale_price": money(sale_price, decimals),
-                "seller_discount": money(line.unit_discount, decimals),
-                "platform_discount": money(0, decimals),
-                "display_status": API_STATUS[status_change.status],
-            })
+            items.append(
+                {
+                    "id": self.line_id(line),
+                    "sku_id": "7" + native_digits(self.seed, "tiktok_sku", line.sku_id, 18),
+                    "product_id": "7" + native_digits(self.seed, "tiktok_product", line.sku_id, 18),
+                    "seller_sku": line.sku_id,
+                    "product_name": f"ACME {line.sku_id}",
+                    "quantity": line.quantity,
+                    "original_price": money(line.unit_price, decimals),
+                    "sale_price": money(sale_price, decimals),
+                    "seller_discount": money(line.unit_discount, decimals),
+                    "platform_discount": money(0, decimals),
+                    "display_status": API_STATUS[status_change.status],
+                }
+            )
 
         native_order: dict[str, Any] = {
             "id": order_id,

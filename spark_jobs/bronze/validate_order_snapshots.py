@@ -54,7 +54,7 @@ def walmart_source_rows(spark: SparkSession) -> int:
     query = f"(SELECT count(*) AS n FROM {WALMART_SOURCE}) AS source_count"
     jdbc = {
         "url": f"jdbc:postgresql://{os.environ.get('POSTGRES_HOST', 'postgres')}:"
-               f"{os.environ.get('POSTGRES_PORT', '5432')}/{os.environ['POSTGRES_DB']}",
+        f"{os.environ.get('POSTGRES_PORT', '5432')}/{os.environ['POSTGRES_DB']}",
         "user": os.environ["POSTGRES_USER"],
         "password": os.environ["POSTGRES_PASSWORD"],
         "driver": "org.postgresql.Driver",
@@ -63,15 +63,21 @@ def walmart_source_rows(spark: SparkSession) -> int:
     return int(spark.read.format("jdbc").options(**jdbc).load().first()["n"])
 
 
-def validate(spark: SparkSession, channel: str, table: str, run_id: str,
-             source_rows: int) -> None:
+def validate(spark: SparkSession, channel: str, table: str, run_id: str, source_rows: int) -> None:
     """Kiểm bảng có dòng, đủ cột, đủ số dòng và không có provenance/payload hỏng."""
     full_name = f"lakehouse.bronze.{table}"
     df = spark.table(full_name)
     required = (
         {"payload", "source_file", "export_date", "ingested_at", "run_id"}
-        if channel == "amazon" else
-        {"purchase_order_id", "raw_payload", "source_table", "fetched_at", "ingested_at", "run_id"}
+        if channel == "amazon"
+        else {
+            "purchase_order_id",
+            "raw_payload",
+            "source_table",
+            "fetched_at",
+            "ingested_at",
+            "run_id",
+        }
     )
     missing = required - set(df.columns)
     if missing:
@@ -83,21 +89,31 @@ def validate(spark: SparkSession, channel: str, table: str, run_id: str,
             F.get_json_object("payload", "$.orderId"),
         )
         invalid = (
-            F.col("payload").isNull() | (F.length("payload") == 0)
+            F.col("payload").isNull()
+            | (F.length("payload") == 0)
             | source_id.isNull()
-            | F.col("source_file").isNull() | (F.length("source_file") == 0)
+            | F.col("source_file").isNull()
+            | (F.length("source_file") == 0)
             | F.col("export_date").isNull()
         )
     else:
         source_id = F.get_json_object("raw_payload", "$.purchaseOrderId")
         invalid = (
-            F.col("raw_payload").isNull() | (F.length("raw_payload") == 0)
-            | source_id.isNull() | F.col("purchase_order_id").isNull()
+            F.col("raw_payload").isNull()
+            | (F.length("raw_payload") == 0)
+            | source_id.isNull()
+            | F.col("purchase_order_id").isNull()
             | (source_id != F.col("purchase_order_id"))
             | (F.col("source_table") != WALMART_SOURCE)
-            | F.col("source_table").isNull() | F.col("fetched_at").isNull()
+            | F.col("source_table").isNull()
+            | F.col("fetched_at").isNull()
         )
-    invalid = invalid | F.col("ingested_at").isNull() | F.col("run_id").isNull() | (F.col("run_id") != run_id)
+    invalid = (
+        invalid
+        | F.col("ingested_at").isNull()
+        | F.col("run_id").isNull()
+        | (F.col("run_id") != run_id)
+    )
     result = df.agg(
         F.count("*").alias("rows"),
         F.sum(F.when(invalid, 1).otherwise(0)).alias("invalid_rows"),
@@ -117,7 +133,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         source_rows = (
             amazon_source_rows(spark, args.window_days, args.window_start)
-            if args.channel == "amazon" else walmart_source_rows(spark)
+            if args.channel == "amazon"
+            else walmart_source_rows(spark)
         )
         validate(spark, args.channel, args.table, args.run_id, source_rows)
         return 0

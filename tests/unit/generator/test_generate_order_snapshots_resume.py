@@ -77,7 +77,9 @@ def _comparable(manifest: dict) -> dict:
 
 def _config_at(config, root: Path):
     """Cùng cấu hình nhưng ghi vào `root` khác."""
-    return dataclasses.replace(config, storage=dataclasses.replace(config.storage, output_root=str(root)))
+    return dataclasses.replace(
+        config, storage=dataclasses.replace(config.storage, output_root=str(root))
+    )
 
 
 def _straight_run(config, root: Path) -> dict:
@@ -101,10 +103,13 @@ def test_resume_rejects_changed_dataset_before_mutation(tiny_config, tmp_path, c
     before = {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
     modified = (
         dataclasses.replace(config, seed=config.seed + 1)
-        if changed == "seed" else
-        dataclasses.replace(config, scale=dataclasses.replace(
-            config.scale, **{changed: getattr(config.scale, changed) + 1}
-        ))
+        if changed == "seed"
+        else dataclasses.replace(
+            config,
+            scale=dataclasses.replace(
+                config.scale, **{changed: getattr(config.scale, changed) + 1}
+            ),
+        )
     )
     with pytest.raises(ValueError, match="identity|dataset"):
         BatchRun(modified).run()
@@ -124,8 +129,11 @@ def test_untrusted_resume_metadata_is_rejected_without_repairing_it(tiny_config,
     if damaged == "legacy":
         (root / "_dataset_identity.json").unlink()
     else:
-        name = {"checkpoint": "_checkpoint/day-00001.json", "manifest": "run_manifest.json",
-                "runtime_identity": "_dataset_identity.json"}[damaged]
+        name = {
+            "checkpoint": "_checkpoint/day-00001.json",
+            "manifest": "run_manifest.json",
+            "runtime_identity": "_dataset_identity.json",
+        }[damaged]
         path = root / name
         value = json.loads(path.read_text())
         if damaged == "runtime_identity":
@@ -136,7 +144,9 @@ def test_untrusted_resume_metadata_is_rejected_without_repairing_it(tiny_config,
     before = {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
     with pytest.raises(ValueError, match="identity"):
         BatchRun(config).run()
-    assert {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()} == before
+    assert {
+        str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()
+    } == before
 
 
 def test_resuming_after_a_clean_cut_matches_a_straight_run_byte_for_byte(tiny_config, tmp_path):
@@ -275,7 +285,9 @@ def test_the_manifest_of_a_resumed_run_still_matches_the_files_on_disk(tiny_conf
     for dataset, pattern in patterns.items():
         parts = sorted(root.glob(pattern))
         assert parts, dataset
-        assert manifest["datasets"][dataset]["bytes"] == sum(p.stat().st_size for p in parts), dataset
+        assert manifest["datasets"][dataset]["bytes"] == sum(p.stat().st_size for p in parts), (
+            dataset
+        )
         assert manifest["datasets"][dataset]["files"] == len(parts), dataset
 
     rows = sum(len(p.read_text().splitlines()) for p in root.glob(patterns["amazon.orders"]))
@@ -308,7 +320,10 @@ def test_a_shorter_rerun_removes_the_files_left_by_a_longer_previous_run(tiny_co
     assert _tree(root) == _tree(fresh)
 
     for dataset, pattern in (
-        ("amazon.orders", "source-exports/channel=amazon/dataset=orders/export_date=*/part-sim*.jsonl"),
+        (
+            "amazon.orders",
+            "source-exports/channel=amazon/dataset=orders/export_date=*/part-sim*.jsonl",
+        ),
         ("walmart.orders", "pg-load/walmart.orders/export_date=*/part-sim*.jsonl"),
     ):
         on_disk = sum(p.stat().st_size for p in root.glob(pattern))

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass, field
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -170,7 +170,9 @@ class GeneratorConfig:
 
     seed: int = 42
     scale: ScaleConfig = field(default_factory=ScaleConfig)
-    storefront_weights: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_STOREFRONT_WEIGHTS))
+    storefront_weights: dict[str, float] = field(
+        default_factory=lambda: dict(DEFAULT_STOREFRONT_WEIGHTS)
+    )
     labels: LabelConfig = field(default_factory=LabelConfig)
     offline_problems: OfflineProblemsConfig = field(default_factory=OfflineProblemsConfig)
     streaming_problems: StreamingProblemsConfig = field(default_factory=StreamingProblemsConfig)
@@ -182,7 +184,7 @@ class GeneratorConfig:
     def day_start(self, day: int) -> datetime:
         """Trả về 00:00 UTC của ngày mô phỏng `day` (ngày 1 là `start_date`)."""
         d = self.scale.start_date + timedelta(days=day - 1)
-        return datetime.combine(d, time(0, 0), tzinfo=timezone.utc)
+        return datetime.combine(d, time(0, 0), tzinfo=UTC)
 
     @property
     def cutoff(self) -> datetime:
@@ -217,7 +219,9 @@ def parse_config(raw: dict[str, Any]) -> GeneratorConfig:
         "offline_problems": OfflineProblemsConfig,
         "storage": StorageConfig,
     }
-    _reject_unknown(raw, {"seed", "storefront_weights", "drift", "streaming_problems", *sections}, where="gốc")
+    _reject_unknown(
+        raw, {"seed", "storefront_weights", "drift", "streaming_problems", *sections}, where="gốc"
+    )
 
     kwargs: dict[str, Any] = {}
     if "seed" in raw:
@@ -255,17 +259,25 @@ def _parse_drift(raw: dict[str, Any]) -> DriftConfig:
 
 def _parse_streaming(raw: dict[str, Any]) -> StreamingProblemsConfig:
     """Đọc mục `streaming_problems`."""
-    _reject_unknown(raw, {f.name for f in dataclasses.fields(StreamingProblemsConfig)}, where="streaming_problems")
+    _reject_unknown(
+        raw,
+        {f.name for f in dataclasses.fields(StreamingProblemsConfig)},
+        where="streaming_problems",
+    )
     kwargs: dict[str, Any] = {}
     if "pacing" in raw:
         pacing = dict(raw["pacing"] or {})
-        pacing["segments"] = tuple(_section(s, PacingSegment, "streaming_problems.pacing.segments")
-                                   for s in pacing.get("segments") or ())
+        pacing["segments"] = tuple(
+            _section(s, PacingSegment, "streaming_problems.pacing.segments")
+            for s in pacing.get("segments") or ()
+        )
         kwargs["pacing"] = _section(pacing, PacingConfig, "streaming_problems.pacing")
     if "duplicate_rate" in raw:
         kwargs["duplicate_rate"] = {k: float(v) for k, v in (raw["duplicate_rate"] or {}).items()}
     if "amazon_late" in raw:
-        kwargs["amazon_late"] = _section(raw["amazon_late"] or {}, AmazonLateConfig, "streaming_problems.amazon_late")
+        kwargs["amazon_late"] = _section(
+            raw["amazon_late"] or {}, AmazonLateConfig, "streaming_problems.amazon_late"
+        )
     return StreamingProblemsConfig(**kwargs)
 
 
@@ -289,10 +301,16 @@ def _validate(config: GeneratorConfig) -> None:
     if unknown:
         raise ValueError(f"Storefront không tồn tại: {sorted(unknown)}")
     if abs(sum(weights.values()) - 1.0) > 1e-6:
-        raise ValueError(f"storefront_weights phải cộng lại bằng 1, đang là {sum(weights.values())}")
+        raise ValueError(
+            f"storefront_weights phải cộng lại bằng 1, đang là {sum(weights.values())}"
+        )
     if not 0 <= config.offline_problems.duplicate_rate < 0.5:
         raise ValueError("duplicate_rate phải nằm trong [0, 0.5)")
-    if not 1 <= config.offline_problems.amazon_orders_api_switch_day <= config.scale.days_history + 1:
+    if (
+        not 1
+        <= config.offline_problems.amazon_orders_api_switch_day
+        <= config.scale.days_history + 1
+    ):
         raise ValueError("amazon_orders_api_switch_day phải nằm trong khoảng ngày lịch sử")
 
     sale = config.drift.prime_day
@@ -314,23 +332,31 @@ def _validate(config: GeneratorConfig) -> None:
     if live is not None:
         if not first_stream_day <= live.day <= last_stream_day:
             raise ValueError("drift.tiktok_live.day phải nằm trong khoảng ngày Stream")
-        if not (0 <= live.start_hour_utc and live.duration_hours > 0
-                and live.start_hour_utc + live.duration_hours <= 24):
+        if not (
+            live.start_hour_utc >= 0
+            and live.duration_hours > 0
+            and live.start_hour_utc + live.duration_hours <= 24
+        ):
             raise ValueError("drift.tiktok_live phải nằm trọn trong một ngày")
         low, high = live.burst_multiplier
         if not 1 <= low <= high:
-            raise ValueError("drift.tiktok_live.burst_multiplier phải là [thấp, cao] với 1 <= thấp <= cao")
+            raise ValueError(
+                "drift.tiktok_live.burst_multiplier phải là [thấp, cao] với 1 <= thấp <= cao"
+            )
     streaming = config.streaming_problems
     unknown = set(streaming.duplicate_rate) - set(STOREFRONTS)
     if unknown:
-        raise ValueError(f"streaming_problems.duplicate_rate có Storefront không tồn tại: {sorted(unknown)}")
+        raise ValueError(
+            f"streaming_problems.duplicate_rate có Storefront không tồn tại: {sorted(unknown)}"
+        )
     if not all(0 <= r < 0.5 for r in streaming.duplicate_rate.values()):
         raise ValueError("streaming_problems.duplicate_rate phải nằm trong [0, 0.5)")
     late = streaming.amazon_late
     if not 0 < late.median_minutes < 60 or not 0 <= late.share_over_1h < 1:
         raise ValueError("amazon_late cần 0 < median_minutes < 60 và 0 <= share_over_1h < 1")
     if streaming.pacing.default_seconds_per_sim_day <= 0 or any(
-            s.seconds_per_sim_day <= 0 or s.from_day > s.to_day for s in streaming.pacing.segments):
+        s.seconds_per_sim_day <= 0 or s.from_day > s.to_day for s in streaming.pacing.segments
+    ):
         raise ValueError("streaming_problems.pacing cần tốc độ dương và from_day <= to_day")
 
 

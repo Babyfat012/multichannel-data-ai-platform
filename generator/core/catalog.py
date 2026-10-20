@@ -77,8 +77,9 @@ def build_catalog(config: GeneratorConfig) -> Catalog:
     )
 
 
-def sale_popularity(popularity: np.ndarray, sale: PrimeDayConfig | None,
-                    rng: np.random.Generator) -> np.ndarray:
+def sale_popularity(
+    popularity: np.ndarray, sale: PrimeDayConfig | None, rng: np.random.Generator
+) -> np.ndarray:
     """Độ phổ biến trong ngày sale: SKU deal được nhân trọng số rồi chuẩn hóa lại.
 
     Không có Sale Event thì trả về chính `popularity`, tức ngày sale không đổi

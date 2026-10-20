@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import NamedTuple
 
 DDL = """
@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS walmart_lifecycle.orders (
 
 class Row(NamedTuple):
     """Một đơn Walmart sẵn sàng chèn."""
+
     dataset_version: str
     purchase_order_id: str
     fetched_at: str
@@ -47,9 +48,21 @@ def bootstrap_rows(root: Path) -> list[Row]:
     rows = []
     for line in (root / files[0]["path"]).read_text(encoding="utf-8").splitlines():
         record = json.loads(line)
-        payload = json.dumps(record["raw_payload"], sort_keys=True, separators=(",", ":"),
-                             ensure_ascii=False, allow_nan=False)
-        rows.append(Row(manifest["dataset_version"], record["purchase_order_id"], record["fetched_at"], payload))
+        payload = json.dumps(
+            record["raw_payload"],
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+        rows.append(
+            Row(
+                manifest["dataset_version"],
+                record["purchase_order_id"],
+                record["fetched_at"],
+                payload,
+            )
+        )
     if len(rows) != files[0]["rows"]:
         raise ValueError("Số dòng file Walmart khác manifest")
     return rows
@@ -59,15 +72,30 @@ def load(rows: list[Row], settings: dict[str, str]) -> int:
     """Thay toàn bộ dòng của dataset_version này trong một transaction; trả số dòng đã chèn."""
     import psycopg  # nhập muộn để test phần đọc file không cần thư viện PostgreSQL
 
-    with psycopg.connect(host="127.0.0.1", port=int(settings.get("POSTGRES_PORT", "5432")),
-                         dbname=settings["POSTGRES_DB"], user=settings["POSTGRES_USER"],
-                         password=settings["POSTGRES_PASSWORD"]) as conn, conn.cursor() as cur:
+    with (
+        psycopg.connect(
+            host="127.0.0.1",
+            port=int(settings.get("POSTGRES_PORT", "5432")),
+            dbname=settings["POSTGRES_DB"],
+            user=settings["POSTGRES_USER"],
+            password=settings["POSTGRES_PASSWORD"],
+        ) as conn,
+        conn.cursor() as cur,
+    ):
         cur.execute(DDL)
-        cur.execute("DELETE FROM walmart_lifecycle.orders WHERE dataset_version = %s", (rows[0].dataset_version,))
+        cur.execute(
+            "DELETE FROM walmart_lifecycle.orders WHERE dataset_version = %s",
+            (rows[0].dataset_version,),
+        )
         cur.executemany(
             "INSERT INTO walmart_lifecycle.orders (dataset_version, purchase_order_id, fetched_at, raw_payload) "
-            "VALUES (%s, %s, %s, %s)", rows)
-        cur.execute("SELECT count(*) FROM walmart_lifecycle.orders WHERE dataset_version = %s", (rows[0].dataset_version,))
+            "VALUES (%s, %s, %s, %s)",
+            rows,
+        )
+        cur.execute(
+            "SELECT count(*) FROM walmart_lifecycle.orders WHERE dataset_version = %s",
+            (rows[0].dataset_version,),
+        )
         return cur.fetchone()[0]
 
 
@@ -81,7 +109,9 @@ def main() -> int:
     args = parser.parse_args()
     rows = bootstrap_rows(args.root)
     count = load(rows, load_settings(args.env_file))
-    print(f"walmart_lifecycle.orders: dataset_version={rows[0].dataset_version}, file={len(rows)}, DB={count}")
+    print(
+        f"walmart_lifecycle.orders: dataset_version={rows[0].dataset_version}, file={len(rows)}, DB={count}"
+    )
     return 0 if count == len(rows) else 1
 
 

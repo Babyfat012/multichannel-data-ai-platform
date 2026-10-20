@@ -8,13 +8,14 @@ docker run --rm --network none --read-only --tmpfs /tmp:rw,size=1g \
   --mount type=bind,src=$PWD,dst=/workspace,readonly --entrypoint python \
   fsds-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_order_lifecycle_silver.py
 """
+
 import json
 import os
-from pathlib import Path
 import shutil
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 
 os.environ.setdefault("SPARK_LOCAL_IP", "127.0.0.1")
 os.environ.setdefault("SPARK_LOCAL_HOSTNAME", "localhost")
@@ -22,12 +23,13 @@ os.environ.setdefault("SPARK_LOCAL_HOSTNAME", "localhost")
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from pyspark.sql import SparkSession, functions as F  # noqa: E402
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
 
-from generator.generate_order_lifecycle_fixture import generate_fixture  # noqa: E402
-import os
+from generator.generate_order_lifecycle_fixture import generate_fixture
+
 os.environ["FSDS_CONTRACTS_DIR"] = str(ROOT / "contracts")
-import spark_jobs.lib.order_lifecycle_lakehouse as v2  # noqa: E402
+import spark_jobs.lib.order_lifecycle_lakehouse as v2
 
 # Ngày 40 kể từ 2026-01-01: sau khi refund mơ hồ được quan sát, trước correction (ngày 43).
 BEFORE_REFUND_CORRECTION = "2026-02-10T00:00:00.000000Z"
@@ -35,17 +37,22 @@ BEFORE_REFUND_CORRECTION = "2026-02-10T00:00:00.000000Z"
 
 class SourceV2LakehouseTests(unittest.TestCase):
     """Kiểm logic Bronze/Silver v2 trên DataFrame từ fixture nguồn cục bộ."""
+
     @classmethod
     def setUpClass(cls):
         """Khởi tạo Spark local và fixture v2 dùng chung cho bộ kiểm."""
         cls.tmp = Path(tempfile.mkdtemp(prefix="fsds-v2-"))
         cls.root = cls.tmp / "fixture"
         cls.manifest = generate_fixture(cls.root)
-        cls.spark = (SparkSession.builder.master("local[1]").appName("source-v2-regression")
-                     .config("spark.sql.shuffle.partitions", "1")
-                     .config("spark.sql.session.timeZone", "UTC")
-                     .config("spark.sql.warehouse.dir", str(cls.tmp / "warehouse"))
-                     .config("spark.driver.bindAddress", "127.0.0.1").getOrCreate())
+        cls.spark = (
+            SparkSession.builder.master("local[1]")
+            .appName("source-v2-regression")
+            .config("spark.sql.shuffle.partitions", "1")
+            .config("spark.sql.session.timeZone", "UTC")
+            .config("spark.sql.warehouse.dir", str(cls.tmp / "warehouse"))
+            .config("spark.driver.bindAddress", "127.0.0.1")
+            .getOrCreate()
+        )
         cls.spark.sparkContext.setLogLevel("ERROR")
         cls.bronze = v2.bronze_from_root(cls.spark, str(cls.root), "run-test").cache()
         cls.silver = v2.build_silver(cls.bronze)
@@ -68,8 +75,10 @@ class SourceV2LakehouseTests(unittest.TestCase):
 
     def test_bronze_path_columns_match_manifest(self):
         """Kiểm cột đường dẫn Bronze khớp manifest nguồn."""
-        got = {(r["producer"], r["feed"]): r["n"] for r in
-               self.bronze.groupBy("producer", "feed").agg(F.count("*").alias("n")).collect()}
+        got = {
+            (r["producer"], r["feed"]): r["n"]
+            for r in self.bronze.groupBy("producer", "feed").agg(F.count("*").alias("n")).collect()
+        }
         want = {}
         for f in self.source_files():
             key = (f["producer"], f["feed"])
@@ -80,6 +89,7 @@ class SourceV2LakehouseTests(unittest.TestCase):
         """Kiểm hash bản ghi Bronze khớp byte file nguồn."""
         row = self.bronze.filter(F.col("feed") == "seller_wms.stock_operations").first()
         import hashlib
+
         self.assertEqual(row["record_sha256"], hashlib.sha256(row["raw_json"].encode()).hexdigest())
 
     def test_fact_hash_ignores_execution_recorded_at(self):
@@ -87,8 +97,9 @@ class SourceV2LakehouseTests(unittest.TestCase):
         row = self.bronze.filter(F.col("feed") == "seller_oms.line_commitments").first()["raw_json"]
         other = json.loads(row)
         other["recorded_at"] = "2099-01-01T00:00:00.000000Z"
-        frame = self.spark.createDataFrame([(row,), (json.dumps(other, sort_keys=True, separators=(",", ":")),)],
-                                           ["raw_json"])
+        frame = self.spark.createDataFrame(
+            [(row,), (json.dumps(other, sort_keys=True, separators=(",", ":")),)], ["raw_json"]
+        )
         hashes = {r[0] for r in frame.select(v2.fact_sha256_col("raw_json")).collect()}
         self.assertEqual(len(hashes), 1)
 
@@ -111,14 +122,19 @@ class SourceV2LakehouseTests(unittest.TestCase):
         """Kiểm cùng event ID nhưng khác payload bị đánh dấu conflict."""
         one = self.bronze.filter(F.col("feed") == "seller_wms.stock_operations").limit(1)
         altered = v2.with_envelope(
-            one.withColumn("raw_json", F.regexp_replace("raw_json", '"quantity":(\\d+)', '"quantity":999')))
+            one.withColumn(
+                "raw_json", F.regexp_replace("raw_json", '"quantity":(\\d+)', '"quantity":999')
+            )
+        )
         silver = v2.build_silver(self.bronze.unionByName(altered))
         self.assertEqual(v2.reconcile(silver)["checks"]["event_conflicts"], 1)
 
     def test_missing_dependency_is_reported(self):
         """Kiểm dependency còn thiếu được báo cáo."""
         target = self.bronze.filter(
-            (F.col("feed") == "seller_oms.fulfillment_allocations") & (F.col("entity_revision") == 1)).limit(1)
+            (F.col("feed") == "seller_oms.fulfillment_allocations")
+            & (F.col("entity_revision") == 1)
+        ).limit(1)
         silver = v2.build_silver(self.bronze.subtract(target))
         self.assertGreater(v2.reconcile(silver)["checks"]["missing_dependencies"], 0)
 
@@ -136,17 +152,24 @@ class SourceV2LakehouseTests(unittest.TestCase):
 
     def test_quantity_balance_breaks_when_allocation_missing(self):
         """Kiểm thiếu allocation làm hỏng cân bằng số lượng."""
-        second = self.bronze.filter((F.get_json_object("raw_json", "$.payload.quantity") == "1")
-                                    & (F.col("feed") == "seller_oms.fulfillment_allocations"))
+        second = self.bronze.filter(
+            (F.get_json_object("raw_json", "$.payload.quantity") == "1")
+            & (F.col("feed") == "seller_oms.fulfillment_allocations")
+        )
         self.assertGreater(second.count(), 0)
         silver = v2.build_silver(self.bronze.subtract(second))
         self.assertGreater(v2.reconcile(silver)["checks"]["quantity_mismatch_lines"], 0)
 
     def test_split_shipment_line_has_two_allocations(self):
         """Kiểm một dòng giao tách có hai allocation riêng."""
-        allocs = self.silver["allocations"].groupBy("line_id").agg(F.sum("quantity").alias("q"),
-                                                                     F.count("*").alias("n"))
-        line_b = self.silver["line_commitments"].filter(F.col("native_line_id") == "2").select("line_id")
+        allocs = (
+            self.silver["allocations"]
+            .groupBy("line_id")
+            .agg(F.sum("quantity").alias("q"), F.count("*").alias("n"))
+        )
+        line_b = (
+            self.silver["line_commitments"].filter(F.col("native_line_id") == "2").select("line_id")
+        )
         rows = allocs.join(line_b, "line_id").collect()
         self.assertEqual({(r["n"], r["q"]) for r in rows}, {(2, 3)})
 
@@ -163,7 +186,9 @@ class SourceV2LakehouseTests(unittest.TestCase):
         result = v2.reconcile(early)
         self.assertEqual(result["info"]["refund_unresolved_product_rows"], 15)
         self.assertEqual(result["checks"]["refund_unscoped_rows"], 0)
-        unresolved = early["refunds"].filter(F.col("line_id").isNull() & (F.col("component") == "product"))
+        unresolved = early["refunds"].filter(
+            F.col("line_id").isNull() & (F.col("component") == "product")
+        )
         self.assertEqual(unresolved.filter(F.col("unresolved_scope_ref").isNull()).count(), 0)
 
     def test_refund_after_correction_is_allocated(self):
@@ -177,8 +202,12 @@ class SourceV2LakehouseTests(unittest.TestCase):
         """Kiểm listing correction thay mapping sai và giữ lịch sử."""
         history = self.silver["listing_versions"]
         amazon_a = history.filter((F.col("channel") == "amazon") & (F.col("revision") > 1))
-        latest = history.filter(F.col("is_latest") & F.col("listing_id").isin(
-            [r["listing_id"] for r in amazon_a.select("listing_id").distinct().collect()])).first()
+        latest = history.filter(
+            F.col("is_latest")
+            & F.col("listing_id").isin(
+                [r["listing_id"] for r in amazon_a.select("listing_id").distinct().collect()]
+            )
+        ).first()
         self.assertEqual(latest["internal_sku_id"], "sku-B")
         self.assertEqual(latest["change_kind"], "source_correction")
         self.assertEqual(amazon_a.count(), 2)
@@ -191,16 +220,26 @@ class SourceV2LakehouseTests(unittest.TestCase):
     def test_native_lines_parse_for_every_channel(self):
         """Kiểm native line của đủ năm Channel được parse."""
         native = self.silver["native_order_lines"]
-        per_channel = {r["channel"]: r["n"] for r in native.groupBy("channel").agg(F.count("*").alias("n")).collect()}
-        self.assertEqual(per_channel, {c: 6 for c in ("amazon", "walmart", "shopify", "tiktok_shop", "shopee")})
+        per_channel = {
+            r["channel"]: r["n"]
+            for r in native.groupBy("channel").agg(F.count("*").alias("n")).collect()
+        }
+        self.assertEqual(
+            per_channel, {c: 6 for c in ("amazon", "walmart", "shopify", "tiktok_shop", "shopee")}
+        )
         self.assertEqual(native.filter(F.col("quantity") != 3).count(), 0)
         self.assertEqual(native.filter(F.col("net_minor") != 30000).count(), 0)
 
     def test_native_reconciles_with_oms(self):
         """Kiểm nguồn native đối soát được với OMS."""
         checks = v2.reconcile(self.silver)["checks"]
-        for key in ("native_unparsed_rows", "native_lines_without_commitment", "commitments_without_native",
-                    "native_quantity_mismatches", "native_money_mismatches"):
+        for key in (
+            "native_unparsed_rows",
+            "native_lines_without_commitment",
+            "commitments_without_native",
+            "native_quantity_mismatches",
+            "native_money_mismatches",
+        ):
             self.assertEqual(checks[key], 0, key)
 
     def test_amazon_schema_two_parses_the_same(self):
@@ -210,15 +249,20 @@ class SourceV2LakehouseTests(unittest.TestCase):
         silver = v2.build_silver(v2.bronze_from_root(self.spark, str(root), "run-schema2"))
         amazon = silver["native_order_lines"].filter(F.col("channel") == "amazon")
         self.assertEqual(amazon.count(), 6)
-        self.assertEqual(set(r[0] for r in amazon.select("native_schema").distinct().collect()), {"amazon/2"})
+        self.assertEqual(
+            set(r[0] for r in amazon.select("native_schema").distinct().collect()), {"amazon/2"}
+        )
         checks = v2.reconcile(silver)["checks"]
         self.assertEqual({k: v for k, v in checks.items() if v}, {})
 
     def test_native_money_drift_is_caught(self):
         """Kiểm phát hiện sai lệch tiền từ nguồn native."""
         walmart = self.bronze.filter(F.col("feed") == "walmart.orders").limit(1)
-        drifted = v2.with_envelope(walmart.withColumn(
-            "raw_json", F.regexp_replace("raw_json", '"amount":"300.00"', '"amount":"299.00"')))
+        drifted = v2.with_envelope(
+            walmart.withColumn(
+                "raw_json", F.regexp_replace("raw_json", '"amount":"300.00"', '"amount":"299.00"')
+            )
+        )
         silver = v2.build_silver(self.bronze.subtract(walmart).unionByName(drifted))
         self.assertEqual(v2.reconcile(silver)["checks"]["native_money_mismatches"], 2)
 
@@ -234,18 +278,36 @@ class SourceV2LakehouseTests(unittest.TestCase):
         jdbc = files.select(
             "dataset_version",
             F.get_json_object("raw_json", "$.purchase_order_id").alias("purchase_order_id"),
-            F.concat(F.lit('{"fetched_at" : "'), F.get_json_object("raw_json", "$.fetched_at"),
-                     F.lit('", "purchase_order_id" : "'), F.get_json_object("raw_json", "$.purchase_order_id"),
-                     F.lit('", "raw_payload" : '), F.get_json_object("raw_json", "$.raw_payload"),
-                     F.lit("}")).alias("raw_json"))
-        rows = v2.bronze_from_jdbc(jdbc, "run-jdbc", "jdbc:postgresql://postgres:5432/sources#walmart_lifecycle.orders",
-                                   "2026-01-04")
-        self.assertEqual(set(r[0] for r in rows.select("ingestion_boundary").distinct().collect()), {"jdbc"})
+            F.concat(
+                F.lit('{"fetched_at" : "'),
+                F.get_json_object("raw_json", "$.fetched_at"),
+                F.lit('", "purchase_order_id" : "'),
+                F.get_json_object("raw_json", "$.purchase_order_id"),
+                F.lit('", "raw_payload" : '),
+                F.get_json_object("raw_json", "$.raw_payload"),
+                F.lit("}"),
+            ).alias("raw_json"),
+        )
+        rows = v2.bronze_from_jdbc(
+            jdbc,
+            "run-jdbc",
+            "jdbc:postgresql://postgres:5432/sources#walmart_lifecycle.orders",
+            "2026-01-04",
+        )
+        self.assertEqual(
+            set(r[0] for r in rows.select("ingestion_boundary").distinct().collect()), {"jdbc"}
+        )
         bronze = self.bronze.filter(F.col("feed") != "walmart.orders").unionByName(rows)
-        self.assertEqual(bronze.filter(F.col("ingestion_boundary") == "file").filter(
-            F.col("feed") == "walmart.orders").count(), 0)
+        self.assertEqual(
+            bronze.filter(F.col("ingestion_boundary") == "file")
+            .filter(F.col("feed") == "walmart.orders")
+            .count(),
+            0,
+        )
         silver = v2.build_silver(bronze)
-        self.assertEqual(silver["native_order_lines"].filter(F.col("channel") == "walmart").count(), 6)
+        self.assertEqual(
+            silver["native_order_lines"].filter(F.col("channel") == "walmart").count(), 6
+        )
         checks = v2.reconcile(silver)["checks"]
         self.assertEqual({k: v for k, v in checks.items() if v}, {})
 
@@ -274,19 +336,41 @@ class SourceV2LakehouseTests(unittest.TestCase):
     def test_coverage_detects_silent_content_change(self):
         """Kiểm coverage phát hiện nội dung bị đổi âm thầm."""
         row = self.bronze.filter(F.col("feed") == "carrier.delivery_events").limit(1)
-        changed = v2.with_envelope(row.withColumn(
-            "raw_json", F.regexp_replace("raw_json", '"event_type":"delivered"', '"event_type":"delivered "')))
-        receipts = v2.build_silver(self.bronze.subtract(row).unionByName(changed))["coverage_receipts"]
+        changed = v2.with_envelope(
+            row.withColumn(
+                "raw_json",
+                F.regexp_replace(
+                    "raw_json", '"event_type":"delivered"', '"event_type":"delivered "'
+                ),
+            )
+        )
+        receipts = v2.build_silver(self.bronze.subtract(row).unionByName(changed))[
+            "coverage_receipts"
+        ]
         failed = receipts.filter(F.col("covered_feed") == "carrier.delivery_events").first()
         self.assertEqual(failed["reasons"], ["record_set_digest_mismatch"])
 
     def test_stock_correction_replaces_not_adds(self):
         """Kiểm stock correction thay giá trị cũ thay vì cộng dồn."""
-        opening = self.bronze.filter(F.col("raw_json").contains('"operation_type":"opening"')).limit(1)
-        fixed = (opening
-                 .withColumn("raw_json", F.regexp_replace("raw_json", '"entity_revision":1', '"entity_revision":2'))
-                 .withColumn("raw_json", F.regexp_replace("raw_json", '"delta_on_hand":200', '"delta_on_hand":199'))
-                 .withColumn("raw_json", F.regexp_replace("raw_json", '"source_event_id":"event-', '"source_event_id":"event-fix')))
+        opening = self.bronze.filter(
+            F.col("raw_json").contains('"operation_type":"opening"')
+        ).limit(1)
+        fixed = (
+            opening.withColumn(
+                "raw_json",
+                F.regexp_replace("raw_json", '"entity_revision":1', '"entity_revision":2'),
+            )
+            .withColumn(
+                "raw_json",
+                F.regexp_replace("raw_json", '"delta_on_hand":200', '"delta_on_hand":199'),
+            )
+            .withColumn(
+                "raw_json",
+                F.regexp_replace(
+                    "raw_json", '"source_event_id":"event-', '"source_event_id":"event-fix'
+                ),
+            )
+        )
         fixed = v2.with_envelope(fixed)
         silver = v2.build_silver(self.bronze.unionByName(fixed))
         ops = silver["stock_operations"].filter(F.col("operation_type") == "opening")
@@ -305,10 +389,14 @@ class SourceV2LakehouseTests(unittest.TestCase):
         silver = v2.build_silver(v2.bronze_from_root(self.spark, str(root), "unknown"))
         quarantine = silver["quarantine_records"]
         self.assertEqual(quarantine.count(), 3)
-        self.assertEqual({r.reason for r in quarantine.select("reason").collect()}, {"unregistered_schema"})
+        self.assertEqual(
+            {r.reason for r in quarantine.select("reason").collect()}, {"unregistered_schema"}
+        )
         for channel in ("amazon", "walmart", "shopify", "tiktok_shop"):
-            self.assertEqual(silver["native_order_lines"].filter(F.col("channel") == channel).count(),
-                             self.silver["native_order_lines"].filter(F.col("channel") == channel).count())
+            self.assertEqual(
+                silver["native_order_lines"].filter(F.col("channel") == channel).count(),
+                self.silver["native_order_lines"].filter(F.col("channel") == channel).count(),
+            )
         result = v2.reconcile(silver)
         self.assertEqual({k: v for k, v in result["checks"].items() if v}, {})
         self.assertEqual(result["quarantined_orders"], {})
@@ -320,15 +408,27 @@ class SourceV2LakehouseTests(unittest.TestCase):
         generate_fixture(root, native_schemas={"tiktok_shop": 2})
         silver = v2.build_silver(v2.bronze_from_root(self.spark, str(root), "compatible"))
         self.assertEqual(silver["quarantine_records"].count(), 0)
-        before = self.silver["native_order_lines"].filter(F.col("channel") == "tiktok_shop").drop("dataset_version")
-        after = silver["native_order_lines"].filter(F.col("channel") == "tiktok_shop").drop("dataset_version")
+        before = (
+            self.silver["native_order_lines"]
+            .filter(F.col("channel") == "tiktok_shop")
+            .drop("dataset_version")
+        )
+        after = (
+            silver["native_order_lines"]
+            .filter(F.col("channel") == "tiktok_shop")
+            .drop("dataset_version")
+        )
         self.assertEqual(before.exceptAll(after).count(), 0)
         self.assertEqual(after.exceptAll(before).count(), 0)
 
     def test_contract_producer_lies_about_schema(self):
         """Sai required dưới nhãn đã đăng ký bị cách ly với đường dẫn rõ ràng."""
         one = self.bronze.filter(F.col("feed") == "shopee.orders").limit(1)
-        changed = v2.with_envelope(one.withColumn("raw_json", F.regexp_replace("raw_json", '"order_sn":', '"order_number":')))
+        changed = v2.with_envelope(
+            one.withColumn(
+                "raw_json", F.regexp_replace("raw_json", '"order_sn":', '"order_number":')
+            )
+        )
         silver = v2.build_silver(self.bronze.subtract(one).unionByName(changed))
         rows = silver["quarantine_records"].collect()
         self.assertEqual(len(rows), 1)
@@ -342,14 +442,24 @@ class SourceV2LakehouseTests(unittest.TestCase):
     def test_contract_registered_but_missing_parser(self):
         """Registry biết schema nhưng Silver chưa hỗ trợ parser: no_parser."""
         from spark_jobs.lib.data_contracts.registry import Registry
+
         registry = Registry(ROOT / "contracts")
         registry.entries["sim-native-v2/shopee/2"] = {
-            **registry.lookup("sim-native-v2/shopee/1"), "parser": "shopee/2"}
-        bronze = self.bronze.withColumn("contract_schema_id", F.when(
-            F.col("feed") == "shopee.orders", F.lit("sim-native-v2/shopee/2")).otherwise(F.col("contract_schema_id")))
+            **registry.entries.get("sim-native-v2/shopee/1"),
+            "parser": "shopee/2",
+        }
+        bronze = self.bronze.withColumn(
+            "contract_schema_id",
+            F.when(F.col("feed") == "shopee.orders", F.lit("sim-native-v2/shopee/2")).otherwise(
+                F.col("contract_schema_id")
+            ),
+        )
         silver = v2.build_silver(bronze, registry=registry)
         self.assertEqual(silver["quarantine_records"].count(), 3)
-        self.assertEqual({r.reason for r in silver["quarantine_records"].select("reason").collect()}, {"no_parser"})
+        self.assertEqual(
+            {r.reason for r in silver["quarantine_records"].select("reason").collect()},
+            {"no_parser"},
+        )
         result = v2.reconcile(silver)
         self.assertEqual(result["quarantined_orders"], {"shopee": 3})
         self.assertEqual(result["info"]["quarantined_native_records_without_order_identity"], 0)

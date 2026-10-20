@@ -1,12 +1,13 @@
 """Hàm thuần đối soát CDC v2 với oracle và tiện ích Spark/receipt dùng chung."""
+
 from __future__ import annotations
 
-from collections import Counter, defaultdict
 import hashlib
 import json
 import os
-from pathlib import Path
 import tempfile
+from collections import Counter, defaultdict
+from pathlib import Path
 
 TOPIC = "fsds_cdc_order_lifecycle.walmart_lifecycle.orders"
 TARGET = "lakehouse.bronze.lifecycle_raw_walmart_cdc_events"
@@ -36,8 +37,19 @@ def write_json(path, document):
 
 def compare_events(expected, actual, epoch, boundary=None):
     """Đếm thiếu/thừa, sai hash, đảo thứ tự cùng khóa và epoch lẫn, không che dòng sai."""
-    checks = dict.fromkeys(("missing", "extra", "payload_mismatch", "order_mismatch", "epoch_mismatch",
-                            "invalid", "duplicate_offsets", "outside_boundary"), 0)
+    checks = dict.fromkeys(
+        (
+            "missing",
+            "extra",
+            "payload_mismatch",
+            "order_mismatch",
+            "epoch_mismatch",
+            "invalid",
+            "duplicate_offsets",
+            "outside_boundary",
+        ),
+        0,
+    )
     want, got = defaultdict(list), defaultdict(list)
     sequences_want, sequences_got = defaultdict(list), defaultdict(list)
     offsets = set()
@@ -50,21 +62,35 @@ def compare_events(expected, actual, epoch, boundary=None):
         got[(*key, event.get("op"))].append(event)
         sequences_got[key].append(event)
         checks["epoch_mismatch"] += event.get("source_epoch") != epoch
-        invalid = (event.get("op") not in ("c", "u", "d") or not all(key)
-                   or event.get("source_lsn") is None or event.get("source_ts") is None
-                   or type(event.get("kafka_partition")) is not int or type(event.get("kafka_offset")) is not int)
+        invalid = (
+            event.get("op") not in ("c", "u", "d")
+            or not all(key)
+            or event.get("source_lsn") is None
+            or event.get("source_ts") is None
+            or type(event.get("kafka_partition")) is not int
+            or type(event.get("kafka_offset")) is not int
+        )
         if event.get("op") in ("c", "u"):
             invalid |= event.get("payload_after") is None
         elif event.get("op") == "d":
             invalid |= event.get("payload_after") is not None
         checks["invalid"] += bool(invalid)
-        offset = (event.get("source_epoch"), event.get("topic"), event.get("kafka_partition"), event.get("kafka_offset"))
+        offset = (
+            event.get("source_epoch"),
+            event.get("topic"),
+            event.get("kafka_partition"),
+            event.get("kafka_offset"),
+        )
         checks["duplicate_offsets"] += offset in offsets
         offsets.add(offset)
         if boundary:
             p, o = str(event.get("kafka_partition")), event.get("kafka_offset")
-            inside = (event.get("topic") == boundary["topic"] and p in boundary["starting_offsets"]
-                      and type(o) is int and boundary["starting_offsets"][p] <= o < boundary["ending_offsets"][p])
+            inside = (
+                event.get("topic") == boundary["topic"]
+                and p in boundary["starting_offsets"]
+                and type(o) is int
+                and boundary["starting_offsets"][p] <= o < boundary["ending_offsets"][p]
+            )
             checks["outside_boundary"] += not inside
     for key in want.keys() | got.keys():
         ws, gs = want[key], got[key]
@@ -73,12 +99,16 @@ def compare_events(expected, actual, epoch, boundary=None):
         gs = sorted(gs, key=lambda e: (e.get("kafka_partition") or 0, e.get("kafka_offset") or 0))
         for w, g in zip(ws, gs):
             digest = payload_sha256(g.get("payload_after"))
-            checks["payload_mismatch"] += (digest != w["after_sha256"] or g.get("record_sha256") != digest)
+            checks["payload_mismatch"] += (
+                digest != w["after_sha256"] or g.get("record_sha256") != digest
+            )
     for key, sequence in sequences_want.items():
         rows = sequences_got[key]
         # So dấu vân tay để bắt cả hai UPDATE cùng khóa bị đảo, không quy lỗi payload thành thứ tự.
-        observed = [(e.get("op"), payload_sha256(e.get("payload_after")))
-                    for e in sorted(rows, key=lambda e: e.get("kafka_offset") or 0)]
+        observed = [
+            (e.get("op"), payload_sha256(e.get("payload_after")))
+            for e in sorted(rows, key=lambda e: e.get("kafka_offset") or 0)
+        ]
         if Counter(observed) == Counter(sequence):
             partitions = {e.get("kafka_partition") for e in rows}
             checks["order_mismatch"] += len(partitions) != 1 or observed != sequence
@@ -89,12 +119,20 @@ def build_session(name, local_warehouse=None):
     """Dùng catalog thật mặc định, hoặc Hadoop local riêng cho harness không Lakekeeper."""
     if local_warehouse is None:
         from spark_jobs.lib.iceberg_session import build_spark
+
         return build_spark(name, shuffle_partitions=2)
     from pyspark.sql import SparkSession
-    return (SparkSession.builder.appName(name)
-            .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
-            .config("spark.sql.catalog.lakehouse", "org.apache.iceberg.spark.SparkCatalog")
-            .config("spark.sql.catalog.lakehouse.type", "hadoop")
-            .config("spark.sql.catalog.lakehouse.warehouse", local_warehouse)
-            .config("spark.sql.session.timeZone", "UTC")
-            .config("spark.sql.shuffle.partitions", "2").getOrCreate())
+
+    return (
+        SparkSession.builder.appName(name)
+        .config(
+            "spark.sql.extensions",
+            "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+        )
+        .config("spark.sql.catalog.lakehouse", "org.apache.iceberg.spark.SparkCatalog")
+        .config("spark.sql.catalog.lakehouse.type", "hadoop")
+        .config("spark.sql.catalog.lakehouse.warehouse", local_warehouse)
+        .config("spark.sql.session.timeZone", "UTC")
+        .config("spark.sql.shuffle.partitions", "2")
+        .getOrCreate()
+    )

@@ -17,7 +17,6 @@ import collections
 import dataclasses
 import json
 import sys
-from datetime import timedelta
 
 from generator.config import load_config
 from generator.core.simulate import Simulator
@@ -67,8 +66,10 @@ def _print_duplicate(first, second) -> None:
     print(RULE)
     print(f"tts_notification_id : {first.dedup_key}")
     print(f"bản gốc đến lúc     : {first.arrive_at:%Y-%m-%d %H:%M:%S}")
-    print(f"bản gửi lại đến lúc : {second.arrive_at:%Y-%m-%d %H:%M:%S}"
-          f"   → sau {(second.arrive_at - first.arrive_at).total_seconds() / 60:.0f} phút")
+    print(
+        f"bản gửi lại đến lúc : {second.arrive_at:%Y-%m-%d %H:%M:%S}"
+        f"   → sau {(second.arrive_at - first.arrive_at).total_seconds() / 60:.0f} phút"
+    )
     print(f"nội dung giống hệt  : {first.value == second.value}")
     print(f"payload             : {json.dumps(first.value['data'], separators=(',', ':'))}")
 
@@ -80,10 +81,14 @@ def _print_late(msg, newest) -> None:
     print("2. LATE + OUT-OF-ORDER: notification Amazon đến sau một tin mới hơn nó")
     print(RULE)
     print(f"EventTime   (lúc xảy ra) : {msg.event_time:%Y-%m-%d %H:%M:%S}")
-    print(f"PublishTime (lúc đến)    : {msg.arrive_at:%Y-%m-%d %H:%M:%S}"
-          f"   → trễ {(msg.arrive_at - msg.event_time).total_seconds() / 60:.0f} phút")
-    print(f"tin mới nhất đã đến      : {newest:%Y-%m-%d %H:%M:%S}"
-          f"   → tin này cũ hơn {(newest - msg.event_time).total_seconds() / 3600:.1f} giờ")
+    print(
+        f"PublishTime (lúc đến)    : {msg.arrive_at:%Y-%m-%d %H:%M:%S}"
+        f"   → trễ {(msg.arrive_at - msg.event_time).total_seconds() / 60:.0f} phút"
+    )
+    print(
+        f"tin mới nhất đã đến      : {newest:%Y-%m-%d %H:%M:%S}"
+        f"   → tin này cũ hơn {(newest - msg.event_time).total_seconds() / 3600:.1f} giờ"
+    )
     print(f"AmazonOrderId            : {msg.key}")
 
 
@@ -106,14 +111,21 @@ def _print_burst(config, orders_by_hour, hours) -> None:
     in_window = sum(orders_by_hour[(live_date, h)] for h in hours)
     prev_window = sum(orders_by_hour[(prev_date, h)] for h in hours)
     no_live = dataclasses.replace(config, drift=dataclasses.replace(config.drift, tiktok_live=None))
-    base = sum(1 for o in Simulator(no_live).simulate_day(live.day)
-               if o.storefront_id == "tiktok_shop_us" and o.created_at.hour in hours)
+    base = sum(
+        1
+        for o in Simulator(no_live).simulate_day(live.day)
+        if o.storefront_id == "tiktok_shop_us" and o.created_at.hour in hours
+    )
 
     span = f"{min(hours):02d}-{max(hours) + 1:02d}h"
-    print(f"\nkhung live {span}: {in_window / len(hours):.1f} Order/giờ"
-          f"   ngày trước: {prev_window / len(hours):.1f} Order/giờ")
-    print(f"chính ngày đó nếu tắt livestream: {base / len(hours):.1f} Order/giờ"
-          f"   → tỷ lệ {in_window / base:.2f}   (đáp án {Simulator(config).live_multiplier:.2f})")
+    print(
+        f"\nkhung live {span}: {in_window / len(hours):.1f} Order/giờ"
+        f"   ngày trước: {prev_window / len(hours):.1f} Order/giờ"
+    )
+    print(
+        f"chính ngày đó nếu tắt livestream: {base / len(hours):.1f} Order/giờ"
+        f"   → tỷ lệ {in_window / base:.2f}   (đáp án {Simulator(config).live_multiplier:.2f})"
+    )
 
 
 if __name__ == "__main__":

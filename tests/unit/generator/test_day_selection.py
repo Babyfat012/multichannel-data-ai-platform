@@ -17,8 +17,9 @@ import pytest
 from generator.day_selection import day_of, filter_to_sample_days, pick_sample_days
 
 DAYS = [f"2026-{1 + i // 30:02d}-{1 + i % 30:02d}" for i in range(180)]
-WALMART = [f"pg-load/walmart.orders/export_date={d}/part-sim{i:05d}.jsonl"
-           for i, d in enumerate(DAYS)]
+WALMART = [
+    f"pg-load/walmart.orders/export_date={d}/part-sim{i:05d}.jsonl" for i, d in enumerate(DAYS)
+]
 SKUS = ["pg-load/seller.skus/part-00000.jsonl"]
 
 

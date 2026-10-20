@@ -72,7 +72,6 @@ class OrderLine:
     unit_price: float
     unit_discount: float
     return_requested_at: datetime | None = None
-    refunded_at: datetime | None = None
     label: int | None = None
 
 

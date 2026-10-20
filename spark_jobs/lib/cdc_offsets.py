@@ -9,13 +9,15 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 
 def _digest(value):
     """SHA-256 hex of a value serialized as sorted, compact JSON."""
-    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
 
 
 def _validate(snapshot):
@@ -24,13 +26,23 @@ def _validate(snapshot):
         if not isinstance(snapshot.get(key), str) or not snapshot[key].strip():
             raise ValueError(f"Missing Kafka {key}")
     starts, ends = snapshot.get("starting_offsets"), snapshot.get("ending_offsets")
-    if not isinstance(starts, dict) or not isinstance(ends, dict) or not starts or starts.keys() != ends.keys():
+    if (
+        not isinstance(starts, dict)
+        or not isinstance(ends, dict)
+        or not starts
+        or starts.keys() != ends.keys()
+    ):
         raise ValueError("Offsets must cover the same nonempty partition set")
     for partition, start in starts.items():
         end = ends[partition]
-        if (not isinstance(partition, str) or not partition.isdecimal()
-                or str(int(partition)) != partition or type(start) is not int
-                or type(end) is not int or not 0 <= start <= end):
+        if (
+            not isinstance(partition, str)
+            or not partition.isdecimal()
+            or str(int(partition)) != partition
+            or type(start) is not int
+            or type(end) is not int
+            or not 0 <= start <= end
+        ):
             raise ValueError("Invalid Kafka offset range")
 
 
@@ -57,9 +69,11 @@ def load_boundary(directory, run_id, observed):
         if frozen[key] != observed[key]:
             raise ValueError(f"Kafka source incarnation changed: {key}")
     for partition, start in frozen["starting_offsets"].items():
-        if (partition not in observed["starting_offsets"]
-                or observed["starting_offsets"][partition] > start
-                or observed["ending_offsets"][partition] < frozen["ending_offsets"][partition]):
+        if (
+            partition not in observed["starting_offsets"]
+            or observed["starting_offsets"][partition] > start
+            or observed["ending_offsets"][partition] < frozen["ending_offsets"][partition]
+        ):
             raise ValueError("Frozen Kafka range lost to retention, reset or truncation")
     return frozen
 
@@ -118,8 +132,10 @@ def capture_kafka_boundary(spark, bootstrap, topic):
         "bootstrap.servers": bootstrap,
         "key.deserializer": "org.apache.kafka.common.serialization.ByteArrayDeserializer",
         "value.deserializer": "org.apache.kafka.common.serialization.ByteArrayDeserializer",
-        "isolation.level": "read_committed", "enable.auto.commit": "false",
-        "allow.auto.create.topics": "false", "default.api.timeout.ms": "30000",
+        "isolation.level": "read_committed",
+        "enable.auto.commit": "false",
+        "allow.auto.create.topics": "false",
+        "default.api.timeout.ms": "30000",
         "request.timeout.ms": "30000",
     }.items():
         properties.setProperty(key, value)
@@ -139,7 +155,9 @@ def capture_kafka_boundary(spark, bootstrap, topic):
         consumer = jvm.org.apache.kafka.clients.consumer.KafkaConsumer(properties)
         starts, ends = consumer.beginningOffsets(partitions), consumer.endOffsets(partitions)
         observed = {
-            "topic": topic, "cluster_id": cluster_id, "topic_id": topic_id,
+            "topic": topic,
+            "cluster_id": cluster_id,
+            "topic_id": topic_id,
             "starting_offsets": {str(p.partition()): int(starts.get(p)) for p in partitions},
             "ending_offsets": {str(p.partition()): int(ends.get(p)) for p in partitions},
         }

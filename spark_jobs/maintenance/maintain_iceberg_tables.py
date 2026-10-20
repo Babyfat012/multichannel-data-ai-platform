@@ -5,19 +5,25 @@ Tổng không phụ thuộc thứ tự dòng/file, không tràn bigint; đây l�
 không phải chứng minh toán học rằng hai multiset bằng nhau. Không dùng count metadata.
 Module chỉ import pyspark khi dựng session; có thể nạp CLI/help không cần Spark.
 """
+
 from __future__ import annotations
 
 import argparse
-from datetime import date, datetime, timedelta, timezone
 import hashlib
 import json
-from pathlib import Path
 import re
-import sys
 import time
+from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 
-from spark_jobs.lib.maintenance_policy import (count_probe_files, ensure_refs_survive_expiration, execute_actions, load_config,
-                                plan_maintenance, validated_config)
+from spark_jobs.lib.maintenance_policy import (
+    count_probe_files,
+    ensure_refs_survive_expiration,
+    execute_actions,
+    load_config,
+    plan_maintenance,
+    validated_config,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -68,11 +74,16 @@ def read_metadata(spark, table):
     """Chụp files/snapshots/refs/partitions/properties cho policy thuần Python."""
     name = identifier(table)
     files = rows(spark, f"SELECT * FROM {name}.files WHERE content = 0")
-    return {"files": files, "snapshots": rows(spark, f"SELECT * FROM {name}.snapshots"),
-            "refs": rows(spark, f"SELECT * FROM {name}.refs"),
-            "partitions": rows(spark, f"SELECT * FROM {name}.partitions"),
-            "properties": {row["key"]: row["value"] for row in rows(spark, f"SHOW TBLPROPERTIES {name}")},
-            "current_snapshot_id": snapshot_id(spark, table)}
+    return {
+        "files": files,
+        "snapshots": rows(spark, f"SELECT * FROM {name}.snapshots"),
+        "refs": rows(spark, f"SELECT * FROM {name}.refs"),
+        "partitions": rows(spark, f"SELECT * FROM {name}.partitions"),
+        "properties": {
+            row["key"]: row["value"] for row in rows(spark, f"SHOW TBLPROPERTIES {name}")
+        },
+        "current_snapshot_id": snapshot_id(spark, table),
+    }
 
 
 def fingerprint(spark, table, version=None):
@@ -82,9 +93,15 @@ def fingerprint(spark, table, version=None):
         relation += " VERSION AS OF " + literal(version)
     frame = spark.sql(f"SELECT * FROM {relation}")
     columns = ", ".join(column_name(column) for column in frame.columns)
-    result = frame.selectExpr("count(*) AS rows",
-                              f"coalesce(sum(cast(xxhash64({columns}) AS decimal(38,0))), 0) AS fingerprint").first()
-    return {"rows": result["rows"], "fingerprint": str(result["fingerprint"]), "columns": frame.columns}
+    result = frame.selectExpr(
+        "count(*) AS rows",
+        f"coalesce(sum(cast(xxhash64({columns}) AS decimal(38,0))), 0) AS fingerprint",
+    ).first()
+    return {
+        "rows": result["rows"],
+        "fingerprint": str(result["fingerprint"]),
+        "columns": frame.columns,
+    }
 
 
 def probe_where(probe):
@@ -101,9 +118,13 @@ def probe_where(probe):
 def measure(spark, table, config, metadata=None):
     """Đo checksum, file/byte/snapshot và probe: 1 warmup + 3 lượt, n=3."""
     metadata = metadata or read_metadata(spark, table)
-    result = {**fingerprint(spark, table), "data_files": len(metadata["files"]),
-              "total_bytes": sum(file["file_size_in_bytes"] for file in metadata["files"]),
-              "snapshots": len(metadata["snapshots"]), "probes": {}}
+    result = {
+        **fingerprint(spark, table),
+        "data_files": len(metadata["files"]),
+        "total_bytes": sum(file["file_size_in_bytes"] for file in metadata["files"]),
+        "snapshots": len(metadata["snapshots"]),
+        "probes": {},
+    }
     if config["zorder_columns"]:
         for probe in config["probe_predicates"]:
             query = f"SELECT count(*) FROM {identifier(table)} WHERE {probe_where(probe)}"
@@ -115,7 +136,10 @@ def measure(spark, table, config, metadata=None):
                 samples.append(time.perf_counter() - started)
             result["probes"][probe["name"]] = {
                 "candidate_data_files": count_probe_files(metadata["files"], probe["ranges"]),
-                "seconds": samples, "n": 3, "warmup": 1}
+                "seconds": samples,
+                "n": 3,
+                "warmup": 1,
+            }
     return result
 
 
@@ -132,7 +156,9 @@ def partition_where(spark, table, partitions):
     Không dùng tên partition transform trực tiếp làm tên cột. Bảng có evolution spec
     khác hiện hành hoặc bucket/truncate bị từ chối trước mọi procedure.
     """
-    jtable = spark._jvm.org.apache.iceberg.spark.Spark3Util.loadIcebergTable(spark._jsparkSession, table)
+    jtable = spark._jvm.org.apache.iceberg.spark.Spark3Util.loadIcebergTable(
+        spark._jsparkSession, table
+    )
     spec = jtable.spec()
     if jtable.specs().size() != 1:
         raise ValueError("Bảng có partition spec evolution; cần mapping riêng trước compaction")
@@ -191,23 +217,31 @@ def action_sql(spark, table, action):
             extra = ", sort_order => " + literal("zorder(" + ",".join(action["columns"]) + ")")
             strategy = "sort"
         mapping = ", ".join(f"{literal(key)}, {literal(value)}" for key, value in options.items())
-        return (f"CALL {system}.rewrite_data_files(table => {literal(short)}, strategy => {literal(strategy)}"
-                f"{extra}, options => map({mapping}))")
+        return (
+            f"CALL {system}.rewrite_data_files(table => {literal(short)}, strategy => {literal(strategy)}"
+            f"{extra}, options => map({mapping}))"
+        )
     if kind == "expire_snapshots":
-        return (f"CALL {system}.expire_snapshots(table => {literal(short)}, "
-                f"older_than => {literal(datetime.fromisoformat(action['older_than']))}, "
-                f"retain_last => {action['retain_last']})")
+        return (
+            f"CALL {system}.expire_snapshots(table => {literal(short)}, "
+            f"older_than => {literal(datetime.fromisoformat(action['older_than']))}, "
+            f"retain_last => {action['retain_last']})"
+        )
     if kind == "remove_orphans":
-        return (f"CALL {system}.remove_orphan_files(table => {literal(short)}, "
-                f"older_than => {literal(datetime.fromisoformat(action['older_than']))}, "
-                f"dry_run => {literal(action['dry_run'])})")
+        return (
+            f"CALL {system}.remove_orphan_files(table => {literal(short)}, "
+            f"older_than => {literal(datetime.fromisoformat(action['older_than']))}, "
+            f"dry_run => {literal(action['dry_run'])})"
+        )
     raise ValueError(f"Hành động không biết: {kind} trên {name}")
 
 
 def code_hashes():
     """Gắn sha256 code/config vào receipt để truy nguồn phiên bản đã chạy."""
     paths = [Path(__file__), ROOT / "spark_jobs/lib/maintenance_policy.py"]
-    return {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
+    return {
+        str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths
+    }
 
 
 def write_receipt(path, receipt):
@@ -225,7 +259,9 @@ def check_tags(spark, table, tags):
         assert_same(expected, fingerprint(spark, table, tag))
 
 
-def run_table(spark, table, config, receipt, execute=False, transient_failures=0, fatal_failure=False):
+def run_table(
+    spark, table, config, receipt, execute=False, transient_failures=0, fatal_failure=False
+):
     """Chạy một bảng; receipt được cập nhật tại chỗ ngay cả khi lỗi giữa chừng."""
     config = validated_config(config)
     spark.conf.set("spark.sql.parser.escapedStringLiterals", "false")
@@ -243,7 +279,9 @@ def run_table(spark, table, config, receipt, execute=False, transient_failures=0
             receipt["status"] = "planned"
             return receipt
         receipt["before"] = measure(spark, table, config, metadata)
-        receipt["generation_before"] = {tag: fingerprint(spark, table, tag) for tag in plan["generation_tags"]}
+        receipt["generation_before"] = {
+            tag: fingerprint(spark, table, tag) for tag in plan["generation_tags"]
+        }
         injected = 0
         first = plan["actions"][0] if plan["actions"] else None
 
@@ -255,15 +293,19 @@ def run_table(spark, table, config, receipt, execute=False, transient_failures=0
                     raise ValueError("Injected fatal failure trước procedure")
                 if injected < transient_failures:
                     injected += 1
-                    raise RuntimeError("CommitFailedException: injected transient failure trước procedure")
+                    raise RuntimeError(
+                        "CommitFailedException: injected transient failure trước procedure"
+                    )
             if action["kind"] == "expire_snapshots":
                 # Kiểm lại sát CALL vì compact/zorder có thể kéo dài qua TTL của ref.
                 ensure_refs_survive_expiration(read_metadata(spark, table))
             result = rows(spark, action_sql(spark, table, action))
             if action["kind"] == "zorder":
                 current = snapshot_id(spark, table)
-                spark.sql(f"ALTER TABLE {identifier(table)} SET TBLPROPERTIES "
-                          f"('fsds.maintenance.last_zorder_snapshot_id' = '{current}')").collect()
+                spark.sql(
+                    f"ALTER TABLE {identifier(table)} SET TBLPROPERTIES "
+                    f"('fsds.maintenance.last_zorder_snapshot_id' = '{current}')"
+                ).collect()
             if action["kind"] == "expire_snapshots":
                 check_tags(spark, table, receipt["generation_before"])
             return result
@@ -272,7 +314,9 @@ def run_table(spark, table, config, receipt, execute=False, transient_failures=0
         receipt["after"] = measure(spark, table, config)
         assert_same(receipt["before"], receipt["after"])
         check_tags(spark, table, receipt["generation_before"])
-        receipt["generation_after"] = {tag: fingerprint(spark, table, tag) for tag in plan["generation_tags"]}
+        receipt["generation_after"] = {
+            tag: fingerprint(spark, table, tag) for tag in plan["generation_tags"]
+        }
         receipt["status"] = "success"
         return receipt
     except Exception as error:
@@ -290,7 +334,7 @@ def validate_receipt(spark, receipt):
         assert_same(entry["before"], entry["after"])
         assert_same(entry["after"], fingerprint(spark, entry["table"]))
         check_tags(spark, entry["table"], entry["generation_before"])
-    return {"status": "validated", "validated_at": datetime.now(timezone.utc).isoformat()}
+    return {"status": "validated", "validated_at": datetime.now(UTC).isoformat()}
 
 
 def arguments():
@@ -301,11 +345,15 @@ def arguments():
     mode.add_argument("--execute", action="store_true")
     mode.add_argument("--validate-receipt")
     parser.add_argument("--config", default=str(ROOT / "configs/iceberg_maintenance.json"))
-    parser.add_argument("--config-json", help="Bản JSON từ Airflow Variable, cùng schema với --config")
+    parser.add_argument(
+        "--config-json", help="Bản JSON từ Airflow Variable, cùng schema với --config"
+    )
     parser.add_argument("--tables", help="JSON array hoặc danh sách bảng phân cách bằng dấu phẩy")
     parser.add_argument("--receipt", default="/tmp/fsds-maintenance-receipt.json")
     parser.add_argument("--catalog", default="lakehouse")
-    parser.add_argument("--local-warehouse", help="Dùng Hadoop local catalog thay vì build_spark REST")
+    parser.add_argument(
+        "--local-warehouse", help="Dùng Hadoop local catalog thay vì build_spark REST"
+    )
     parser.add_argument("--inject-transient-failures", type=int, default=0)
     parser.add_argument("--inject-fatal-failure", action="store_true")
     return parser.parse_args()
@@ -315,24 +363,38 @@ def build_session(args):
     """Production dùng helper có sẵn; Hadoop local không lấy packages qua mạng."""
     if args.local_warehouse:
         from pyspark.sql import SparkSession
+
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", args.catalog):
             raise ValueError("Catalog không hợp lệ")
-        return (SparkSession.builder.master("local[2]").appName("fsds-maintenance-local")
-                .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
-                .config(f"spark.sql.catalog.{args.catalog}", "org.apache.iceberg.spark.SparkCatalog")
-                .config(f"spark.sql.catalog.{args.catalog}.type", "hadoop")
-                .config(f"spark.sql.catalog.{args.catalog}.warehouse", args.local_warehouse)
-                .config("spark.sql.session.timeZone", "UTC")
-                .config("spark.sql.shuffle.partitions", "2").getOrCreate())
+        return (
+            SparkSession.builder.master("local[2]")
+            .appName("fsds-maintenance-local")
+            .config(
+                "spark.sql.extensions",
+                "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+            )
+            .config(f"spark.sql.catalog.{args.catalog}", "org.apache.iceberg.spark.SparkCatalog")
+            .config(f"spark.sql.catalog.{args.catalog}.type", "hadoop")
+            .config(f"spark.sql.catalog.{args.catalog}.warehouse", args.local_warehouse)
+            .config("spark.sql.session.timeZone", "UTC")
+            .config("spark.sql.shuffle.partitions", "2")
+            .getOrCreate()
+        )
     from spark_jobs.lib.iceberg_session import build_spark
+
     return build_spark("fsds-iceberg-maintenance", shuffle_partitions=4)
 
 
 def main():
     """Ghi receipt lỗi và exit khác 0; validate không ghi đè receipt execute."""
     args = arguments()
-    receipt = {"status": "running", "started_at": datetime.now(timezone.utc).isoformat(),
-               "mode": "execute" if args.execute else "plan", "code_sha256": code_hashes(), "tables": []}
+    receipt = {
+        "status": "running",
+        "started_at": datetime.now(UTC).isoformat(),
+        "mode": "execute" if args.execute else "plan",
+        "code_sha256": code_hashes(),
+        "tables": [],
+    }
     spark = None
     try:
         if args.inject_transient_failures < 0:
@@ -352,8 +414,13 @@ def main():
             payload = Path(args.config).read_text()
             configs = load_config(args.config)
         receipt["config_sha256"] = hashlib.sha256(payload.encode()).hexdigest()
-        tables = (json.loads(args.tables) if args.tables and args.tables.lstrip().startswith("[")
-                  else args.tables.split(",") if args.tables else list(configs))
+        tables = (
+            json.loads(args.tables)
+            if args.tables and args.tables.lstrip().startswith("[")
+            else args.tables.split(",")
+            if args.tables
+            else list(configs)
+        )
         if not isinstance(tables, list) or not tables:
             raise ValueError("Danh sách bảng phải khác rỗng")
         for table in tables:
@@ -364,16 +431,22 @@ def main():
         for index, table in enumerate(tables):
             entry = {}
             receipt["tables"].append(entry)
-            run_table(spark, table, configs[table], entry, args.execute,
-                      args.inject_transient_failures if index == 0 else 0,
-                      args.inject_fatal_failure if index == 0 else False)
+            run_table(
+                spark,
+                table,
+                configs[table],
+                entry,
+                args.execute,
+                args.inject_transient_failures if index == 0 else 0,
+                args.inject_fatal_failure if index == 0 else False,
+            )
         receipt["status"] = "success" if args.execute else "planned"
     except Exception as error:
         receipt.update(status="failed", error=f"{type(error).__name__}: {error}")
         raise
     finally:
         if not args.validate_receipt:
-            receipt["finished_at"] = datetime.now(timezone.utc).isoformat()
+            receipt["finished_at"] = datetime.now(UTC).isoformat()
             write_receipt(args.receipt, receipt)
         if spark is not None:
             spark.stop()

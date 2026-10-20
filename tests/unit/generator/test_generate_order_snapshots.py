@@ -16,7 +16,9 @@ def test_batch_writes_expected_layout_and_manifest(tiny_config):
     manifest = BatchRun(tiny_config).run()
     root = Path(tiny_config.storage.output_root)
 
-    amazon_parts = sorted(root.glob("source-exports/channel=amazon/dataset=orders/export_date=*/part-sim*.jsonl"))
+    amazon_parts = sorted(
+        root.glob("source-exports/channel=amazon/dataset=orders/export_date=*/part-sim*.jsonl")
+    )
     walmart_parts = sorted(root.glob("pg-load/walmart.orders/export_date=*/part-sim*.jsonl"))
     assert amazon_parts and walmart_parts
     assert json.loads((root / "run_manifest.json").read_text()) == manifest
@@ -31,8 +33,14 @@ def test_amazon_partitions_before_switch_use_v0_and_after_use_new_schema(tiny_co
     """Chứng minh file Amazon trước ngày chuyển dùng khoá v0 (`AmazonOrderId`), từ ngày đó dùng khoá 2026 (`orderId`)."""
     BatchRun(tiny_config).run()
     root = Path(tiny_config.storage.output_root)
-    switch_date = tiny_config.day_start(tiny_config.offline_problems.amazon_orders_api_switch_day).date().isoformat()
-    for part in root.glob("source-exports/channel=amazon/dataset=orders/export_date=*/part-sim*.jsonl"):
+    switch_date = (
+        tiny_config.day_start(tiny_config.offline_problems.amazon_orders_api_switch_day)
+        .date()
+        .isoformat()
+    )
+    for part in root.glob(
+        "source-exports/channel=amazon/dataset=orders/export_date=*/part-sim*.jsonl"
+    ):
         export_date = part.parent.name.removeprefix("export_date=")
         first = json.loads(part.read_text().splitlines()[0])
         expected_key = "AmazonOrderId" if export_date < switch_date else "orderId"
@@ -65,8 +73,10 @@ def test_labels_only_include_lines_known_before_cutoff(tiny_config):
 
 def test_same_config_produces_identical_files(tiny_config, tmp_path):
     """Chứng minh cùng cấu hình sinh ra file giống y từng byte, kể cả khi ghi vào thư mục khác."""
-    other = dataclasses.replace(tiny_config, storage=dataclasses.replace(tiny_config.storage,
-                                                                         output_root=str(tmp_path / "again")))
+    other = dataclasses.replace(
+        tiny_config,
+        storage=dataclasses.replace(tiny_config.storage, output_root=str(tmp_path / "again")),
+    )
     BatchRun(tiny_config).run()
     BatchRun(other).run()
     first = Path(tiny_config.storage.output_root)
@@ -96,10 +106,16 @@ def test_unique_keys_equals_primary_placements_so_the_key_set_is_unneeded(tiny_c
     """
     manifest = BatchRun(tiny_config).run()
     root = Path(tiny_config.storage.output_root)
-    key_fields = {"amazon.orders": ("AmazonOrderId", "orderId"), "walmart.orders": ("purchase_order_id",)}
+    key_fields = {
+        "amazon.orders": ("AmazonOrderId", "orderId"),
+        "walmart.orders": ("purchase_order_id",),
+    }
 
     for dataset, pattern in [
-        ("amazon.orders", "source-exports/channel=amazon/dataset=orders/export_date=*/part-sim*.jsonl"),
+        (
+            "amazon.orders",
+            "source-exports/channel=amazon/dataset=orders/export_date=*/part-sim*.jsonl",
+        ),
         ("walmart.orders", "pg-load/walmart.orders/export_date=*/part-sim*.jsonl"),
     ]:
         summary = manifest["datasets"][dataset]
@@ -147,5 +163,7 @@ def test_manifest_bytes_match_the_real_size_of_the_export_files(tiny_config):
     for dataset, pattern in patterns.items():
         parts = sorted(root.glob(pattern))
         assert parts, dataset
-        assert manifest["datasets"][dataset]["bytes"] == sum(p.stat().st_size for p in parts), dataset
+        assert manifest["datasets"][dataset]["bytes"] == sum(p.stat().st_size for p in parts), (
+            dataset
+        )
         assert manifest["datasets"][dataset]["files"] == len(parts), dataset

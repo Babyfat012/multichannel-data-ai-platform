@@ -53,7 +53,9 @@ class FileSink:
 
     def send(self, msg: StreamMessage) -> None:
         """Xếp message vào bộ đệm của topic nó, chưa đụng tới đĩa."""
-        self.rows[msg.topic].append({"arrive_at": msg.arrive_at.isoformat(), "key": msg.key, "value": msg.value})
+        self.rows[msg.topic].append(
+            {"arrive_at": msg.arrive_at.isoformat(), "key": msg.key, "value": msg.value}
+        )
 
     def close(self) -> None:
         """Ghi mỗi topic thành một file JSONL `stream/<topic>/part-00000.jsonl`."""
@@ -112,8 +114,14 @@ class StreamStats:
         if t in self.max_event and msg.event_time < self.max_event[t] - timedelta(hours=1):
             self.out_of_order[t] += 1
         self.max_event[t] = max(self.max_event.get(t, msg.event_time), msg.event_time)
-        if t == TOPICS["tiktok_shop"] and not msg.is_duplicate and msg.value["data"]["order_status"] == "UNPAID":
-            self.new_tiktok_orders_by_hour[msg.event_time.replace(minute=0, second=0, microsecond=0)] += 1
+        if (
+            t == TOPICS["tiktok_shop"]
+            and not msg.is_duplicate
+            and msg.value["data"]["order_status"] == "UNPAID"
+        ):
+            self.new_tiktok_orders_by_hour[
+                msg.event_time.replace(minute=0, second=0, microsecond=0)
+            ] += 1
 
     def summary(self, live_multiplier: float) -> dict[str, Any]:
         """Gộp số đo từng topic thành dict ghi manifest.
@@ -130,7 +138,9 @@ class StreamStats:
                 "duplicate_rate": round(1 - len(self.keys[t]) / rows, 6),
                 "injected_duplicates": self.duplicates[t],
                 "median_delay_minutes": round(statistics.median(delays), 2) if delays else None,
-                "share_late_over_1h": round(sum(d > 60 for d in delays) / len(delays), 6) if delays else None,
+                "share_late_over_1h": round(sum(d > 60 for d in delays) / len(delays), 6)
+                if delays
+                else None,
                 "out_of_order_over_1h": self.out_of_order[t],
             }
         return {"topics": topics, "burst": self._burst(live_multiplier)}
@@ -147,7 +157,9 @@ class StreamStats:
         def per_hour(day: int) -> float:
             """Số Order TikTok mới trung bình mỗi giờ trong khung giờ live của một ngày."""
             start = self.config.day_start(day)
-            return sum(self.new_tiktok_orders_by_hour[start + timedelta(hours=h)] for h in hours) / len(hours)
+            return sum(
+                self.new_tiktok_orders_by_hour[start + timedelta(hours=h)] for h in hours
+            ) / len(hours)
 
         normal_days = [d for d in range(first, last + 1) if d != live.day]
         normal = statistics.mean(per_hour(d) for d in normal_days) if normal_days else 0.0

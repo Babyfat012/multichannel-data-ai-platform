@@ -24,8 +24,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Đọc Channel, đường dẫn nguồn và bảng Bronze đích."""
     parser = argparse.ArgumentParser(description="Bronze JSONL cho ba Channel mới")
     parser.add_argument("--channel", choices=CHANNELS, required=True)
-    parser.add_argument("--source-root", required=True,
-                        help="gốc source-exports/ có thư mục channel=...")
+    parser.add_argument(
+        "--source-root", required=True, help="gốc source-exports/ có thư mục channel=..."
+    )
     parser.add_argument("--table", required=True)
     parser.add_argument("--run-id", default=None)
     args = parser.parse_args(argv)
@@ -38,13 +39,13 @@ def main(argv: list[str] | None = None) -> int:
     """Đọc JSONL và ghi Bronze; in số dòng của snapshot mới."""
     args = parse_args(argv)
     run_id = args.run_id or str(uuid.uuid4())
-    source = (f"{args.source_root.rstrip('/')}/channel={args.channel}"
-              "/dataset=orders")
+    source = f"{args.source_root.rstrip('/')}/channel={args.channel}/dataset=orders"
     target = f"{CATALOG}.bronze.{args.table}"
     spark = build_spark(f"bronze-{args.channel}")
     try:
         bronze = (
-            spark.read.option("basePath", source).text(source)
+            spark.read.option("basePath", source)
+            .text(source)
             .select(
                 F.col("value").alias("payload"),
                 F.input_file_name().alias("source_file"),

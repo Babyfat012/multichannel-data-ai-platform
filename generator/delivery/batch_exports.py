@@ -60,17 +60,13 @@ def end_of_day(config: GeneratorConfig, day: int) -> datetime:
     return config.day_start(day + 1) - timedelta(seconds=1)
 
 
-def plan_exports(order: Order, config: GeneratorConfig, rng: np.random.Generator) -> list[ExportPlacement]:
-    """Trả về các lần Order xuất hiện trong Batch: bản chính và có thể một bản trùng.
+def plan_exports(
+    order: Order, config: GeneratorConfig, rng: np.random.Generator
+) -> list[ExportPlacement]:
+    """Các lần Order xuất hiện trong Batch: bản chính và có thể một bản trùng.
 
-    Ảnh chụp của Batch lấy ở giây cuối trước `cutoff`. Order tạo sau thời điểm đó
-    chưa tồn tại lúc chụp nên không thuộc Batch, trả về danh sách rỗng.
-
-    Mốc loại bỏ phải là `cutoff - 1s`, không phải `cutoff`: Order tạo trong giây
-    cuối cùng của lịch sử nằm giữa hai mốc đó, lọt qua cửa rồi làm `status_at` ném
-    lỗi "chưa tồn tại". Xác suất mỗi Order là 1/86.400 nên ở 4.000 Order/ngày hầu
-    như không gặp, nhưng ở 852.099 Order/ngày thì trung bình ~10 Order mỗi lần chạy,
-    tức lần chạy 100 GB gần như chắc chắn chết.
+    Ảnh chụp lấy ở `cutoff - 1s`; Order tạo sau mốc đó chưa tồn tại nên trả rỗng. Phải trừ
+    1s: Order tạo trong giây cuối sẽ làm `status_at` ném lỗi, và ở quy mô lớn gần như chắc gặp.
     """
     as_of = config.cutoff - timedelta(seconds=1)
     if order.created_at > as_of:
@@ -94,11 +90,10 @@ def _pick_duplicate(
     config: GeneratorConfig,
     rng: np.random.Generator,
 ) -> ExportPlacement | None:
-    """Chọn chỗ đặt bản trùng: thử kiểu được bốc trước, không hợp lệ thì thử kiểu còn lại.
+    """Chọn chỗ đặt bản trùng; kiểu bốc trước không hợp lệ thì thử kiểu còn lại.
 
-    Bản muộn hơn không được vượt quá ngày lịch sử cuối cùng. Bản sớm hơn không được
-    trước ngày tạo Order. Nếu cả hai kiểu đều không đặt được thì bỏ qua, và
-    manifest sẽ ghi số bản trùng thật sự đã chèn.
+    Bản muộn không vượt ngày lịch sử cuối, bản sớm không trước ngày tạo Order. Không đặt được
+    thì bỏ qua; manifest ghi số bản trùng thật.
     """
     shift = int(rng.integers(1, config.offline_problems.overlap_days + 1))
     first_day = day_of(config, order.created_at)

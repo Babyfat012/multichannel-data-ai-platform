@@ -1,20 +1,12 @@
-"""Chọn tập ngày export để nạp — phần logic thuần, không phụ thuộc Spark.
-
-Tách khỏi `bronze/ingest_amazon_order_snapshots.py` vì file job import `pyspark`, mà pyspark chỉ có trong
-container Spark. Tách ra thì `uv run pytest` trên máy host test được phần quyết định này.
-"""
+"""Chọn ngày export để nạp; logic thuần, không phụ thuộc Spark nên test được trên host."""
 
 from __future__ import annotations
 
 
 def pick_sample_days(all_days: list[str], n: int) -> list[str]:
-    """Chọn `n` ngày rải đều trên danh sách ngày đã sắp xếp, luôn gồm ngày đầu và ngày cuối.
+    """Chọn `n` ngày rải đều, luôn gồm ngày đầu và ngày cuối; `n <= 0` hoặc quá dài là lấy hết.
 
-    Rải đều là có chủ đích. Dữ liệu Amazon lớn dần theo thời gian: ngày đầu dải ~7 MB,
-    ngày cuối ~1,64 GB. Nếu lấy `n` ngày liền nhau ở cuối thì mọi task to gần bằng nhau và
-    biểu đồ Spark UI KHÔNG lộ skew — mất đúng thứ mình cần chụp làm bằng chứng.
-
-    `n <= 0` hoặc `n >= len(all_days)` nghĩa là lấy hết.
+    Rải đều để một lần chạy có cả ngày bé lẫn ngày to, nhờ đó Spark UI lộ skew.
     """
     if n <= 0 or n >= len(all_days):
         return all_days
@@ -24,29 +16,12 @@ def pick_sample_days(all_days: list[str], n: int) -> list[str]:
     return [all_days[round(i * step)] for i in range(n)]
 
 
-def pick_window_days(
-    all_days: list[str], n: int, start: str | None = None
-) -> list[str]:
-    """Chọn `n` ngày LIỀN NHAU trên danh sách ngày đã sắp xếp.
+def pick_window_days(all_days: list[str], n: int, start: str | None = None) -> list[str]:
+    """Chọn `n` ngày liền nhau; `start=None` lấy cửa sổ ở giữa dải.
 
-    Ngược hẳn mục đích của `pick_sample_days`, và hai mục đích đó loại trừ nhau:
-
-      * **rải đều** để thấy SKEW — cần cả ngày bé lẫn ngày to trong cùng một lần chạy;
-      * **liền nhau** để thấy BẢN TRÙNG — generator xuất lại một Order ở các ngày trong
-        khoảng `overlap_days = 3`, nên hai ngày cách nhau 9-10 ngày KHÔNG BAO GIỜ chứa cùng
-        một Order. Đã đo: 20 ngày rải đều cho dedup bắt được đúng 0 bản trùng
-        (`docs/silver.md` mục 10.3).
-
-    Vì vậy muốn chứng minh dedup thì `n` phải lớn hơn cửa sổ chồng lấn: `n >= 7` phủ được
-    `±3` ngày quanh một ngày ở giữa.
-
-    `start` là ngày bắt đầu; để `None` thì lấy cửa sổ ở GIỮA dải. Lấy giữa chứ không lấy
-    đầu hay cuối vì hai đầu dải là ca biên: đầu dải ngày quá bé (ít Order nên ít bản trùng
-    tuyệt đối), cuối dải ngày quá to (tốn đĩa mà không thêm thông tin gì về bản trùng).
-
-    Ném `ValueError` khi `start` không có trong danh sách — khác `pick_sample_days` vốn
-    không có tham số nào sai được. Lý do ném chứ không lặng lẽ chọn ngày gần nhất: gõ sai
-    ngày rồi chạy 20 phút ra bảng không như mong đợi thì tệ hơn là dừng ngay.
+    Dùng để kiểm dedup: bản trùng chỉ nằm trong khoảng `overlap_days` quanh nhau, nên ngày rải
+    đều không bắt được bản trùng nào. Cần `n >= 7`. `start` không có trong danh sách thì
+    ném `ValueError`.
 
     >>> days = [f"2026-01-{d:02d}" for d in range(1, 11)]
     >>> pick_window_days(days, 3, start="2026-01-05")
@@ -66,9 +41,7 @@ def pick_window_days(
         first = (len(all_days) - n) // 2
     else:
         if start not in all_days:
-            raise ValueError(
-                f"ngày bắt đầu {start!r} không có trong danh sách ngày trên đĩa"
-            )
+            raise ValueError(f"ngày bắt đầu {start!r} không có trong danh sách ngày trên đĩa")
         first = all_days.index(start)
         # Cửa sổ chạm cuối dải thì lùi lại cho đủ `n` ngày, thay vì trả về ít hơn yêu cầu.
         first = min(first, len(all_days) - n)

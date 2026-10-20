@@ -9,7 +9,13 @@ def test_resolve_runtime_env_maps_requested_connection_groups_only():
     """Resolve only the requested integrations and never expose credentials elsewhere."""
     connections = {
         "fsds_minio": {"host": "minio", "port": 9000, "login": "access", "password": "secret"},
-        "fsds_postgres": {"host": "postgres", "port": 5432, "schema": "sources", "login": "user", "password": "pg-secret"},
+        "fsds_postgres": {
+            "host": "postgres",
+            "port": 5432,
+            "schema": "sources",
+            "login": "user",
+            "password": "pg-secret",
+        },
         "fsds_kafka": {"host": "kafka", "port": 9092, "login": "", "password": ""},
     }
     variables = {

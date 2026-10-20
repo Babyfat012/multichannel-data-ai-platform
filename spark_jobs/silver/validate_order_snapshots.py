@@ -19,15 +19,35 @@ IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 RULES = {
     "amazon": {
         "keys": ("order_id", "order_item_id"),
-        "required": ("order_id", "order_item_id", "created_at", "order_status",
-                     "seller_sku", "line_net_amount", "export_date", "source_file",
-                     "schema_form", "processed_at", "run_id"),
+        "required": (
+            "order_id",
+            "order_item_id",
+            "created_at",
+            "order_status",
+            "seller_sku",
+            "line_net_amount",
+            "export_date",
+            "source_file",
+            "schema_form",
+            "processed_at",
+            "run_id",
+        ),
     },
     "walmart": {
         "keys": ("purchase_order_id", "customer_order_id", "line_number"),
-        "required": ("purchase_order_id", "customer_order_id", "line_number",
-                     "created_at", "order_status", "sku", "line_net_amount",
-                     "source_table", "fetched_at", "processed_at", "run_id"),
+        "required": (
+            "purchase_order_id",
+            "customer_order_id",
+            "line_number",
+            "created_at",
+            "order_status",
+            "sku",
+            "line_net_amount",
+            "source_table",
+            "fetched_at",
+            "processed_at",
+            "run_id",
+        ),
     },
 }
 
@@ -75,11 +95,7 @@ def main(argv: list[str] | None = None) -> int:
         target_count = counts["rows"]
         invalid_count = counts["invalid_rows"] or 0
         duplicate_groups = (
-            silver.groupBy(*rule["keys"])
-            .count()
-            .filter(F.col("count") > 1)
-            .limit(1)
-            .count()
+            silver.groupBy(*rule["keys"]).count().filter(F.col("count") > 1).limit(1).count()
         )
 
         print(f"nguồn Bronze      = {source}")

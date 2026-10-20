@@ -230,6 +230,7 @@ Wheel generator giữ riêng `generator`, không thêm PySpark vào unit depende
 | [ADR index](docs/adr/README.md) | Quyết định và quan hệ thay thế, dẫn chiếu theo tên file đầy đủ |
 | [docs/architecture-decisions.md](docs/architecture-decisions.md) | Kiến trúc DE đã triển khai, vai trò Iceberg/REST catalog và warehouse |
 | [docs/terminology.md](docs/terminology.md) | Thuật ngữ nghiệp vụ và định nghĩa Bronze/Silver/Gold |
+| [docs/code-style.md](docs/code-style.md) | Quy ước viết code và chú thích; ruff format/lint |
 | [docs/Domain.md](docs/Domain.md) | Business domain, thuật ngữ, bài toán dự đoán, vấn đề dữ liệu cần mô phỏng |
 | [docs/generator-design.md](docs/generator-design.md) | Thiết kế Data Generator: kiến trúc, đường thời gian Batch và Stream, vấn đề dữ liệu, nơi lưu, cấu hình, bằng chứng chất lượng |
 | [docs/channel-sources.md](docs/channel-sources.md) | Nguồn tài liệu và mức tin cậy của dạng dữ liệu từng Channel |

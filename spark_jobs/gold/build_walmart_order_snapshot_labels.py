@@ -34,40 +34,60 @@ def main(argv: list[str] | None = None) -> int:
     spark = build_spark("walmart-return-label-bridge", shuffle_partitions=32)
     try:
         keys = spark.read.parquet(args.keys_path).select(
-            "order_line_id", "channel_order_id", "channel_line_id",
+            "order_line_id",
+            "channel_order_id",
+            "channel_line_id",
             "channel_secondary_order_id",
         )
-        fact = spark.table(f"{CATALOG}.gold.{args.fact_table}").filter(
-            F.col("channel") == "walmart"
-        ).select("order_line_key", "channel_order_id", "channel_secondary_order_id",
-                 "channel_line_id", "created_at")
+        fact = (
+            spark.table(f"{CATALOG}.gold.{args.fact_table}")
+            .filter(F.col("channel") == "walmart")
+            .select(
+                "order_line_key",
+                "channel_order_id",
+                "channel_secondary_order_id",
+                "channel_line_id",
+                "created_at",
+            )
+        )
         matched = fact.join(
-            keys, ["channel_order_id", "channel_secondary_order_id", "channel_line_id"],
+            keys,
+            ["channel_order_id", "channel_secondary_order_id", "channel_line_id"],
             "inner",
         )
-        labels = spark.read.parquet(
-            f"{args.ground_truth}/labels/*.parquet"
-        ).select("order_line_id", "label", "delivered_at", "label_available_at")
+        labels = spark.read.parquet(f"{args.ground_truth}/labels/*.parquet").select(
+            "order_line_id", "label", "delivered_at", "label_available_at"
+        )
         result = matched.join(labels, "order_line_id", "inner").select(
-            "order_line_key", "order_line_id", "label", "delivered_at",
-            "label_available_at", "created_at", F.lit(args.run_id).alias("run_id"),
+            "order_line_key",
+            "order_line_id",
+            "label",
+            "delivered_at",
+            "label_available_at",
+            "created_at",
+            F.lit(args.run_id).alias("run_id"),
         )
         target = f"{CATALOG}.gold.{args.table}"
         spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {CATALOG}.gold")
         result.writeTo(target).partitionedBy(F.days("created_at")).createOrReplace()
         saved = spark.table(target)
-        duplicate = (saved.groupBy("order_line_key").count()
-                     .filter(F.col("count") > 1).limit(1).count())
-        invalid = saved.filter(
-            F.col("order_line_key").isNull()
-            | F.col("label").isNull()
-            | ~F.col("label").isin(0, 1)
-            | F.col("delivered_at").isNull()
-            | F.col("label_available_at").isNull()
-            | (F.col("created_at") > F.col("delivered_at"))
-            | (F.col("delivered_at") > F.col("label_available_at"))
-            | (F.col("run_id") != args.run_id)
-        ).limit(1).count()
+        duplicate = (
+            saved.groupBy("order_line_key").count().filter(F.col("count") > 1).limit(1).count()
+        )
+        invalid = (
+            saved.filter(
+                F.col("order_line_key").isNull()
+                | F.col("label").isNull()
+                | ~F.col("label").isin(0, 1)
+                | F.col("delivered_at").isNull()
+                | F.col("label_available_at").isNull()
+                | (F.col("created_at") > F.col("delivered_at"))
+                | (F.col("delivered_at") > F.col("label_available_at"))
+                | (F.col("run_id") != args.run_id)
+            )
+            .limit(1)
+            .count()
+        )
         rows = spark.table(f"{target}.files").agg(F.sum("record_count")).first()[0]
         print(f"Bridge Walmart: rows={rows}, duplicate={duplicate}, invalid={invalid}")
         if not rows or duplicate or invalid:

@@ -68,7 +68,9 @@ class TikTokOrderWebhookRenderer:
 
     def notification_id(self, order: Order, change: StatusChange) -> str:
         """Mã thông báo 19 chữ số, cố định cho một lần đổi trạng thái."""
-        return "7" + native_digits(self.seed, "tts_notification", f"{order.order_id}:{change.status}", 18)
+        return "7" + native_digits(
+            self.seed, "tts_notification", f"{order.order_id}:{change.status}", 18
+        )
 
     def render_event(self, order: Order, change: StatusChange) -> RenderedRecord:
         """Vẽ lần đổi trạng thái `change` của `order` thành message webhook.

@@ -58,8 +58,14 @@ class ShopeeOrdersRenderer:
     def line_keys(self, order: Order) -> list[dict[str, Any]]:
         """Nối ID lõi với order_sn và order_item_id Shopee."""
         order_sn = self.order_sn(order)
-        return [{"order_line_id": line.order_line_id, "channel_order_id": order_sn,
-                 "channel_line_id": self.line_id(line)} for line in order.lines]
+        return [
+            {
+                "order_line_id": line.order_line_id,
+                "channel_order_id": order_sn,
+                "channel_line_id": self.line_id(line),
+            }
+            for line in order.lines
+        ]
 
     def render(self, order: Order, as_of: datetime, export_day: int) -> RenderedRecord:
         """Vẽ một Order tại `as_of`; ngày export được lớp Batch ghi vào đường dẫn."""
@@ -70,22 +76,24 @@ class ShopeeOrdersRenderer:
         for line in order.lines:
             sku_native = int("1" + native_digits(self.seed, "shopee_item", line.sku_id, 14))
             model_native = int("2" + native_digits(self.seed, "shopee_model", line.sku_id, 14))
-            items.append({
-                "order_item_id": self.line_id(line),
-                "item_id": sku_native,
-                "item_name": f"ACME {line.sku_id}",
-                "item_sku": line.sku_id,
-                "model_id": model_native,
-                "model_sku": line.sku_id,
-                "model_quantity_purchased": line.quantity,
-                "model_original_price": int(round(line.unit_price)),
-                "model_discounted_price": int(round(line.unit_price - line.unit_discount)),
-            })
+            items.append(
+                {
+                    "order_item_id": self.line_id(line),
+                    "item_id": sku_native,
+                    "item_name": f"ACME {line.sku_id}",
+                    "item_sku": line.sku_id,
+                    "model_id": model_native,
+                    "model_sku": line.sku_id,
+                    "model_quantity_purchased": line.quantity,
+                    "model_original_price": int(round(line.unit_price)),
+                    "model_discounted_price": int(round(line.unit_price - line.unit_discount)),
+                }
+            )
 
-        total = sum((line.unit_price - line.unit_discount) * line.quantity
-                    for line in order.lines)
-        paid_at = next((change.at for change in order.timeline
-                        if change.status == AWAITING_SHIPMENT), None)
+        total = sum((line.unit_price - line.unit_discount) * line.quantity for line in order.lines)
+        paid_at = next(
+            (change.at for change in order.timeline if change.status == AWAITING_SHIPMENT), None
+        )
         native_order: dict[str, Any] = {
             "order_sn": self.order_sn(order),
             "region": "VN",
@@ -96,7 +104,8 @@ class ShopeeOrdersRenderer:
             "create_time": int(order.created_at.timestamp()),
             "update_time": int(status_change.at.timestamp()),
             "pay_time": int(paid_at.timestamp()) if paid_at and paid_at <= as_of else None,
-            "buyer_user_id": "1" + native_digits(self.seed, "shopee_buyer", order.buyer.buyer_id, 15),
+            "buyer_user_id": "1"
+            + native_digits(self.seed, "shopee_buyer", order.buyer.buyer_id, 15),
             "recipient_address": {
                 "city": order.buyer.city,
                 "zipcode": order.buyer.postal_code,

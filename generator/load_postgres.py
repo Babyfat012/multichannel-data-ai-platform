@@ -28,8 +28,9 @@ với `INSERT` từng dòng.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import Any, Callable, Iterator
+from typing import Any
 
 from generator.day_selection import filter_to_sample_days
 from generator.storage import OutputStore
@@ -68,24 +69,44 @@ class TableLoad:
 def _walmart_order_row(record: dict[str, Any], path: str) -> tuple[Any, ...]:
     """Một bản ghi Walmart thành dòng; `export_date` lấy từ thư mục chứa file."""
     export_date = path.split("export_date=", 1)[1].split("/", 1)[0]
-    return (record["purchase_order_id"], record["fetched_at"], export_date,
-            json.dumps(record["raw_payload"], ensure_ascii=False, separators=(",", ":")))
+    return (
+        record["purchase_order_id"],
+        record["fetched_at"],
+        export_date,
+        json.dumps(record["raw_payload"], ensure_ascii=False, separators=(",", ":")),
+    )
 
 
 def _sku_row(record: dict[str, Any], path: str) -> tuple[Any, ...]:
     """Một SKU thành dòng của `seller.skus`."""
-    return (record["sku"], record["name"], record["category"], record["base_price_usd"], record["unit_cost_usd"])
+    return (
+        record["sku"],
+        record["name"],
+        record["category"],
+        record["base_price_usd"],
+        record["unit_cost_usd"],
+    )
 
 
 TABLES = (
-    TableLoad("walmart.orders", ("purchase_order_id", "fetched_at", "export_date", "raw_payload"),
-              "pg-load/walmart.orders/export_date=*/part-*.jsonl", _walmart_order_row),
-    TableLoad("seller.skus", ("sku", "name", "category", "base_price_usd", "unit_cost_usd"),
-              "pg-load/seller.skus/part-*.jsonl", _sku_row),
+    TableLoad(
+        "walmart.orders",
+        ("purchase_order_id", "fetched_at", "export_date", "raw_payload"),
+        "pg-load/walmart.orders/export_date=*/part-*.jsonl",
+        _walmart_order_row,
+    ),
+    TableLoad(
+        "seller.skus",
+        ("sku", "name", "category", "base_price_usd", "unit_cost_usd"),
+        "pg-load/seller.skus/part-*.jsonl",
+        _sku_row,
+    ),
 )
 
 
-def iter_rows(store: OutputStore, load: TableLoad, sample_days: int = 0) -> Iterator[tuple[Any, ...]]:
+def iter_rows(
+    store: OutputStore, load: TableLoad, sample_days: int = 0
+) -> Iterator[tuple[Any, ...]]:
     """Đọc file của `load` dưới `store` và trả về từng dòng sẵn sàng cho `COPY`.
 
     `sample_days > 0` thì chỉ đọc file thuộc N ngày export rải đều. Mặc định 0 = đọc hết,
