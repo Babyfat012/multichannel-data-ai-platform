@@ -1,0 +1,241 @@
+{
+  "checks": [
+    {
+      "dag_id": "dp1_bronze",
+      "task_id": "validate_amazon",
+      "dataset": "lakehouse.bronze.raw_amazon_orders_dp1",
+      "run_id": "manual__2026-10-13T15:30:09+00:00",
+      "state": "success",
+      "completed_at": "2026-10-13T15:32:36+00:00",
+      "source_log": "dag_id=dp1_bronze/run_id=manual__2026-10-13T15:30:09+00:00/task_id=validate_amazon/attempt=1.log",
+      "rule": "Nguồn có dòng; số dòng nguồn = Bronze; dữ liệu và provenance hợp lệ",
+      "metrics": {
+        "source_rows": 5827514,
+        "dataset_rows": 5827514,
+        "invalid_rows": 0
+      }
+    },
+    {
+      "dag_id": "dp1_bronze",
+      "task_id": "validate_walmart",
+      "dataset": "lakehouse.bronze.raw_walmart_orders_dp1",
+      "run_id": "manual__2026-10-13T15:30:09+00:00",
+      "state": "success",
+      "completed_at": "2026-10-13T15:33:33+00:00",
+      "source_log": "dag_id=dp1_bronze/run_id=manual__2026-10-13T15:30:09+00:00/task_id=validate_walmart/attempt=1.log",
+      "rule": "Nguồn có dòng; số dòng nguồn = Bronze; dữ liệu và provenance hợp lệ",
+      "metrics": {
+        "source_rows": 1293525,
+        "dataset_rows": 1293525,
+        "invalid_rows": 0
+      }
+    },
+    {
+      "dag_id": "dp1_bronze",
+      "task_id": "validate_tiktok_shop",
+      "dataset": "lakehouse.bronze.raw_tiktok_shop_orders_dp1",
+      "run_id": "manual__2026-10-13T15:30:09+00:00",
+      "state": "success",
+      "completed_at": "2026-10-13T15:34:15+00:00",
+      "source_log": "dag_id=dp1_bronze/run_id=manual__2026-10-13T15:30:09+00:00/task_id=validate_tiktok_shop/attempt=1.log",
+      "rule": "Nguồn có dòng; số dòng nguồn = Bronze; dữ liệu và provenance hợp lệ",
+      "metrics": {
+        "source_rows": 1810,
+        "dataset_rows": 1810,
+        "invalid_rows": 0
+      }
+    },
+    {
+      "dag_id": "dp1_bronze",
+      "task_id": "validate_shopify",
+      "dataset": "lakehouse.bronze.raw_shopify_orders_dp1",
+      "run_id": "manual__2026-10-13T15:30:09+00:00",
+      "state": "success",
+      "completed_at": "2026-10-13T15:34:58+00:00",
+      "source_log": "dag_id=dp1_bronze/run_id=manual__2026-10-13T15:30:09+00:00/task_id=validate_shopify/attempt=1.log",
+      "rule": "Nguồn có dòng; số dòng nguồn = Bronze; dữ liệu và provenance hợp lệ",
+      "metrics": {
+        "source_rows": 910,
+        "dataset_rows": 910,
+        "invalid_rows": 0
+      }
+    },
+    {
+      "dag_id": "dp1_bronze",
+      "task_id": "validate_shopee",
+      "dataset": "lakehouse.bronze.raw_shopee_orders_dp1",
+      "run_id": "manual__2026-10-13T15:30:09+00:00",
+      "state": "success",
+      "completed_at": "2026-10-13T15:35:55+00:00",
+      "source_log": "dag_id=dp1_bronze/run_id=manual__2026-10-13T15:30:09+00:00/task_id=validate_shopee/attempt=1.log",
+      "rule": "Nguồn có dòng; số dòng nguồn = Bronze; dữ liệu và provenance hợp lệ",
+      "metrics": {
+        "source_rows": 354,
+        "dataset_rows": 354,
+        "invalid_rows": 0
+      }
+    },
+    {
+      "dag_id": "dp1_cdc",
+      "task_id": "validate_walmart_cdc",
+      "dataset": "lakehouse.bronze.raw_walmart_cdc",
+      "run_id": "manual__2026-10-13T22:34:22+00:00",
+      "state": "success",
+      "completed_at": "2026-10-13T22:35:08+00:00",
+      "source_log": "dag_id=dp1_cdc/run_id=manual__2026-10-13T22:34:22+00:00/task_id=validate_walmart_cdc/attempt=1.log",
+      "rule": "Kafka = Bronze = số offset duy nhất; không thiếu và không lỗi",
+      "metrics": {
+        "source_rows": 6,
+        "dataset_rows": 6,
+        "unique_offsets": 6,
+        "missing_rows": 0,
+        "invalid_rows": 0
+      }
+    },
+    {
+      "dag_id": "dp2_silver",
+      "task_id": "validate_amazon_silver",
+      "dataset": "lakehouse.silver.stg_amazon_order_lines_dp2",
+      "run_id": "manual__2026-10-14T03:53:52+00:00",
+      "state": "success",
+      "completed_at": "2026-10-14T03:58:44+00:00",
+      "source_log": "dag_id=dp2_silver/run_id=manual__2026-10-14T03:53:52+00:00/task_id=validate_amazon_silver/attempt=1.log",
+      "rule": "Order Line >= Order nguồn; cột bắt buộc, run_id và khóa hợp lệ",
+      "metrics": {
+        "source_orders": 5827514,
+        "dataset_rows": 8314312,
+        "invalid_rows": 0,
+        "duplicate_keys": 0
+      }
+    },
+    {
+      "dag_id": "dp2_silver",
+      "task_id": "validate_walmart_silver",
+      "dataset": "lakehouse.silver.stg_walmart_order_lines_dp2",
+      "run_id": "manual__2026-10-14T03:53:52+00:00",
+      "state": "success",
+      "completed_at": "2026-10-14T04:05:35+00:00",
+      "source_log": "dag_id=dp2_silver/run_id=manual__2026-10-14T03:53:52+00:00/task_id=validate_walmart_silver/attempt=1.log",
+      "rule": "Order Line >= Order nguồn; cột bắt buộc, run_id và khóa hợp lệ",
+      "metrics": {
+        "source_orders": 1293525,
+        "dataset_rows": 1875607,
+        "invalid_rows": 0,
+        "duplicate_keys": 0
+      }
+    },
+    {
+      "dag_id": "dp2_silver",
+      "task_id": "validate_tiktok_shop_silver",
+      "dataset": "lakehouse.silver.stg_tiktok_shop_order_lines_dp2",
+      "run_id": "manual__2026-10-14T03:53:52+00:00",
+      "state": "success",
+      "completed_at": "2026-10-14T04:06:06+00:00",
+      "source_log": "dag_id=dp2_silver/run_id=manual__2026-10-14T03:53:52+00:00/task_id=validate_tiktok_shop_silver/attempt=1.log",
+      "rule": "Order Line >= Order nguồn; cột bắt buộc, run_id và khóa hợp lệ",
+      "metrics": {
+        "source_orders": 1780,
+        "dataset_rows": 2609,
+        "invalid_rows": 0,
+        "duplicate_keys": 0
+      }
+    },
+    {
+      "dag_id": "dp2_silver",
+      "task_id": "validate_shopify_silver",
+      "dataset": "lakehouse.silver.stg_shopify_order_lines_dp2",
+      "run_id": "manual__2026-10-14T03:53:52+00:00",
+      "state": "success",
+      "completed_at": "2026-10-14T04:06:42+00:00",
+      "source_log": "dag_id=dp2_silver/run_id=manual__2026-10-14T03:53:52+00:00/task_id=validate_shopify_silver/attempt=1.log",
+      "rule": "Order Line >= Order nguồn; cột bắt buộc, run_id và khóa hợp lệ",
+      "metrics": {
+        "source_orders": 891,
+        "dataset_rows": 1316,
+        "invalid_rows": 0,
+        "duplicate_keys": 0
+      }
+    },
+    {
+      "dag_id": "dp2_silver",
+      "task_id": "validate_shopee_silver",
+      "dataset": "lakehouse.silver.stg_shopee_order_lines_dp2",
+      "run_id": "manual__2026-10-14T03:53:52+00:00",
+      "state": "success",
+      "completed_at": "2026-10-14T04:07:21+00:00",
+      "source_log": "dag_id=dp2_silver/run_id=manual__2026-10-14T03:53:52+00:00/task_id=validate_shopee_silver/attempt=1.log",
+      "rule": "Order Line >= Order nguồn; cột bắt buộc, run_id và khóa hợp lệ",
+      "metrics": {
+        "source_orders": 347,
+        "dataset_rows": 514,
+        "invalid_rows": 0,
+        "duplicate_keys": 0
+      }
+    },
+    {
+      "dag_id": "dp2_silver",
+      "task_id": "validate_amazon_order_dim",
+      "dataset": "lakehouse.gold.dim_amazon_order_dp2",
+      "run_id": "manual__2026-10-14T03:53:52+00:00",
+      "state": "success",
+      "completed_at": "2026-10-14T04:49:17+00:00",
+      "source_log": "dag_id=dp2_silver/run_id=manual__2026-10-14T03:53:52+00:00/task_id=validate_amazon_order_dim/attempt=1.log",
+      "rule": "Một phiên bản hiện hành mỗi Order; khóa fact trỏ đúng phiên bản; không lỗi",
+      "metrics": {
+        "dataset_rows": 5779561,
+        "invalid_rows": 0,
+        "duplicate_rows": 0,
+        "multiple_current_rows": 0,
+        "bad_fact_rows": 0,
+        "missing_version_rows": 0
+      }
+    },
+    {
+      "dag_id": "dp2_silver",
+      "task_id": "validate_gold_order_lines",
+      "dataset": "lakehouse.gold.fact_order_lines_dp2",
+      "run_id": "manual__2026-10-14T03:53:52+00:00",
+      "state": "success",
+      "completed_at": "2026-10-14T04:50:03+00:00",
+      "source_log": "dag_id=dp2_silver/run_id=manual__2026-10-14T03:53:52+00:00/task_id=validate_gold_order_lines/attempt=2.log",
+      "rule": "Gold khớp Silver theo từng Channel; không lỗi và không trùng khóa",
+      "metrics": {
+        "source_rows": 10194358,
+        "dataset_rows": 10194358,
+        "invalid_rows": 0,
+        "duplicate_order_line_key": 0
+      }
+    },
+    {
+      "dag_id": "dp3_features",
+      "task_id": "validate_return_features",
+      "dataset": "lakehouse.gold.feat_order_line_return_dp3",
+      "run_id": "manual__2026-10-14T04:11:15+00:00",
+      "state": "success",
+      "completed_at": "2026-10-14T05:02:40+00:00",
+      "source_log": "dag_id=dp3_features/run_id=manual__2026-10-14T04:11:15+00:00/task_id=validate_return_features/attempt=2.log",
+      "rule": "Feature bằng Gold; không lỗi, không trùng khóa, không rò rỉ nhãn",
+      "metrics": {
+        "source_rows": 10194358,
+        "dataset_rows": 10194358,
+        "invalid_rows": 0,
+        "duplicate_order_line_key": 0
+      }
+    },
+    {
+      "dag_id": "dp3_walmart_labels",
+      "task_id": "build_and_validate_walmart_labels",
+      "dataset": "lakehouse.gold.fact_walmart_return_labels_dp3",
+      "run_id": "manual__2026-10-14T04:15:18+00:00",
+      "state": "success",
+      "completed_at": "2026-10-14T04:24:21+00:00",
+      "source_log": "dag_id=dp3_walmart_labels/run_id=manual__2026-10-14T04:15:18+00:00/task_id=build_and_validate_walmart_labels/attempt=2.log",
+      "rule": "Bridge nhãn Walmart có dòng; không lỗi và không trùng khóa",
+      "metrics": {
+        "dataset_rows": 1319345,
+        "duplicate_keys": 0,
+        "invalid_rows": 0
+      }
+    }
+  ]
+}
