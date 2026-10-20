@@ -10,7 +10,7 @@ Quyết định thiết kế đứng sau file này (chốt 2026-10-06..10):
     nghĩa là giải bài schema evolution ngay tại Bronze, trái với vai trò "chép nguyên bản".
   * Hệ quả đã chấp nhận: bảng này KHÔNG có cột mã đơn hàng. Muốn tra một đơn thì tra ở
     Silver. Bronze tồn tại để chạy lại khi Silver lỗi.
-  * Cột provenance (nguồn gốc từng dòng): `source_file`, `ingested_at`, `run_id`.
+  * Bốn cột provenance: `source_file`, `export_date`, `ingested_at`, `run_id`.
   * PARTITIONED BY (export_date) — khớp đúng cách file nằm trên đĩa.
 
 Vì sao có chế độ "baseline xấu": rubric cho điểm khi CHỨNG MINH tìm ra và sửa được vấn đề
@@ -20,13 +20,13 @@ tắt AQE bằng cờ, chạy một lần xấu để chụp Spark UI, rồi ch�
 
 Ví dụ ba lần chạy đã chốt:
     # 1. baseline xấu, 20 ngày rải đều (có cả ngày bé và ngày to) -> ảnh skew + số giây
-    spark-submit ... 01_bronze_baseline.py --sample-days 20 --aqe off \
+    spark-submit ... bronze/ingest_amazon_order_snapshots.py --sample-days 20 --aqe off \
         --table raw_amazon_orders_sample
     # 2. đã sửa, CÙNG 20 ngày đó -> ảnh đẹp + số giây so được vì cùng quy mô
-    spark-submit ... 01_bronze_baseline.py --sample-days 20 --aqe on \
+    spark-submit ... bronze/ingest_amazon_order_snapshots.py --sample-days 20 --aqe on \
         --table raw_amazon_orders_sample
     # 3. chạy thật, cả 180 ngày
-    spark-submit ... 01_bronze_baseline.py --aqe on
+    spark-submit ... bronze/ingest_amazon_order_snapshots.py --aqe on
 """
 
 from __future__ import annotations
@@ -40,9 +40,9 @@ import uuid
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
-# spark-submit đưa thư mục của file script vào sys.path, nên import phẳng là đủ.
-# day_selection.py cố tình KHÔNG import pyspark để test được trên máy host.
-from day_selection import pick_sample_days, pick_window_days
+# Shared helpers use package imports from the repository root.
+# lib/day_selection.py cố tình KHÔNG import pyspark để test được trên máy host.
+from spark_jobs.lib.day_selection import pick_sample_days, pick_window_days
 
 # Thư mục export của Amazon bên trong container Spark (mount read-only từ /data/raw).
 # Dưới nó là export_date=YYYY-MM-DD/part-*.jsonl -> Spark tự nhận `export_date` là cột
@@ -122,8 +122,6 @@ def build_spark(aqe: str, shuffle_partitions: int, app_name: str) -> SparkSessio
     credential tạm (vended credentials) từ Lakekeeper — warehouse đã tạo với
     sts-enabled=false.
     """
-    minio_user = os.environ["MINIO_ROOT_USER"]
-    minio_password = os.environ["MINIO_ROOT_PASSWORD"]
     minio_endpoint = os.environ.get("MINIO_INTERNAL_ENDPOINT", "http://minio:9000")
     warehouse = os.environ.get("WAREHOUSE_NAME", "fsds")
     catalog_uri = os.environ.get(
@@ -146,8 +144,6 @@ def build_spark(aqe: str, shuffle_partitions: int, app_name: str) -> SparkSessio
         )
         .config(f"spark.sql.catalog.{CATALOG}.s3.endpoint", minio_endpoint)
         .config(f"spark.sql.catalog.{CATALOG}.s3.path-style-access", "true")
-        .config(f"spark.sql.catalog.{CATALOG}.s3.access-key-id", minio_user)
-        .config(f"spark.sql.catalog.{CATALOG}.s3.secret-access-key", minio_password)
         .config(f"spark.sql.catalog.{CATALOG}.s3.region", "local-01")
         # JSON chữ lặp tên khoá hàng trăm triệu lần -> zstd nén mạnh hơn snappy khá nhiều,
         # mà `/` chỉ còn ~37 GB.
@@ -205,7 +201,7 @@ def read_raw(spark: SparkSession, source: str, days: list[str] | None) -> DataFr
 
 
 def add_provenance(df: DataFrame, run_id: str) -> DataFrame:
-    """Thêm hai cột còn lại của bộ provenance: lúc Spark ghi, và mã lần chạy."""
+    """Thêm timestamp đầu query Spark (không phải lúc commit) và mã lần chạy."""
     return df.withColumn("ingested_at", F.current_timestamp()).withColumn(
         "run_id", F.lit(run_id)
     )
@@ -214,8 +210,8 @@ def add_provenance(df: DataFrame, run_id: str) -> DataFrame:
 def write_bronze(spark: SparkSession, df: DataFrame, table: str) -> None:
     """Ghi (thay thế) bảng Iceberg, partition theo export_date.
 
-    `createOrReplace` là một commit nguyên khối (atomic): hoặc bảng mới hiện ra đầy đủ,
-    hoặc không có gì đổi. Nửa đường hỏng thì bảng cũ vẫn nguyên, chạy lại được.
+    Với SparkCatalog, snapshot hiện hành được thay toàn bộ một cách atomic, kể cả khi
+    df chỉ có một số ngày. Mất ACK lúc commit cần kiểm tra trạng thái trước khi retry.
     """
     spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {CATALOG}.{NAMESPACE}")
     full_name = f"{CATALOG}.{NAMESPACE}.{table}"

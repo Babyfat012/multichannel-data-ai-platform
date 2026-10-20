@@ -1,9 +1,9 @@
 """Job Bronze 01b — nạp bảng `walmart.orders` của PostgreSQL vào Iceberg `bronze.raw_walmart_orders`.
 
-Cặp với `01_bronze_baseline.py`. Hai job vì Bronze có đúng HAI nguồn batch, và chúng khác
+Cặp với `bronze/ingest_amazon_order_snapshots.py`. Hai job vì Bronze có đúng HAI nguồn batch, và chúng khác
 nhau ở chỗ dữ liệu *đến từ đâu*, không phải ở chỗ *làm gì với nó*:
 
-  * Amazon giao FILE (JSONL trên đĩa/MinIO)  -> `01_bronze_baseline.py`
+  * Amazon giao FILE (JSONL trên đĩa/MinIO)  -> `bronze/ingest_amazon_order_snapshots.py`
   * Walmart nằm trong DB của PHÒNG BAN KHÁC   -> job này, đọc qua JDBC
   (TikTok Shop không có trong batch — nó chỉ đi Kafka, nên thuộc phần Flink.)
 
@@ -31,11 +31,11 @@ Hai cái bẫy của JDBC đã xử lý trong file này, giải thích tại ch�
   * `raw_payload` là JSONB -> ép sang text ngay trong câu SQL, xem `source_query`.
   * Spark mặc định mở MỘT kết nối -> một task kéo hết bảng, xem `read_jdbc`.
 
-Ví dụ chạy (cần cả driver PostgreSQL trong --packages, xem scripts/run_bronze_evidence.sh):
+Ví dụ chạy (cần cả driver PostgreSQL trong --packages, xem scripts/evidence/measure_order_snapshots_bronze.sh):
     spark-submit --master spark://spark-master:7077 \
       --packages org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.11.0,\
 org.apache.iceberg:iceberg-aws-bundle:1.11.0,org.postgresql:postgresql:42.7.4 \
-      /opt/spark_jobs/01b_bronze_walmart.py --num-partitions 16
+      /opt/spark_jobs/bronze/ingest_walmart_order_snapshots.py --num-partitions 16
 """
 
 from __future__ import annotations
@@ -137,12 +137,10 @@ def source_query() -> str:
 def build_spark(aqe: str, app_name: str) -> SparkSession:
     """Dựng SparkSession đã nối vào catalog Iceberg trên Lakekeeper.
 
-    Giống `01_bronze_baseline.py`: Lakekeeper chỉ giữ con trỏ tới metadata mới nhất của mỗi
+    Giống `bronze/ingest_amazon_order_snapshots.py`: Lakekeeper chỉ giữ con trỏ tới metadata mới nhất của mỗi
     bảng, còn file metadata và file dữ liệu thật nằm trên MinIO. Spark mang sẵn access key
     của MinIO nên không xin credential tạm — warehouse đã tạo với sts-enabled=false.
     """
-    minio_user = os.environ["MINIO_ROOT_USER"]
-    minio_password = os.environ["MINIO_ROOT_PASSWORD"]
     minio_endpoint = os.environ.get("MINIO_INTERNAL_ENDPOINT", "http://minio:9000")
     warehouse = os.environ.get("WAREHOUSE_NAME", "fsds")
     catalog_uri = os.environ.get("LAKEKEEPER_CATALOG_URI", "http://lakekeeper:8181/catalog")
@@ -160,8 +158,6 @@ def build_spark(aqe: str, app_name: str) -> SparkSession:
         .config(f"spark.sql.catalog.{CATALOG}.io-impl", "org.apache.iceberg.aws.s3.S3FileIO")
         .config(f"spark.sql.catalog.{CATALOG}.s3.endpoint", minio_endpoint)
         .config(f"spark.sql.catalog.{CATALOG}.s3.path-style-access", "true")
-        .config(f"spark.sql.catalog.{CATALOG}.s3.access-key-id", minio_user)
-        .config(f"spark.sql.catalog.{CATALOG}.s3.secret-access-key", minio_password)
         .config(f"spark.sql.catalog.{CATALOG}.s3.region", "local-01")
         .config("spark.sql.iceberg.compression-codec", "zstd")
         .config("spark.eventLog.enabled", "true")
