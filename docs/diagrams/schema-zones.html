@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8">
+<title>FSDS — schema ba zone</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f4f6f8; color: #142337; font: 16px Arial, sans-serif; }
+  main { width: 1600px; height: 1040px; padding: 32px 36px; position: relative; }
+  h1 { margin: 0 0 8px; font-size: 30px; }
+  .sub { margin: 0; color: #526477; font-size: 16px; }
+  .zones { display: grid; grid-template-columns: 380px 380px 650px; gap: 48px; margin-top: 32px; }
+  section { background: white; border: 1px solid #d6dfe6; border-radius: 14px; padding: 18px 20px 20px; box-shadow: 0 2px 8px #14233712; min-height: 826px; }
+  section h2 { margin: 0 0 8px; font-size: 23px; }
+  section p { margin: 0 0 20px; color: #526477; font-size: 14px; line-height: 1.4; }
+  .bronze { border-top: 8px solid #b36b27; }
+  .silver { border-top: 8px solid #657996; }
+  .gold { border-top: 8px solid #c19a24; }
+  .box { border: 1px solid #d9e1e8; background: #fbfcfd; border-radius: 9px; padding: 12px 14px; margin: 11px 0; min-height: 67px; }
+  .box b { display: block; font-size: 16px; overflow-wrap: anywhere; }
+  .box span { display: block; font-size: 13px; color: #526477; margin-top: 5px; }
+  .box.goldbox { margin-bottom: 20px; min-height: 121px; border-left: 5px solid #c19a24; }
+  .box.goldbox strong { display: block; font-size: 14px; margin-top: 9px; color: #325c7a; }
+  .gold .box:nth-of-type(2) { border-left-color: #3d9274; }
+  .gold .box:nth-of-type(3) { border-left-color: #6671b5; }
+  .gold .box:nth-of-type(4) { border-left-color: #b56565; }
+  footer { position: absolute; left: 36px; bottom: 18px; color: #526477; font-size: 14px; }
+  .arrow { position: absolute; color: #678095; font-size: 34px; z-index: 2; }
+  .a1 { left: 425px; top: 255px; } .a2 { left: 425px; top: 334px; }
+  .a3 { left: 425px; top: 414px; } .a4 { left: 425px; top: 493px; }
+  .a5 { left: 425px; top: 572px; }
+  .merge { position: absolute; left: 845px; top: 372px; width: 48px;
+           color: #526477; text-align: center; font-size: 15px; font-weight: bold; }
+</style>
+<main>
+  <h1>FSDS · Schema ba zone</h1>
+  <p class="sub">Các bảng đang tồn tại trong Trino, kiểm bằng SHOW TABLES và DESCRIBE · 2026-10-14</p>
+  <div class="zones">
+    <section class="bronze">
+      <h2>Bronze</h2><p>Payload gốc và thông tin export · DP1</p>
+      <div class="box"><b>raw_amazon_orders_dp1</b><span>JSON v0 và 2026</span></div>
+      <div class="box"><b>raw_walmart_orders_dp1</b><span>Bản ghi nguồn PostgreSQL</span></div>
+      <div class="box"><b>raw_tiktok_shop_orders_dp1</b><span>JSON response</span></div>
+      <div class="box"><b>raw_shopify_orders_dp1</b><span>JSON response</span></div>
+      <div class="box"><b>raw_shopee_orders_dp1</b><span>JSON response</span></div>
+    </section>
+    <section class="silver">
+      <h2>Silver</h2><p>Chuẩn hóa một dòng mỗi Order Line · DP2</p>
+      <div class="box"><b>stg_amazon_order_lines_dp2</b><span>Parse hai schema, dedup</span></div>
+      <div class="box"><b>stg_walmart_order_lines_dp2</b><span>Khóa Order kép, dedup</span></div>
+      <div class="box"><b>stg_tiktok_shop_order_lines_dp2</b><span>Chuẩn trạng thái và tiền</span></div>
+      <div class="box"><b>stg_shopify_order_lines_dp2</b><span>Chuẩn trạng thái và tiền</span></div>
+      <div class="box"><b>stg_shopee_order_lines_dp2</b><span>Giữ tiền VND nguyên đơn vị</span></div>
+    </section>
+    <section class="gold">
+      <h2>Gold</h2><p>Fact, dimension SCD2 và feature · DP2/DP3</p>
+      <div class="box goldbox"><b>fact_order_lines_dp2</b><span>10.194.358 Order Line · 5 Channel</span><strong>order_line_key · amazon_order_version_key</strong></div>
+      <div class="box goldbox"><b>dim_amazon_order_dp2</b><span>5.779.561 phiên bản trạng thái Amazon</span><strong>order_version_key · valid_from_ts · valid_to_ts · is_current</strong></div>
+      <div class="box goldbox"><b>feat_order_line_return_dp3</b><span>Feature ở thời điểm đặt Order</span><strong>order_line_key · event_timestamp · created</strong></div>
+      <div class="box goldbox"><b>fact_walmart_return_labels_dp3</b><span>1.319.345 Order Line Walmart có nhãn</span><strong>order_line_key · nhãn tách riêng feature</strong></div>
+      <p><b>Quan hệ fact–dim:</b> fact.amazon_order_version_key = dim.order_version_key. Validate: 0 khóa thiếu, 0 khóa trùng, 0 khoảng sai.</p>
+    </section>
+  </div>
+  <div class="arrow a1">→</div><div class="arrow a2">→</div><div class="arrow a3">→</div><div class="arrow a4">→</div><div class="arrow a5">→</div>
+  <div class="merge">5 → 1<br>fact</div>
+  <footer>Bronze Amazon cũng cấp lịch sử cho dim Amazon; năm bảng Silver hợp vào fact; fact cấp feature và bridge nhãn.</footer>
+</main>
+</html>
