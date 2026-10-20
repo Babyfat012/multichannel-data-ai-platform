@@ -2,16 +2,16 @@
 
 Tài liệu này ghi lại **cách tối ưu job Spark đầu tiên của lakehouse**: từ baseline cố tình
 xấu, qua một giả định bị số đo bác bỏ, tới nguyên nhân thật và kết quả ở quy mô đầy đủ.
-Cập nhật **2026-10-11**.
+Cập nhật **2026-10-15**; số đo Bronze lịch sử giữ theo ngày của từng run.
 
-Mọi số ở đây lấy từ `HANDOFF.bronze.md` mục 4 và `docs/evidence/spark-ui/README.md` —
+Số đo benchmark và App ID được ghi trong [chỉ mục bằng chứng Spark UI](evidence/spark-ui/README.md) —
 không đo lại, không suy đoán. Chỗ nào chưa có số thì ghi rõ "chưa đo".
 
 ---
 
 ## 1. Mục tiêu và phạm vi
 
-**Bronze là gì** (theo `CONTEXT.md`): bản sao trung thực của dữ liệu Channel giao cho
+**Bronze là gì** (theo [thuật ngữ và tầng dữ liệu](terminology.md)): bản sao trung thực của dữ liệu Channel giao cho
 Seller. Nó chỉ đổi file sang định dạng cột và thêm cột kỹ thuật (Export Date, tên file
 nguồn, thời điểm nạp). Nó **không** sửa tên cột, **không** gộp schema, **không** bỏ bản
 trùng. Bronze có **một bảng mỗi KÊNH**, không phải một bảng mỗi dạng schema: hai dạng schema của
@@ -19,19 +19,21 @@ Amazon (v0 và 2026-01-01) nằm chung một bảng vì Bronze **giữ nguyên c
 không parse thì không phải chọn bộ tên cột nào. Việc quy tên khoá về một dạng thuộc **Silver**
 (xem `docs/silver.md`). Bảng tầng này mang tiền tố `raw_`.
 
-**Job này làm gì:** `spark_jobs/01_bronze_baseline.py` đọc các file JSONL export của
+**Job này làm gì:** `spark_jobs/bronze/ingest_amazon_order_snapshots.py` đọc các file JSONL export của
 Amazon nằm ở `/data/raw` (mount read-only vào container Spark), rồi ghi thành bảng Iceberg
 `lakehouse.bronze.raw_amazon_orders` qua REST catalog Lakekeeper, dữ liệu bảng nằm trên MinIO.
 Job **không parse JSON và không làm sạch gì** — đúng vai trò "chép nguyên bản" của Bronze.
 
-**Phạm vi tài liệu:** baseline, chuỗi tối ưu hiệu năng, và bằng chứng Spark UI. Phần Silver,
-Gold và tích hợp Airflow thuộc giai đoạn sau (mục 9 để trống, điền ở GĐ 4).
+**Phạm vi tài liệu:** baseline, chuỗi tối ưu hiệu năng và bằng chứng Spark UI của
+Bronze Amazon. Mục 9 nối job này với lần chạy Airflow sau đó; thiết kế và số đo
+Silver/Gold nằm ở [`silver.md`](silver.md),
+[`silver-five-channels.md`](silver-five-channels.md) và [`gold.md`](gold.md).
 
 ---
 
 ## 2. Hình dạng bảng và vì sao
 
-Bốn quyết định thiết kế đã chốt (`HANDOFF.bronze.md` mục 1). Điểm quan trọng không phải
+Bốn quyết định thiết kế đã chốt được ghi đầy đủ trong bảng dưới. Điểm quan trọng không phải
 chọn gì, mà **vì sao**:
 
 | # | Quyết định | Lý do |
@@ -62,7 +64,10 @@ Tài liệu phải trỏ đúng chỗ đó.
 | Số dòng | 108.248.563 dòng |
 | Dung lượng | 80,77 GiB |
 
-**Chỉ có HAI nguồn batch.** TikTok **không** có trong batch — nó chỉ đi Kafka/stream. Walmart
+**Ở lần benchmark Bronze này chỉ có hai nguồn Batch lớn.** Ba Channel TikTok Shop,
+Shopify và Shopee được thêm sau bằng bộ nguồn JSONL nhỏ, không nằm trong phép đo
+100 GB hay ba lần chạy Spark UI ở đây (xem
+[`silver-five-channels.md`](silver-five-channels.md)). Walmart
 nằm ở `/data/raw/pg-load/walmart.orders/export_date=*/` (JSONL chờ nạp vào PostgreSQL), ba
 trường `purchase_order_id`, `raw_payload`, `fetched_at`; `fetched_at` = `...T23:59:59Z` cho cả
 ngày nên có 180 giá trị phân biệt.
@@ -164,7 +169,7 @@ nặng thêm (đúng như cột "số task" cho thấy: 200 → 8).
 | `none` | không shuffle, 114 task đọc gì ghi nấy | ghi song song, hết nghẽn; nhưng **nhiều file nhỏ** hơn — liên quan trực tiếp tới kết luận "small-file là vấn đề phía đọc" |
 
 ### e. Quyết định: GIỮ `hash` (chốt 2026-10-11)
-Đây là câu hỏi treo ở `HANDOFF.bronze.md` mục 5, đã chốt: **giữ `hash`, không chạy lại**.
+Quyết định triển khai ngày 2026-10-11 đã chốt: **giữ `hash`, không chạy lại**.
 
 **`hash` là mặc định NGẦM, không phải giá trị ghi trong bảng (đo 2026-10-12).**
 `SHOW TBLPROPERTIES lakehouse.bronze.raw_amazon_orders` **không có** dòng
@@ -357,23 +362,23 @@ thì `docker ps` xem MinIO có chạy không, **đừng** đi sửa Lakekeeper h
 cd /home/phattl/eonsr/FSDS
 docker compose up -d minio minio-init                                        # BẮT BUỘC
 docker compose --profile spark up -d spark-master spark-worker-1 spark-worker-2
-bash scripts/setup_lakekeeper.sh                                             # chạy lại được, đã có thì bỏ qua
+bash scripts/setup/setup_lakekeeper.sh                                             # chạy lại được, đã có thì bỏ qua
 ```
 
 **Chạy job** (script chạy cả ba lần hoặc từng lần):
 ```bash
-bash scripts/run_bronze_evidence.sh lan3   # 180 ngày, AQE on  → bảng thật
-bash scripts/run_bronze_evidence.sh lan1   # 20 ngày, AQE off  → ảnh skew
-bash scripts/run_bronze_evidence.sh lan2   # 20 ngày, AQE on   → ảnh so sánh
+bash scripts/evidence/measure_order_snapshots_bronze.sh lan3   # 180 ngày, AQE on  → bảng thật
+bash scripts/evidence/measure_order_snapshots_bronze.sh lan1   # 20 ngày, AQE off  → ảnh skew
+bash scripts/evidence/measure_order_snapshots_bronze.sh lan2   # 20 ngày, AQE on   → ảnh so sánh
 ```
 
 **Chạy lại loạt thí nghiệm skew của mục 5f** (mỗi lần ghi một bảng thử, đo xong thì `DROP TABLE
 ... PURGE`; đừng để hai bảng thử cùng tồn tại, mỗi bảng ~945 MiB):
 ```bash
-bash scripts/run_bronze_evidence.sh skew_0   # đối chứng: cấu hình baseline, môi trường mới
-bash scripts/run_bronze_evidence.sh skew_a   # shuffle.partitions 24
-bash scripts/run_bronze_evidence.sh skew_b   # distribution-mode=none
-bash scripts/run_bronze_evidence.sh skew_c   # distribution-mode=range
+bash scripts/evidence/measure_order_snapshots_bronze.sh skew_0   # đối chứng: cấu hình baseline, môi trường mới
+bash scripts/evidence/measure_order_snapshots_bronze.sh skew_a   # shuffle.partitions 24
+bash scripts/evidence/measure_order_snapshots_bronze.sh skew_b   # distribution-mode=none
+bash scripts/evidence/measure_order_snapshots_bronze.sh skew_c   # distribution-mode=range
 ```
 Bốn đích này **không** nằm trong `tatca`, và **không** ghi vào hai bảng thật. Mỗi lần
 `spark-submit` để lại ~108 MB jar trong `/opt/spark/work` của **mỗi** worker — chạy nhiều thì
@@ -403,4 +408,87 @@ thiếu MinIO) **không phải bằng chứng** và đã được xoá.
 
 ## 9. Tích hợp vào Airflow pipeline
 
-**Điền ở GĐ 4.**
+Job `spark_jobs/bronze/ingest_amazon_order_snapshots.py` không chỉ chạy tay để đo: DAG
+[`dp1_bronze`](../dags/dp1_bronze.py) gọi nó qua `SparkSubmitOperator` ở task
+`ingest_amazon`, rồi gọi `spark_jobs/bronze/validate_order_snapshots.py` ở `validate_amazon`.
+`ingest_amazon → validate_amazon` là hai task đầu của chuỗi năm Channel. DAG
+truyền `--window-days`, `--window-start`, tên bảng và `--run-id` từ Airflow
+Variables / run hiện tại, nên có thể lần từ bảng Bronze về đúng log của lần chạy.
+Các task dùng chung Airflow Connection `spark_default` (Spark standalone) và
+Variable `fsds_spark_packages`, được nạp bởi
+[`scripts/setup/setup_airflow.sh`](../scripts/setup/setup_airflow.sh). Các bảng/tham số cho ba
+Channel mới được nạp riêng bởi
+[`scripts/setup/setup_dp1_file_channels.sh`](../scripts/setup/setup_dp1_file_channels.sh).
+
+| DAG | Spark job chính | Chốt chất lượng | Bằng chứng lần chạy |
+|---|---|---|---|
+| DP1 `dp1_bronze` | Amazon/Walmart + ba file Channel → Bronze | 5 task Validate sau 5 task Ingest | `manual__2026-10-13T15:30:09+00:00`: **10/10 success**; Amazon nguồn = Bronze **5.827.514**, lỗi 0 |
+| DP2 `dp2_silver` | Bronze → Silver năm Channel → Gold fact + Amazon SCD2 | Validate từng Silver, dim và Gold | `manual__2026-10-14T03:53:52+00:00`: **14/14 success**; Gold **10.194.358**, lỗi 0, khóa trùng 0 |
+| DP3 `dp3_features` | Gold fact → bảng `feat_order_line_return_dp3` | `validate_return_features` | `manual__2026-10-14T04:11:15+00:00`: **2/2 success**; feature **10.194.358**, lỗi 0, khóa trùng 0 |
+
+![Airflow Graph DP1: năm cặp Ingest/Validate đều thành công](images/airflow/dp1_bronze-graph-five-channels.png)
+
+![Airflow Graph DP2: Silver, Gold và Amazon SCD2 đều thành công](images/airflow/dp2_silver-graph-scd2-five-channels.png)
+
+![Airflow Graph DP3: tạo và kiểm tra feature offline](images/airflow/dp3_features-graph-scd2-five-channels.png)
+
+Graph cho thấy thứ tự Spark task và trạng thái chạy; số dòng và kết quả kiểm
+được trích từ log của đúng run. Grid, log và diễn giải từng task nằm ở
+[`airflow.md`](airflow.md). Lineage job → bảng và assertion PASS trên UI
+DataHub nằm ở [`datahub.md`](datahub.md).
+
+**Tách phạm vi phép đo:** ba lần chạy Spark UI ở mục 5–7 dùng 20 hoặc 180 ngày
+Amazon để nghiên cứu skew; DP1 Airflow ở bảng trên dùng cửa sổ Amazon **10 ngày
+liền nhau** để bắt bản trùng, Walmart từ PostgreSQL hiện có và ba Channel mới
+từ nguồn nhỏ. Task Airflow không truyền `--aqe`, nên job dùng mặc định `on`;
+không lấy thời gian benchmark 20/180 ngày làm số đo hiệu năng của lần Airflow,
+và không coi DP1 này là đã xử lý hết 100 GB nguồn Batch.
+
+## 10. Proof Silver: schema evolution và dedup trong execution 3
+
+Ảnh và REST dưới đây được lấy lại từ History Server ngày 2026-10-15, dùng
+event log của lần chạy **2026-10-14**, không chạy lại job:
+`app-20261014035356-0002`, app name
+`silver-amazon-stg_amazon_order_lines_dp2`. Application đã kết thúc, không có
+job thất bại. Đây là task Amazon Silver trong DP2 run
+`manual__2026-10-14T03:53:52+00:00`, dùng cửa sổ Amazon 10 ngày.
+
+![Danh sách job của Silver Amazon](evidence/spark-ui/09-silver-amazon-jobs.png)
+
+![SQL UI: execution 2 có sub-execution 3](evidence/spark-ui/10-silver-amazon-sql.png)
+
+Execution **2** là lệnh ghi bảng `AtomicReplaceTableAsSelect`; phần xử lý dữ
+liệu nằm trong sub-execution **3**. Vì vậy ảnh `11` chụp execution 2 trước
+đây không được dùng để minh họa parse hay dedup.
+
+![Execution 3: hai nhánh nguồn qua Union rồi WindowGroupLimit và Window](evidence/spark-ui/12-silver-amazon-dedup-plan.png)
+
+Graph thể hiện hai nhánh `BatchScan` cùng bảng Bronze, lọc và parse riêng từng
+schema, `Generate` nổ mảng Order Line rồi `Union`. Sau đó Spark sort/shuffle
+theo khóa, thực hiện `WindowGroupLimit`/`Window` và lọc bản có `row_number=1`.
+Details của plan cho thấy `from_json` với `AmazonOrderId`/`OrderItems` của v0
+và `orderId`/`orderItems` của schema 2026, cùng ánh xạ trạng thái/kiểu tiền về
+bộ cột Silver. Các trường v0 không còn ở schema mới được giữ NULL đúng thiết kế.
+
+![Details của execution 3: schema parse và các trường nguồn](evidence/spark-ui/13-silver-amazon-schema-details.png)
+
+[REST execution 3](evidence/spark-ui/silver-amazon-execution-3.json) lưu
+`status=COMPLETED`, `planDescription` và metrics của chính run này:
+
+| Số đo execution 3 | Số dòng |
+|---|---:|
+| Order Line từ nhánh v0 (`Generate`, node 19) | 4.222.964 |
+| Order Line từ nhánh 2026 (`Generate`, node 27) | 4.226.338 |
+| Trước dedup (`WindowGroupLimit`, node 13) | 8.449.302 |
+| Sau dedup (`Filter`, node 6) | 8.314.312 |
+| **Bản trùng đã bỏ** | **134.990 (1,5976%)** |
+
+Như vậy số trước/sau đã được đối chiếu ngay trên run ngày 2026-10-14, ngoài
+phép đo lịch sử ngày 2026-10-12 trong [Silver mục 10.6](silver.md).
+Tỷ lệ 1,5976% thuộc cửa sổ 10 ngày, không so bằng trực tiếp với 1,98% của
+generator toàn kỳ vì các cặp duplicate gần rìa cửa sổ có thể nằm ngoài nguồn nạp.
+
+Tái tạo ảnh bằng `scripts/evidence/capture_spark_silver_evidence.py` khi History Server
+đang đọc `out/spark-events`. Script kiểm execution đã hoàn tất và có cả hai
+tên khóa, `from_json`, `Union`, `row_number` trước khi lưu proof. Việc chụp
+không cần Spark worker hay đọc lại dữ liệu nguồn.

@@ -1,4 +1,25 @@
-# Bằng chứng Spark UI — giai đoạn Bronze
+# Bằng chứng Spark UI — Bronze và Silver
+
+## Bổ sung Silver ngày 2026-10-15
+
+App `app-20261014035356-0002` thuộc task Amazon Silver trong DP2 run ngày
+2026-10-14, đã hoàn tất không có job thất bại. Execution **3** là phần xử lý
+thật; execution **2** chỉ là lệnh ghi bảng bao ngoài.
+
+| Artifact | Nội dung và cách đọc |
+|---|---|
+| `09-silver-amazon-jobs.png` | Job của application Silver đã chạy |
+| `10-silver-amazon-sql.png` | SQL execution 2 có sub-execution 3 |
+| `11-silver-amazon-query-plan.png` | Ảnh cũ của execution 2; chỉ thấy `AtomicReplaceTableAsSelect`, không dùng làm proof parse/dedup |
+| `12-silver-amazon-dedup-plan.png` | Graph execution 3: hai nhánh schema → Union → window dedup; 8.449.302 → 8.314.312 dòng |
+| `13-silver-amazon-schema-details.png` | Details của plan với parse schema nguồn |
+| `silver-amazon-execution-3.json` | REST execution hoàn tất, physical plan và metrics của đúng run |
+
+Ảnh được nhúng và diễn giải trong [Spark mục 10](../../spark.md). Script
+`scripts/capture_spark_silver_evidence.py` chụp History UI thật và lưu REST
+response, không chạy lại job.
+
+## Bằng chứng Bronze lịch sử
 
 Ảnh chụp 2026-10-11 từ **Spark History Server**, không phải UI cổng 4040 (UI đó chết cùng
 job nên không chụp được job chạy 19 phút). Nguồn: ba event log trong `out/spark-events/`.
@@ -47,4 +68,4 @@ Hai app còn lại trong History Server **không phải bằng chứng**, đừn
    là `write.distribution-mode=hash` dồn mỗi `export_date` về một task — AQE không chia
    việc ghi một partition cho nhiều task được.
 4. Ảnh `06`: ở quy mô 180 ngày, skew vẫn còn (median 33s, max 1,1 phút = gấp 2) nhưng
-   không chặn được việc. Quyết định 2026-10-11: **giữ `hash`** (lý do ở `HANDOFF.bronze.md` mục 5).
+   không chặn được việc. Quyết định 2026-10-11: **giữ `hash`** (lý do và phép đo tiếp theo ở [Spark mục 5](../../spark.md)).

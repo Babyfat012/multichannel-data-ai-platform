@@ -11,20 +11,20 @@ Chỗ nào chưa đo thì không suy đoán.
 
 ## 1. Phạm vi tài liệu
 
-- Thiết kế đã chốt, và **code đã có**: `spark_jobs/02_silver_amazon.py`,
-  `spark_jobs/02_silver_walmart.py`. Bảng ánh xạ tách ra `spark_jobs/silver_mapping.py`
+- Thiết kế đã chốt, và **code đã có**: `spark_jobs/silver/build_amazon_order_snapshots.py`,
+  `spark_jobs/silver/build_walmart_order_snapshots.py`. Bảng ánh xạ tách ra `spark_jobs/lib/order_snapshot_mapping.py`
   (không import pyspark nên test được trên máy host). Mục 10 ghi số đo lần chạy thật.
 - Tài liệu tả *quyết định, lý do, và giá* — không phải hướng dẫn chạy.
-- Mục 8 ghi **ba khoản cuối đã chốt** (2026-10-12). Mục 9 nêu **một** hệ quả còn mở, thuộc Gold.
+- Mục 8 ghi **ba khoản cuối đã chốt** (2026-10-12). Mục 9 ghi quyết định Gold đã triển khai sau hệ quả đó.
 - Mục 10 ghi **số đo lần chạy thật** và **hai khoản mới mở ra khi chạy**.
-- Đọc kèm: `CONTEXT.md` (định nghĩa Bronze/Silver/Gold), `docs/spark.md` (Bronze đã xong).
+- Đọc kèm: [thuật ngữ và tầng dữ liệu](terminology.md) (định nghĩa Bronze/Silver/Gold), `docs/spark.md` (Bronze đã xong).
 
 ---
 
 ## 2. Hai bảng riêng theo kênh, KHÔNG gộp
 
 **Chốt:** hai bảng Silver riêng — `stg_amazon_order_lines`, `stg_walmart_order_lines`.
-(Tên bảng là **đề xuất** của implementer 1, chưa duyệt.)
+Tên bảng `stg_*` đã được triển khai; các bảng chạy qua Airflow có hậu tố `_dp2`.
 
 | | Amazon | Walmart |
 |---|---|---|
@@ -35,14 +35,14 @@ rẽ nhánh theo `channel` — khó ở code, và thêm kênh mới là phải s
 
 **Cột `channel` giữ trong CẢ HAI bảng**, để bước gộp sau không phải đoán dòng từ đâu.
 
-**Chỗ gộp hai kênh là Gold** (`fact_`/`obt_`), không phải Silver. Căn cứ: `CONTEXT.md:102`
+**Chỗ gộp hai kênh là Gold** (`fact_`/`obt_`), không phải Silver. Căn cứ: [thuật ngữ và tầng dữ liệu](terminology.md)
 định nghĩa Silver là "gộp các dạng schema của **cùng một** Channel" — gộp nhiều kênh không
 thuộc Silver.
 
 **Giá:** tách không làm mất việc gộp, chỉ đẩy nó xuống Gold, nơi hai kênh đã cùng snake_case
 và đã sạch.
 
-**Đồng bộ định nghĩa Bronze:** định nghĩa Bronze ở `docs/spark.md:17` và `CONTEXT.md:98` đã được
+**Đồng bộ định nghĩa Bronze:** định nghĩa Bronze ở `docs/spark.md:17` và [thuật ngữ và tầng dữ liệu](terminology.md) đã được
 sửa cho khớp thiết kế thật — Bronze có **một bảng mỗi KÊNH**, hai dạng schema của Amazon nằm
 chung vì Bronze không parse JSON.
 
@@ -155,7 +155,7 @@ là ngày nào.
 hay không. Không ghim thì cùng dữ liệu, máy khác múi giờ, ra nhãn khác.
 
 **Đồng bộ với Bronze:** Bronze đã có cột thời gian kiểu thật — `ingested_at`
-(`spark_jobs/01_bronze_baseline.py:194`), `fetched_at`, và `raw_walmart_orders` partition theo
+(`spark_jobs/bronze/ingest_amazon_order_snapshots.py:194`), `fetched_at`, và `raw_walmart_orders` partition theo
 `days(fetched_at)`.
 
 ### 4.3 `is_prime` kiểu `boolean`
@@ -212,10 +212,10 @@ Lý do người dùng nêu: "để data trung thực nhất, để giống mô h
 
 ## 6. Trạng thái: HAI cột
 
-`CONTEXT.md:44` đã chốt sẵn: "trạng thái gốc của Channel được giữ riêng và ánh xạ sang trạng
+[thuật ngữ và tầng dữ liệu](terminology.md) đã chốt sẵn: "trạng thái gốc của Channel được giữ riêng và ánh xạ sang trạng
 thái chuẩn". Nên Silver có hai cột — đây **không** phải lựa chọn của dự án.
 
-- **Trạng thái chuẩn** `order_status`, đúng danh sách `CONTEXT.md:44`: `pending_payment` →
+- **Trạng thái chuẩn** `order_status`, đúng danh sách [thuật ngữ và tầng dữ liệu](terminology.md): `pending_payment` →
   `awaiting_shipment` → `shipped` → `delivered` → `completed`, cùng hai nhánh `cancelled` và
   `returned`.
 - **Cột trạng thái gốc** `channel_status`: giữ y nguyên chữ của nguồn. `Canceled` (v0) và
@@ -289,12 +289,12 @@ Silver **không** tạo cột `delivered_at`.
 cùng một chữ `"Delivered"`, và `statusDate` là thời điểm của **lần đổi trạng thái gần nhất**
 (`walmart.py:77,107` — `epoch_millis(change.at)`). Nên với một đơn đã completed, `statusDate` là
 lúc **hoàn tất**, không phải lúc **giao**, và từ payload **không phân biệt được hai trường hợp**.
-`CONTEXT.md:65` định nghĩa **Delivered At** là "thời điểm Order Line thực sự được giao" và là
+[thuật ngữ và tầng dữ liệu](terminology.md) định nghĩa **Delivered At** là "thời điểm Order Line thực sự được giao" và là
 **mốc bắt đầu cửa sổ 30 ngày** của Return Label. Một cột mang tên đó mà chứa thời điểm hoàn tất
 sẽ làm lệch nhãn một cách **im lặng** — không ai thấy lỗi, chỉ thấy nhãn sai. Nên cột ở Silver
 mang tên đúng cái nó là.
 
-**Giá:** `delivered_at` chưa có ở Silver; Gold phải tự dựng. Và chú ý một hệ quả đã biết của khoá
+**Giá:** Silver không có `delivered_at` đáng tin cậy; Gold fact cũng không tự suy diễn cột này. Nhãn và thời điểm giao chỉ nằm trong bridge riêng (mục 9). Và chú ý một hệ quả đã biết của khoá
 dedup đã chốt ở mục 3.1 (giữ bản `last_updated_time` mới nhất): nó sẽ giữ thời điểm **hoàn tất**
 và bỏ thời điểm **giao**. Nên Gold không dựng được `delivered_at` từ Silver một mình — xem mục 9.
 
@@ -303,12 +303,12 @@ và bỏ thời điểm **giao**. Nên Gold không dựng được `delivered_at
 **Chốt:** tên cột `fulfillment_method`, đặt ở **mức Order**, lặp lại trên mọi Order Line của cùng
 Order. Chỉ `stg_amazon_order_lines` có cột này; `stg_walmart_order_lines` **không có**.
 
-**Lý do tên:** `CONTEXT.md:55-57` đã chọn **Fulfillment Method** làm từ vựng dự án, kèm
+**Lý do tên:** [thuật ngữ và tầng dữ liệu](terminology.md) đã chọn **Fulfillment Method** làm từ vựng dự án, kèm
 `_Avoid_: Shipping type, logistics mode`. Không dùng `fulfilled_by` vì đó là **tên khoá gốc** của
 Amazon dạng 2026 (`generator/channels/amazon.py:178`) — lấy tên gốc đặt cho cột chuẩn sẽ lẫn hai
 tầng, đúng cái lỗi mục 6 đã tránh bằng cách tách hai cột trạng thái.
 
-**Lý do mức:** `CONTEXT.md:55` định nghĩa theo Order Line, nhưng dữ liệu **không có ở mức đó**:
+**Lý do mức:** [thuật ngữ và tầng dữ liệu](terminology.md) định nghĩa theo Order Line, nhưng dữ liệu **không có ở mức đó**:
 `generator/core/model.py:102` đặt `fulfillment` trên class `Order` (`model.py:88`), còn class
 `OrderLine` (`model.py:60`) không có field này. Amazon công bố ở mức Order ở cả hai dạng
 (`amazon.py:135` `FulfillmentChannel`, `amazon.py:178` `fulfillment.fulfilledBy`). Walmart:
@@ -323,20 +323,21 @@ grep `fulfill` trong `generator/channels/walmart.py` ra **rỗng** — kênh nà
 
 ---
 
-## 9. Hệ quả còn mở, thuộc tầng Gold
+## 9. Hệ quả chuyển sang Gold — đã chốt ngày 2026-10-14
 
-Mục 8.2 đóng xong phần Silver nhưng mở ra đúng **một** câu, và nó thuộc Gold chứ không thuộc
-Silver, nên tài liệu này không tự chốt:
+Silver giữ snapshot mới nhất nên `statusDate` của Walmart không chứng minh
+được thời điểm giao thật. Renderer chiếu cả `DELIVERED` và `COMPLETED` thành
+chữ nguồn `"Delivered"`; một trạng thái giao có thể không từng được quan sát
+trong các export Bronze. Không thể suy thời điểm giao chính xác từ snapshot
+đầu tiên nhìn thấy chữ đó.
 
-**Dựng `delivered_at` của Walmart từ đâu?** Khoá dedup ở mục 3.1 giữ bản mới nhất, nên Silver chỉ
-còn thời điểm hoàn tất. Hai đường đi được, cả hai **chưa đo**:
-1. Lấy từ Bronze — `raw_walmart_orders` giữ mọi bản đã xuất, nên lần **đầu tiên** một Order Line
-   xuất hiện với trạng thái gốc `"Delivered"` chính là lúc giao (vì `DELIVERED` xảy ra trước
-   `COMPLETED` trong `generator/core/model.py` timeline).
-2. Cho Silver giữ thêm một cột thời điểm giao sớm nhất, tính lúc dedup.
-
-Đường 1 giữ Silver gọn nhưng buộc Gold đọc Bronze. Đường 2 giữ Gold gọn nhưng thêm việc cho Silver
-và phá nguyên tắc "Silver chỉ làm sạch, không tổng hợp". Chưa chọn.
+Quyết định đã triển khai: Gold fact **không có `delivered_at`**; feature DP3
+chỉ dùng thông tin biết tại lúc đặt Order. Nhãn Walmart cùng thời điểm giao
+và thời điểm có nhãn được nối từ ground truth trong bảng riêng, qua đầy đủ
+`purchase_order_id`, `customer_order_id`, `line_number` để tránh va chạm mã.
+Bridge đã ghi 1.319.345 Order Line có nhãn, không lỗi/khóa trùng trong run
+ngày 2026-10-14. Xem [quyết định Gold](gold-design.md) và
+[bằng chứng Gold/DP3](gold.md). Không cần bổ sung cột giao suy diễn vào Silver.
 
 ---
 
@@ -404,7 +405,7 @@ thể** chứa cùng một đơn hai lần. Nên tỉ lệ trùng 0 là **đúng
 
 => Vì vậy phải nạp Bronze từ các ngày **LIỀN NHAU**. Việc đó **ĐÃ LÀM**, xem mục 10.6.
 
-Hệ quả cho công cụ: `spark_jobs/day_selection.py` nay có **hai** cách chọn ngày, và hai cách
+Hệ quả cho công cụ: `spark_jobs/lib/day_selection.py` nay có **hai** cách chọn ngày, và hai cách
 đó loại trừ nhau vì hai mục đích ngược nhau:
 
 | Hàm | Chọn gì | Để thấy |
@@ -412,13 +413,14 @@ Hệ quả cho công cụ: `spark_jobs/day_selection.py` nay có **hai** cách c
 | `pick_sample_days` | n ngày **rải đều** | **skew** — cần cả ngày bé lẫn ngày to trong một lần chạy |
 | `pick_window_days` | n ngày **liền nhau** | **bản trùng** — cần phủ cửa sổ `±3` ngày |
 
-`01_bronze_baseline.py` có cờ `--window-days N` và `--window-start YYYY-MM-DD`; truyền cả
+`spark_jobs/bronze/ingest_amazon_order_snapshots.py` có cờ `--window-days N` và `--window-start YYYY-MM-DD`; truyền cả
 `--sample-days` lẫn `--window-days` thì job dừng với mã 2 chứ không tự chọn một cái.
 
-### 10.4 Khoản mở số 2: cột partition của hai bảng Silver
+### 10.4 ĐÃ CHỐT (2026-10-13): cột partition của hai bảng Silver = `days(created_at)`
 
-Hai job hiện ghi `partitionedBy(days(created_at))` — chia theo **ngày đặt hàng**. Đây là
-**đề xuất của planner**, tài liệu này chưa chốt, và đổi được rẻ cho tới khi chạy trên bảng thật.
+Hai job ghi `partitionedBy(days(created_at))` — chia theo **ngày đặt hàng**. Đây từng là
+"khoản mở số 2"; **learner đã chốt 2026-10-13**, giữ đúng cột code đang dùng nên không phải
+sửa job.
 
 Lý do đề xuất: sau dedup thì `export_date` (Amazon) và `fetched_at` (Walmart) chỉ còn nghĩa
 "của bản thắng", không còn là một lát dữ liệu đầy đủ — chia theo chúng thì một đơn **nhảy
@@ -426,7 +428,18 @@ partition** mỗi lần có bản mới. `days(created_at)` là partition ẩn c
 `timestamp`, query lọc theo khoảng ngày đặt hàng chỉ đọc đúng lát cần. Hai bảng dùng **cùng**
 cột partition để Gold union chúng không phải đọc hai cách chia khác nhau.
 
-Giá: dedup ghi lại partition của **mọi** ngày có đơn được cập nhật, không chỉ ngày mới nhất.
+**Giá của cách đã chọn — đổi GHI đắt lấy ĐỌC rẻ.** Sau dedup, các đơn được cập nhật trong
+một lượt có `created_at` rải khắp dải 180 ngày (đơn đặt tháng 1 vẫn đổi trạng thái hôm nay),
+nên một lượt ghi chạm **nhiều partition rải rác**, không chỉ partition mới nhất. Chấp nhận được
+vì bảng Silver **ghi 1 lần/ngày** còn tầng Gold **đọc nhiều lần**.
+
+**Giá của cách bị loại (`export_date` / `fetched_at`) — mất thời gian ĐỌC, và đó là lý do bỏ.**
+Hai cột này đổi theo từng lần xuất, nên một đơn **nhảy partition** mỗi lần có bản mới: cập nhật
+một dòng phải viết lại **hai** partition (bỏ khỏi partition cũ, thêm vào partition mới) thay vì
+một. Nặng hơn: tên partition chỉ ghi `export_date`, **không nói gì** về `created_at`, nên câu
+truy vấn của Gold lọc theo ngày đặt hàng **không tỉa được partition** (partition pruning) — một
+partition `export_date=2026-04-07` có thể chứa đơn đặt từ bất kỳ ngày nào trước đó. Spark phải
+mở **cả 180 partition** rồi tự lọc, thay vì mở đúng ~30 partition của một tháng.
 
 ### 10.5 Giới hạn đã biết
 `DROP TABLE ... PURGE` in lỗi Lakekeeper `BadRequestException: Malformed request` **sau khi**
@@ -453,10 +466,10 @@ schema mới (`amazon.py:48` `SCHEMA_2026 = "orders-2026-01-01"`), **không ph�
 Chỗ dung lượng tụt 475 -> 418 MB đúng tại 04-10 là bằng chứng độc lập cho mốc đó.
 
 ```bash
-bash scripts/run_silver.sh dup        # chạy cả hai bước; hoặc từng bước:
-spark-submit ... 01_bronze_baseline.py --window-days 10 --window-start 2026-04-05 \
+bash scripts/run/run_order_snapshots_silver.sh dup        # chạy cả hai bước; hoặc từng bước:
+spark-submit ... bronze/ingest_amazon_order_snapshots.py --window-days 10 --window-start 2026-04-05 \
     --aqe on --table raw_amazon_orders_dup
-spark-submit ... 02_silver_amazon.py \
+spark-submit ... silver/build_amazon_order_snapshots.py \
     --source-table raw_amazon_orders_dup --table stg_amazon_order_lines_dup
 ```
 
