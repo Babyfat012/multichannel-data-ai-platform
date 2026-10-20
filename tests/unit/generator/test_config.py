@@ -44,7 +44,7 @@ def test_cutoff_is_midnight_after_last_history_day():
 @pytest.mark.parametrize("name", ["small.yaml", "default.yaml"])
 def test_shipped_config_files_are_valid(name):
     """Chứng minh các file cấu hình gửi kèm repo đọc được, không lỗi."""
-    load_config(Path(__file__).parent.parent / "configs" / name)
+    load_config(Path(__file__).parents[3] / "configs" / name)
 
 
 @pytest.mark.parametrize("prime_day, message", [

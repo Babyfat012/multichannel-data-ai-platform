@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from generator.batch import BatchRun
+from generator.generate_order_snapshots import BatchRun
 from generator.load_postgres import TABLES, iter_rows
 from generator.storage import OutputStore
 

@@ -2,7 +2,17 @@
 
 Data platform gom dữ liệu bán hàng của một Seller trên 5 nền tảng thương mại điện tử (Amazon, TikTok Shop, Shopify, Walmart, Shopee) vào một lakehouse, phục vụ bài toán dự đoán khả năng trả hàng. Toàn bộ dữ liệu được sinh giả lập.
 
-> **Trạng thái**: đang triển khai Data Generator (tiến độ xem [docs/generator-design.md](docs/generator-design.md#15-triển-khai)). Các phần khác, công nghệ và cấu hình trong tài liệu này vẫn là **dự kiến**.
+> **Trạng thái**: Data Generator, Bronze/Silver/Gold năm Channel, DP1/DP2, DP3 feature, các job Flink (baseline, late arrival, dedup, window) và hai ý tưởng Novel (Trino federation, Debezium CDC có kafka-ui) đã có bằng chứng chạy. Amazon SCD2 đã được kiểm tra. DataHub đã ghi lineage và 15 kết quả Validate, có ảnh UI cho DP1/DP2/DP3; xem [bằng chứng DataHub](docs/datahub.md) và [tiến độ theo rubric](docs/de-progress.md).
+
+> **Kế hoạch mở rộng đã chốt 2026-10-17:** xem [plan tổng](docs/high-level-architecture-plan.md), [acceptance ledger](docs/de-acceptance-ledger.md) và [điều kiện triển khai](docs/implementation-readiness.md). Bằng chứng DE bên trên là các run local có phạm vi riêng; chưa chứng minh nguồn chung năm Channel, Feast/ML/agent hoặc triển khai GCP. Novel ideas cho kế hoạch mới theo Q51 trong ledger; các proof cũ được giữ làm tham chiếu.
+
+Discovery tiếp 2026-10-18: policy chốt tới Q61, bổ sung sales sau partial cancel và nguồn Seller operational giả lập. Xem [scope/impact](docs/expanded-scope-design.md), [contract nhãn v2](docs/return-label-contract.md) và [source contract v2](docs/source-contract-order-lifecycle.md); chưa có pipeline/proof đầu cuối cho phần mở rộng.
+
+Rà tích hợp tiếp: [sổ IR01–IR25](docs/integration-risk-register.md) ghi lỗi
+resume generator đã sửa cùng regression test, CDC/feature validation được
+củng cố; [bản xử lý](docs/audit-remediation-20261018.md) ghi phạm vi test.
+[Publication contract](docs/run-publication-contract.md) cụ thể hóa phần
+còn cần implement/POC. Chưa thao tác Cloud hoặc sinh lại nguồn lớn.
 
 ## Mục lục
 
@@ -49,15 +59,18 @@ Cách đọc sơ đồ:
 - **Nhãn trên mũi tên là dữ liệu truyền đi**, không phải tên thao tác.
 - **Luồng Batch đánh số `B1→B6`, luồng Stream đánh số `S1→S3`** theo đúng thứ tự
   chạy. Đọc lần lượt theo số là đi hết một vòng dữ liệu.
-- **Hai mũi tên nét đứt không phải luồng dữ liệu**: một là điều phối (Airflow submit
-  job cho Spark), một là lineage (Airflow đẩy metadata sang DataHub).
-- Khung `DOCKER COMPOSE · FSDS` bao quanh phần tự dựng bằng Compose. Hộp ngoài khung
-  là hệ thống bên ngoài (Channel) hoặc công cụ chạy trên máy (DBeaver).
+- **Các mũi tên nét đứt không phải luồng dữ liệu**: chúng biểu diễn điều phối
+  (Airflow submit job cho Spark) và metadata/lineage (publisher gửi metadata sang DataHub).
+- Khung `DOCKER COMPOSE · FSDS` bao quanh phần tự dựng bằng Compose. DBeaver và
+  Channel là bên ngoài; PostgreSQL được đặt sát biên để gọn sơ đồ nhưng vẫn là
+  service Compose, như `docker-compose.yml` khai báo.
 
-Một chỗ đã đơn giản hoá, cần biết khi đọc: **PostgreSQL vẽ một lần** bên phải với
-subtitle `warehouse · dept · catalog` vì nó kiêm ba vai. Vai "hệ thống phòng ban
-khác" chỉ được gọi tên chứ không vẽ mũi tên riêng sang Spark — trong sơ đồ, Spark
-lấy dữ liệu nguồn qua MinIO (`B2`).
+**PostgreSQL vẽ một lần** vì nó kiêm ba vai: nguồn của Walmart, warehouse và
+backend của REST Catalog. Walmart đi thẳng từ PostgreSQL qua JDBC vào Spark;
+luồng file trên sơ đồ thể hiện nguồn được phân phối qua MinIO. Trong các run
+bằng chứng hiện có, Amazon đọc mount `/data/raw`, ba Channel file khác đọc
+mount `out/channels-small`; MinIO lưu các bảng Iceberg đầu ra. Phạm vi runtime
+và đường dẫn được ghi trong [Airflow](docs/airflow.md).
 
 Bản vector để phóng to hoặc đưa vào slide: [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg).
 Bản dựng gốc: [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html).
@@ -73,9 +86,9 @@ Bản dựng gốc: [`docs/diagrams/architecture.html`](docs/diagrams/architectu
 | Spark | Xử lý batch: skew, high cardinality, schema evolution, dedup |
 | Flink | Xử lý streaming: dedup, late arrival, burst, window |
 | Trino | Query liên nguồn — một câu SQL đọc được cả lakehouse lẫn PostgreSQL |
-| Airflow | Điều phối pipeline theo nhịp write → audit → publish |
+| Airflow | Điều phối Ingest/Build → Validate của DP1/DP2/DP3 |
 | PostgreSQL | Kiêm ba vai: data warehouse (có index), DB phòng ban khác, backend của catalog |
-| DataHub | Metadata, lineage và data contract |
+| DataHub | Metadata, lineage và assertion validation |
 | DBeaver | Công cụ chạy trên máy, nối Trino để xem schema và ERD của cả ba tầng |
 
 ### Các pipeline
@@ -94,17 +107,19 @@ Bản dựng gốc: [`docs/diagrams/architecture.html`](docs/diagrams/architectu
 | Batch | Apache Spark | Xử lý skew, high cardinality, schema evolution |
 | Streaming | Apache Kafka, Apache Flink | Xử lý burst, late arrival, duplicate, window |
 | Điều phối | Apache Airflow | |
-| Lakehouse | MinIO + Apache Iceberg | Compaction, z-order, partitioning. Chọn Iceberg thay Delta: [ADR-0003](docs/adr/0003-iceberg-va-rest-catalog-cho-lakehouse.md) |
+| Lakehouse | MinIO + Apache Iceberg | Partitioning và compaction đã đo; xem [quyết định kiến trúc](docs/architecture-decisions.md) |
 | Catalog | Lakekeeper (Iceberg REST) | Catalog cho cả Spark, Flink và Trino |
 | Query liên nguồn | Trino | Một cửa sổ SQL thấy cả lakehouse lẫn PostgreSQL |
 | Data Warehouse | PostgreSQL | Indexing |
-| Governance | DataHub | Lineage, validation, data contract |
+| Governance | DataHub | Lineage và assertion validation |
 
-Các lựa chọn này là dự kiến và có thể thay đổi trong quá trình triển khai.
+Các thành phần trong bảng đã được triển khai ở phạm vi bằng chứng mô tả trong
+[tiến độ DE](docs/de-progress.md); một số giới hạn về cỡ dữ liệu và cấu hình
+vận hành vẫn được ghi ở đó.
 
 ## 4. Dữ liệu và Data Generator
 
-Generator tạo dữ liệu theo cấu hình. Ví dụ cấu hình dự kiến:
+Generator tạo dữ liệu theo cấu hình. Ví dụ cấu hình mặc định:
 
 ```yaml
 scale:
@@ -146,46 +161,123 @@ Image của generator được tối ưu từ **2,35 GB xuống 677 MB** (giảm
 
 ## 5. Repo Structure
 
-Cấu trúc repo. Mục đánh dấu **(CHƯA có)** sẽ được tạo khi triển khai phần tương ứng; các mục còn lại đã có trong repo.
+Các thư mục mã nguồn, cấu hình và tài liệu công khai (không liệt kê dữ liệu
+sinh ra, cache hay ghi chú cá nhân bị Git bỏ qua):
 
-```
+```text
 .
-├── README.md              # Tài liệu tổng quan này
-├── docs/                  # Toàn bộ tài liệu chi tiết, kèm ảnh chụp minh họa
-│   ├── diagrams/          # Hình kiến trúc (html/svg/png) dùng trong tài liệu
-│   └── evidence/          # Ảnh chụp Spark UI làm bằng chứng tối ưu
-├── generator/             # Data Generator: sinh dữ liệu batch và streaming theo cấu hình
-├── configs/               # File cấu hình YAML của generator (small để thử, default đủ quy mô)
-├── scripts/               # Script vận hành: setup_lakekeeper.sh, run_bronze_evidence.sh
-├── spark_jobs/            # Các job Spark cho DP1, DP2, DP3
-├── flink_jobs/            # Job Flink xử lý luồng event (CHƯA có)
-├── notebooks/             # Notebook báo cáo chất lượng dữ liệu (CHƯA có; output xóa trước khi commit)
-├── dags/                  # Airflow DAG cho DP1, DP2, DP3 (CHƯA có)
-├── sql/                   # DDL cho bảng ở các zone và Data Warehouse (CHƯA có)
-├── docker/                # Dockerfile phụ (bản chưa tối ưu để so dung lượng)
-├── Dockerfile             # Image tối ưu của generator (multi-stage)
-├── docker-compose.yml     # MinIO, PostgreSQL và các bước sinh, nạp dữ liệu
-├── .env.example           # Mẫu biến môi trường cho Compose (mật khẩu, cổng)
-├── tests/                 # Unit test
-└── pyproject.toml         # Thư viện Python của dự án (quản lý bằng uv)
+├── .github/               # Cấu hình CI của repository
+│   └── workflows/         # Workflow kiểm tra tự động
+├── configs/               # Profile generator và chính sách bảo trì Iceberg
+├── contracts/             # Registry hợp đồng dữ liệu và luật schema evolution
+│   └── schemas/           # Schema seller-source-v2 và sim-native-v2
+├── dags/                  # Airflow DP1/DP2/DP3, pipeline v2, CDC và bảo trì
+├── docker/                # Dockerfile Airflow/Flink, image so sánh và override DataHub
+├── docs/                  # Tài liệu thiết kế, vận hành, kiểm chứng và rubric
+│   ├── diagrams/          # Sơ đồ kiến trúc và schema (HTML/SVG/PNG/Markdown)
+│   ├── evidence/          # Receipt, log, metric và bằng chứng Spark UI
+│   └── images/            # Ảnh minh họa và ảnh chụp bằng chứng theo thành phần
+├── flink_jobs/            # SQL streaming baseline, late arrival, dedup và window
+│   ├── order_snapshots/   # SQL streaming snapshots
+│   └── order_lifecycle/   # Template streaming lifecycle và kết quả đối chiếu
+├── generator/             # Sinh nguồn batch/stream giả lập và fixture nguồn v2
+│   ├── channels/          # Renderer định dạng riêng của từng Channel
+│   ├── core/              # Mô hình nghiệp vụ, định danh và logic sinh dữ liệu chung
+│   └── delivery/          # Xuất dữ liệu và mô phỏng đặc tính phân phối
+├── infra/                 # Cấu hình hạ tầng triển khai
+│   └── gcp/               # Terraform và Ansible cho môi trường GCP
+├── scripts/               # Script hỗ trợ theo công việc
+│   ├── setup/             # Bootstrap và cấu hình
+│   ├── run/               # Chạy pipeline và publish metadata
+│   └── evidence/          # Thu bằng chứng và đo đạc
+├── spark_jobs/            # Entrypoint theo tầng: bronze/silver/gold/cdc/warehouse/maintenance/measure
+│   └── lib/               # Helper dùng chung, gồm data_contracts/ cho cổng contract
+├── sql/                   # DDL và SQL phục vụ lakehouse/warehouse
+│   └── warehouse_lifecycle/      # Bảng và index PostgreSQL cho Gold v2
+├── tests/
+│   ├── unit/              # Unit test offline (pytest mặc định)
+│   ├── spark/             # Suite cần Spark, planner chạy riêng
+│   └── harness/           # Docker runner stream/CDC/đầu-cuối
+├── trino/                 # Cấu hình truy vấn liên nguồn
+│   └── catalog/           # Connector Iceberg REST và PostgreSQL
+├── README.md              # Tổng quan, cấu trúc và chỉ mục tài liệu
+├── GLOSSARY.md            # Thuật ngữ dùng chung của dự án
+├── Dockerfile             # Image generator tối ưu bằng multi-stage build
+├── docker-compose.yml     # Môi trường nguồn, xử lý và governance local
+├── docker-compose.gcp.yml # Override Compose cho runtime GCP
+├── .env.example           # Mẫu biến môi trường Compose
+├── .pre-commit-config.yaml # Kiểm tra trước commit
+├── pyproject.toml         # Dependency Python và cấu hình pytest
+├── uv.lock                # Khóa phiên bản dependency bằng uv
+└── requirements.lock      # Dependency đã khóa cho image/runtime
 ```
+
+Helper dùng import đầy đủ, ví dụ `from spark_jobs.lib.return_label import label_line`.
+Driver và worker dùng `PYTHONPATH=/opt` khi mount package tại `/opt/spark_jobs`;
+harness dùng `PYTHONPATH=/workspace`. Job có Python RDD gửi zip toàn package tới worker.
+Wheel generator giữ riêng `generator`, không thêm PySpark vào unit dependencies.
 
 ## 6. Tài liệu chi tiết
 
 | Tài liệu | Nội dung |
 |---|---|
-| [docs/plan.md](docs/plan.md) | **Kế hoạch chốt**: kiến trúc lakehouse, sáu giai đoạn tới 100 điểm, ngân sách RAM đo được, đường lên cloud |
+| [Plan tổng](docs/high-level-architecture-plan.md) | Phạm vi hiện hành Q1–Q51, phase P1–P4 và ràng buộc Cloud |
+| [Discovery mở rộng](docs/plan-expansion-discovery.md) | 15 nhánh khảo sát, research gốc và Q52–Q55 đã chốt |
+| [Thiết kế scope bổ sung](docs/expanded-scope-design.md) | Impact Q52–Q59, quantity trace, S19–S30 và policy đã chốt |
+| [Contract nhãn v2](docs/return-label-contract.md) | Event/known-time, allocation windows, maturity/correction, L01–L17 và migration |
+| [Điều kiện triển khai](docs/implementation-readiness.md) | Contract, gate G0–G4, scenario và tiêu chí evidence trước full-scale |
+| [Acceptance ledger](docs/de-acceptance-ledger.md) | Rubric DE/MLE hiện hành, mapping phase/proof và quy cách nghiệm thu |
+| [ADR index](docs/adr/README.md) | Quyết định và quan hệ thay thế, dẫn chiếu theo tên file đầy đủ |
+| [docs/architecture-decisions.md](docs/architecture-decisions.md) | Kiến trúc DE đã triển khai, vai trò Iceberg/REST catalog và warehouse |
+| [docs/terminology.md](docs/terminology.md) | Thuật ngữ nghiệp vụ và định nghĩa Bronze/Silver/Gold |
 | [docs/Domain.md](docs/Domain.md) | Business domain, thuật ngữ, bài toán dự đoán, vấn đề dữ liệu cần mô phỏng |
 | [docs/generator-design.md](docs/generator-design.md) | Thiết kế Data Generator: kiến trúc, đường thời gian Batch và Stream, vấn đề dữ liệu, nơi lưu, cấu hình, bằng chứng chất lượng |
 | [docs/channel-sources.md](docs/channel-sources.md) | Nguồn tài liệu và mức tin cậy của dạng dữ liệu từng Channel |
 | [docs/Docker.md](docs/Docker.md) | Docker Compose của môi trường nguồn, tối ưu dung lượng image generator |
-| [docs/spark.md](docs/spark.md) | Tối ưu Spark giai đoạn Bronze: baseline, chuỗi tối ưu, bằng chứng Spark UI |
-| [docs/silver.md](docs/silver.md) | Tầng Silver: hai bảng `stg_*` theo kênh, độ hạt Order Line, khoá dedup, kiểu dữ liệu, số đo lần chạy thật, và hai khoản còn mở |
+| [docs/spark.md](docs/spark.md) | Tối ưu Spark Bronze: baseline, chuỗi tối ưu, ảnh Spark UI và tích hợp Airflow |
+| [docs/silver.md](docs/silver.md) | Tầng Silver: hai bảng `stg_*` theo kênh, độ hạt Order Line, khoá dedup, kiểu dữ liệu, số đo lần chạy thật, và quyết định chuyển tiếp sang Gold |
+| [docs/silver-five-channels.md](docs/silver-five-channels.md) | Silver cho đủ năm Channel: mapping, số đo và kiểm tra dữ liệu |
+| [docs/airflow.md](docs/airflow.md) | DP1/DP2/DP3 trên Airflow, kiểm cấu hình runtime và ảnh Graph/Grid |
+| [docs/flink.md](docs/flink.md) | Baseline, watermark, keyed state/dedup và window với kết quả đã đo |
+| [docs/trino.md](docs/trino.md) | Trino federation giữa Iceberg và PostgreSQL |
+| [docs/gold.md](docs/gold.md) | Gold fact năm Channel, Amazon SCD2, feature offline và bảng nhãn Walmart |
+| [docs/gold-design.md](docs/gold-design.md) | Quyết định thiết kế Gold và SCD2 đã chốt |
+| [docs/schema.md](docs/schema.md) | Sơ đồ bảng Bronze/Silver/Gold và quan hệ fact–dim đã kiểm qua Trino |
+| [docs/storage.md](docs/storage.md) | Compaction Iceberg và index PostgreSQL với phép đo trước/sau |
+| [Nguồn chung v2](docs/source-contract-order-lifecycle.md) | Contract nguồn native/operational, identity, coverage và horizon |
+| [Fixture nguồn v2](docs/source-order-lifecycle-fixtures.md) | Profile và cách kiểm fixture nguồn chung |
+| [Quy mô nguồn v2](docs/source-order-lifecycle-scale.md) | Sinh nguồn theo profile scale và kiểm manifest |
+| [Spark v2](docs/spark-order-lifecycle.md) | Baseline và phép đo xử lý skew trên workload lifecycle |
+| [Silver v2](docs/silver-order-lifecycle.md) | Lifecycle, allocation, đối soát và coverage receipt |
+| [Gold v2](docs/gold-order-lifecycle.md) | Fact, dimension, feature và validation v2 |
+| [Warehouse v2](docs/warehouse-order-lifecycle.md) | Export PostgreSQL, index và đo EXPLAIN |
+| [Streaming v2](docs/stream-order-lifecycle.md) | Template Flink và đối chiếu kết quả với nguồn v2 |
+| [CDC v2](docs/cdc-order-lifecycle.md) | Bootstrap, boundary, mutation và kiểm CDC Walmart v2 |
+| [Airflow v2](docs/airflow-order-lifecycle.md) | Điều phối pipeline và receipt theo run |
+| [DataHub v2](docs/datahub-order-lifecycle.md) | Publish lineage và assertion của pipeline v2 |
+| [Kiểm đầu-cuối local v2](docs/e2e-order-lifecycle-local.md) | Runner nguồn → lakehouse → PostgreSQL và giới hạn bằng chứng |
+| [DE lane 2026-10-18](docs/plan-de-lane-20261018.md) | Phạm vi bàn giao nguồn v2, artifact và kết quả kiểm local |
+| [DE scope mở rộng (v2)](docs/de-order-lifecycle-status.md) | Bảng một trang: từng gói v2 (nguồn, Silver, Gold, warehouse, stream, CDC, DAG), tài liệu, kết quả local và GCP |
+| [Triển khai GCP](docs/gcp-checklist.md) | Các bước người học tự chạy trên GCP; chi tiết ở [gcp-deploy](docs/gcp-deploy.md) và [gcp-runtime](docs/gcp-runtime.md) |
+| [DE-N1: data contracts](docs/novel-de-n1-data-contracts.md) | Registry schema, luật tiến hóa và cổng cách ly đầu Silver v2 |
+| [DE-N2: Iceberg tự bảo trì](docs/novel-de-n2-iceberg-maintenance.md) | Chính sách compact/z-order/expire/orphan dry-run, giữ tag `gen-*`, retry lỗi tạm |
+| [docs/novel-ideas.md](docs/novel-ideas.md) | Kế hoạch đo và kết quả hai ý tưởng Novel |
+| [docs/cdc.md](docs/cdc.md) | Debezium CDC cho nguồn Walmart và cách đo thay đổi từ PostgreSQL đến Kafka |
+| [docs/datahub.md](docs/datahub.md) | Lineage và assertion validation trên UI DataHub cho DP1/DP2/DP3 |
+| [docs/de-progress.md](docs/de-progress.md) | Trạng thái artifact/bằng chứng đối chiếu rubric DE |
+| [docs/de-rubric-matrix.md](docs/de-rubric-matrix.md) | Đối chiếu 38 dòng rubric với artifact và proof |
+| [docs/de-audit-20261015.md](docs/de-audit-20261015.md) | Ba phát hiện rà soát và kết quả đóng bằng chứng |
 | [docs/data-quality-report-batch.md](docs/data-quality-report-batch.md) | Báo cáo chất lượng dữ liệu của generator phần Batch, đối chiếu từng dòng rubric với số đo và ảnh chụp |
 | [docs/data-quality-report-stream.md](docs/data-quality-report-stream.md) | Báo cáo phần Stream: trễ, lệch thứ tự, trùng, burst livestream, và số tin trong Kafka |
 
-Các tài liệu sau sẽ được bổ sung cùng phần triển khai tương ứng: Flink và tối ưu lưu trữ, schema phần Gold (`dim_`/`fact_`/`feat_`/`obt_`) và SCD2, Orchestration, Governance.
+Phạm vi và các bằng chứng còn lại được theo dõi trong [tiến độ DE](docs/de-progress.md).
 
 ## 7. Lộ trình
 
-Module data engineering (tài liệu này) là nền cho phần mở rộng ở giai đoạn sau: Feature Store (Feast), huấn luyện và versioning mô hình, serving, drift detection, CI/CD, observability, và các thành phần RAG/Agent. Sơ đồ ở mục 2 sẽ được mở rộng khi các phần đó được thiết kế.
+Lộ trình hiện hành nằm trong [plan tổng](docs/high-level-architecture-plan.md):
+P1 nguồn chung/lakehouse/warehouse, P2 Feast + ML, P3 UI + agent, P4 hoàn thiện
+Cloud/CI/CD/Ops. POC Cloud và phụ thuộc kỹ thuật bắt đầu từ phase cần dùng;
+mọi thao tác GCP do người dùng chủ động thực hiện. Sơ đồ mục 2 mô tả nền DE
+hiện có; sơ đồ toàn hệ thống sẽ cập nhật theo các deployable units thực tế.
+
+Hiệu năng Silver lifecycle: [phân tích và lệnh kiểm](docs/silver-order-lifecycle-performance.md).

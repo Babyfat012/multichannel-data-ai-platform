@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg viewBox="0 0 1200 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="fsds-arch-title fsds-arch-desc">
         <title id="fsds-arch-title">Nền tảng dữ liệu đa kênh phía Seller</title>
-        <desc id="fsds-arch-desc">Sơ đồ tích hợp nền tảng FSDS: nguồn Channel bên trái đẩy dữ liệu vào Kafka và MinIO, năm service trong Docker Compose xử lý ở giữa với Spark và Flink là hai engine trọng tâm, DBeaver và warehouse PostgreSQL tiêu thụ bên phải, DataHub phủ ngang bên dưới để bắt lineage.</desc>
+        <desc id="fsds-arch-desc">Sơ đồ tích hợp FSDS: file nguồn và PostgreSQL đi vào Spark, Channel events qua Kafka và Flink, Spark ghi Iceberg lên MinIO và xuất Gold qua JDBC tới PostgreSQL; publisher gửi lineage vào DataHub.</desc>
 
         <defs>
 <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;family=Noto+Serif:ital@0;1&amp;display=swap');</style>
@@ -72,21 +72,27 @@
         <rect x="978" y="166" width="30" height="13" fill="#f5f5f5"/>
         <text x="980" y="176" font-family="'Geist Mono',monospace" font-size="7" letter-spacing="0.08em" fill="#eb6c36">JDBC</text>
 
-        <!-- 10 · MinIO → Warehouse, copy Gold (secondary) -->
-        <path d="M940,300 H972 Q980,300 980,292 V220 Q980,212 988,212 H1000"
+        <!-- 10 · Spark → PostgreSQL warehouse over JDBC (secondary) -->
+        <path d="M328,248 V270 H980 Q988,270 988,262 V220 Q988,212 996,212 H1000"
               fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-        <rect x="986" y="248" width="50" height="13" fill="#f5f5f5"/>
-        <text x="988" y="258" font-family="'Geist Mono',monospace" font-size="7" letter-spacing="0.06em" fill="#4f5d75">COPY GOLD</text>
+        <rect x="650" y="260" width="70" height="13" fill="#f5f5f5"/>
+        <text x="685" y="270" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" letter-spacing="0.06em" fill="#4f5d75">GOLD · JDBC</text>
+
+        <!-- PostgreSQL source → Spark JDBC read -->
+        <path d="M1000,202 H976 V164 H392 V176"
+              fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <rect x="700" y="156" width="80" height="13" fill="#f5f5f5"/>
+        <text x="740" y="166" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" letter-spacing="0.06em" fill="#4f5d75">WALMART JDBC</text>
 
         <!-- 11 · Airflow → Spark (trigger — dashed, unlabelled, left gutter) -->
         <path d="M276,362 H272 Q266,362 266,356 V306 A6,6 0 0,1 266,294 V236 Q266,230 272,230 H276"
               fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-sm)"/>
 
-        <!-- 12 · DataHub → zone (auth / lineage) -->
-        <line x1="608" y1="460" x2="608" y2="412"
+        <!-- 12 · Airflow metadata publisher → DataHub (lineage) -->
+        <line x1="608" y1="384" x2="608" y2="460"
               stroke="#eb6c36" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow-accent)"/>
-        <rect x="614" y="428" width="46" height="13" fill="#f5f5f5"/>
-        <text x="616" y="438" font-family="'Geist Mono',monospace" font-size="7" letter-spacing="0.08em" fill="#eb6c36">LINEAGE</text>
+        <rect x="614" y="428" width="54" height="13" fill="#f5f5f5"/>
+        <text x="616" y="438" font-family="'Geist Mono',monospace" font-size="7" letter-spacing="0.08em" fill="#eb6c36">METADATA</text>
 
 
         <!-- ===== Số thứ tự mũi tên: B = luồng Batch, S = luồng Stream ===== -->
@@ -106,8 +112,8 @@
         <text x="872" y="266.6" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" font-weight="500" fill="#4f5d75">B4</text>
         <circle cx="966" cy="160" r="7.5" fill="#f5f5f5" stroke="#eb6c36" stroke-width="0.8"/>
         <text x="966" y="162.6" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" font-weight="500" fill="#eb6c36">B5</text>
-        <circle cx="968" cy="300" r="7.5" fill="#f5f5f5" stroke="#4f5d75" stroke-width="0.8"/>
-        <text x="968" y="302.6" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" font-weight="500" fill="#4f5d75">B6</text>
+        <circle cx="328" cy="270" r="7.5" fill="#f5f5f5" stroke="#4f5d75" stroke-width="0.8"/>
+        <text x="328" y="272.6" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" font-weight="500" fill="#4f5d75">B6</text>
 
         <!-- ============ SOURCES (left column, external) ============ -->
         <rect x="40" y="92" width="160" height="64" rx="6" fill="#4f5d75" fill-opacity="0.06" stroke="#7a8399" stroke-width="1"/>

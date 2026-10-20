@@ -1,0 +1,91 @@
+{
+  "description": "Hợp đồng sim-native-v2/amazon/1; suy luận từ fixture, required là giao các bản ghi.",
+  "properties": {
+    "AmazonOrderId": {
+      "type": "string"
+    },
+    "OrderItems": {
+      "items": {
+        "properties": {
+          "ItemPrice": {
+            "properties": {
+              "Amount": {
+                "type": "string"
+              },
+              "CurrencyCode": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "Amount",
+              "CurrencyCode"
+            ],
+            "type": "object"
+          },
+          "OrderItemId": {
+            "type": "string"
+          },
+          "PromotionDiscount": {
+            "properties": {
+              "Amount": {
+                "type": "string"
+              },
+              "CurrencyCode": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "Amount",
+              "CurrencyCode"
+            ],
+            "type": "object"
+          },
+          "QuantityOrdered": {
+            "type": "integer"
+          },
+          "SellerSKU": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ItemPrice",
+          "OrderItemId",
+          "PromotionDiscount",
+          "QuantityOrdered",
+          "SellerSKU"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "OrderStatus": {
+      "type": "string"
+    },
+    "OrderTotal": {
+      "properties": {
+        "Amount": {
+          "type": "string"
+        },
+        "CurrencyCode": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "Amount",
+        "CurrencyCode"
+      ],
+      "type": "object"
+    },
+    "PurchaseDate": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "AmazonOrderId",
+    "OrderItems",
+    "OrderStatus",
+    "OrderTotal",
+    "PurchaseDate"
+  ],
+  "type": "object"
+}

@@ -1,4 +1,4 @@
-"""Test cho `generator/day_selection.py` — lọc file nguồn xuống N ngày export.
+"""Test cho `generator/lib/day_selection.py` — lọc file nguồn xuống N ngày export.
 
 Vì sao test phần này: nó đứng giữa 13 GB và 1,4 GB dữ liệu đưa vào PostgreSQL. Hai hành vi
 dễ làm sai mà hậu quả lặng lẽ:
@@ -6,8 +6,8 @@ dễ làm sai mà hậu quả lặng lẽ:
   * Lọc sai hướng -> `seller.skus` bị loại sạch, bảng SKU rỗng, và không có lỗi nào báo.
   * Lấy N ngày liền nhau ở cuối thay vì rải đều -> tập mẫu toàn ngày to, không đại diện.
 
-`spark_jobs/day_selection.py` có bản `pick_sample_days` trùng nội dung, test riêng ở
-`tests/test_day_selection.py`. Lý do trùng ghi trong docstring của module.
+`spark_jobs/lib/day_selection.py` có bản `pick_sample_days` trùng nội dung, test riêng ở
+`tests/unit/spark_jobs/lib/test_day_selection.py`. Lý do trùng ghi trong docstring của module.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ SKUS = ["pg-load/seller.skus/part-00000.jsonl"]
 
 def test_pick_khop_voi_ban_trong_spark_jobs():
     """Hai bản trùng code phải cho cùng kết quả, nếu không lệch âm thầm giữa hai container."""
-    from spark_jobs.day_selection import pick_sample_days as spark_pick
+    from spark_jobs.lib.day_selection import pick_sample_days as spark_pick
 
     for n in (0, 1, 2, 20, 180, 500):
         assert pick_sample_days(DAYS, n) == spark_pick(DAYS, n), n

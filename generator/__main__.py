@@ -74,7 +74,7 @@ def main() -> None:
 
 def _run_batch(args: argparse.Namespace) -> None:
     """Sinh Batch theo cấu hình, in tóm tắt manifest."""
-    from generator.batch import BatchRun
+    from generator.generate_order_snapshots import BatchRun
     from generator.config import load_config
 
     config = load_config(args.config)
@@ -89,7 +89,7 @@ def _run_stream(args: argparse.Namespace) -> None:
     """Phát Stream theo cấu hình, in số đo."""
     from generator.config import load_config
     from generator.storage import OutputStore
-    from generator.stream import FileSink, KafkaSink, run_stream
+    from generator.publish_order_snapshot_events import FileSink, KafkaSink, run_stream
 
     config = load_config(args.config)
     if args.output:

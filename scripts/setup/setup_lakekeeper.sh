@@ -7,11 +7,12 @@
 #
 # Chạy lại được (idempotent): đã bootstrap thì bỏ qua, đã có warehouse cùng tên thì bỏ qua.
 #
-# Dùng:  bash scripts/setup_lakekeeper.sh
+# Dùng:  bash scripts/setup/setup_lakekeeper.sh
 # Cần:   docker compose --profile catalog up -d  (lakekeeper + postgres + minio đang chạy)
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 # shellcheck disable=SC1091
 set -a; source .env; set +a
 

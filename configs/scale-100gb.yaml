@@ -5,7 +5,7 @@
 # (byte thô của raw batch data). Hệ số KHÔNG suy từ `default.yaml` mà đo bằng một
 # lần chạy nháp 40.000 Order/ngày (x10): nó cho 4.697.556.950 byte, nên
 # 100,0 GB / 4.697.556.950 x 40.000 = 851.506. Lần nháp cũng xác nhận tổng trong
-# manifest bằng đúng byte thật trên đĩa (xem `tests/test_batch.py`).
+# manifest bằng đúng byte thật trên đĩa (xem `tests/unit/generator/test_generate_order_snapshots.py`).
 #
 # Vì sao 100,0 GB thập phân chứ không phải 100 GiB: `/data` có 98 GiB dùng được.
 # 100 GiB không vừa; 100,0 GB = 93,1 GiB, vừa và còn dư ~5 GiB.

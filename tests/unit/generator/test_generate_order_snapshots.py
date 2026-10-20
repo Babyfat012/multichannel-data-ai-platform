@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pyarrow.parquet as pq
 
-from generator.batch import BatchRun
+from generator.generate_order_snapshots import BatchRun
 
 
 def test_batch_writes_expected_layout_and_manifest(tiny_config):

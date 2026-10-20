@@ -1,0 +1,731 @@
+{
+  "suite": "spark_maintenance_checks",
+  "code_sha256": {
+    "spark_jobs/22_iceberg_maintenance.py": "04161a126300248d8422ed270ffebb6991d620d9d14f1e770a1f2fca735ea58c",
+    "spark_jobs/maintenance_policy.py": "785c63682d7c42308e8afb89012d9e049e14098b8d2648854b399f5eee6d3b91"
+  },
+  "receipts": [
+    {
+      "table": "local.demo.maintenance_normal",
+      "config": {
+        "min_input_files": 12,
+        "small_file_ratio": 1.0,
+        "target_file_size_bytes": 65536,
+        "zorder_columns": [
+          "seller_sku",
+          "created_at"
+        ],
+        "zorder_min_new_files": 20,
+        "max_snapshot_age_hours": 0.0002777777777777778,
+        "retain_last": 3,
+        "generation_tag_prefix": "gen-",
+        "orphans_dry_run": true,
+        "orphan_age_hours": 72,
+        "max_attempts": 3,
+        "backoff_seconds": 0,
+        "max_backoff_seconds": 8,
+        "probe_predicates": [
+          {
+            "name": "sku-0001",
+            "ranges": {
+              "seller_sku": [
+                "sku-0001",
+                "sku-0001"
+              ]
+            }
+          }
+        ]
+      },
+      "attempts": [
+        {
+          "kind": "compact",
+          "attempt": 1,
+          "status": "success",
+          "result": [
+            {
+              "rewritten_data_files_count": 32,
+              "added_data_files_count": 16,
+              "rewritten_bytes_count": 839836,
+              "failed_data_files_count": 0,
+              "removed_delete_files_count": 0
+            }
+          ]
+        },
+        {
+          "kind": "zorder",
+          "attempt": 1,
+          "status": "success",
+          "result": [
+            {
+              "rewritten_data_files_count": 16,
+              "added_data_files_count": 12,
+              "rewritten_bytes_count": 749359,
+              "failed_data_files_count": 0,
+              "removed_delete_files_count": 0
+            }
+          ]
+        },
+        {
+          "kind": "expire_snapshots",
+          "attempt": 1,
+          "status": "success",
+          "result": [
+            {
+              "deleted_data_files_count": 0,
+              "deleted_position_delete_files_count": 0,
+              "deleted_equality_delete_files_count": 0,
+              "deleted_manifest_files_count": 0,
+              "deleted_manifest_lists_count": 30,
+              "deleted_statistics_files_count": 0
+            }
+          ]
+        },
+        {
+          "kind": "remove_orphans",
+          "attempt": 1,
+          "status": "success",
+          "result": []
+        }
+      ],
+      "status": "success",
+      "plan": {
+        "actions": [
+          {
+            "kind": "compact",
+            "partitions": [
+              {
+                "part": 1
+              },
+              {
+                "part": 0
+              }
+            ],
+            "target_file_size_bytes": 65536,
+            "min_input_files": 12,
+            "reason": "Partition có đủ nhiều file và size trung bình dưới ngưỡng"
+          },
+          {
+            "kind": "zorder",
+            "columns": [
+              "seller_sku",
+              "created_at"
+            ],
+            "target_file_size_bytes": 65536,
+            "new_data_files": 32,
+            "reason": "Chưa có mốc z-order/không còn ancestry mốc"
+          },
+          {
+            "kind": "expire_snapshots",
+            "snapshot_ids": [
+              7011336377396994157,
+              6541158186097176970,
+              928345483218852378,
+              7270395507783077228,
+              792177344090185291,
+              1679270981247042061,
+              3892465795359063148,
+              286746313465982508,
+              7190235262852076776,
+              5415490052405320922,
+              4785869758303231899,
+              2729434937088286767,
+              6814629110152694188,
+              7853648791057943681,
+              6587206156538048527,
+              6606488237808353915,
+              5375105510215789811,
+              1226700550233696545,
+              7335494074491214432,
+              4458958979435651592,
+              3247391584809638029,
+              1837822931706531524,
+              409885300420315350,
+              8178574715875348509,
+              3785507680246602773,
+              6822295485354066039,
+              7632981946744841414,
+              2537801217049139998
+            ],
+            "older_than": "2026-10-19T02:31:46.060995+00:00",
+            "retain_last": 3,
+            "reason": "Snapshot quá tuổi, ngoài retain_last và không bị ref bảo vệ"
+          },
+          {
+            "kind": "remove_orphans",
+            "dry_run": true,
+            "older_than": "2026-10-16T02:31:47.060995+00:00",
+            "reason": "Kiểm kê orphan mặc định không xoá; cutoff ít nhất 72 giờ"
+          }
+        ],
+        "protected_snapshot_ids": [
+          1021544089834556033,
+          6063023505189594677
+        ],
+        "generation_tags": [
+          "gen-1"
+        ],
+        "no_op": false,
+        "reason": "Có ngưỡng bảo trì bị vượt"
+      },
+      "sql": [
+        "CALL `local`.system.rewrite_data_files(table => 'demo.maintenance_normal', strategy => 'binpack', where => '(`part` = 1) OR (`part` = 0)', options => map('target-file-size-bytes', '65536', 'min-input-files', '12'))",
+        "CALL `local`.system.rewrite_data_files(table => 'demo.maintenance_normal', strategy => 'sort', sort_order => 'zorder(seller_sku,created_at)', options => map('target-file-size-bytes', '65536', 'rewrite-all', 'true'))",
+        "CALL `local`.system.expire_snapshots(table => 'demo.maintenance_normal', older_than => TIMESTAMP '2026-10-19 02:31:46.060995', retain_last => 3)",
+        "CALL `local`.system.remove_orphan_files(table => 'demo.maintenance_normal', older_than => TIMESTAMP '2026-10-16 02:31:47.060995', dry_run => true)"
+      ],
+      "before": {
+        "rows": 8192,
+        "fingerprint": "253838296152053650978",
+        "columns": [
+          "id",
+          "part",
+          "seller_sku",
+          "created_at",
+          "payload"
+        ],
+        "data_files": 32,
+        "total_bytes": 839836,
+        "snapshots": 32,
+        "probes": {
+          "sku-0001": {
+            "candidate_data_files": 32,
+            "seconds": [
+              0.18898365099994408,
+              0.1619804289998683,
+              0.18584215600003517
+            ],
+            "n": 3,
+            "warmup": 1
+          }
+        }
+      },
+      "generation_before": {
+        "gen-1": {
+          "rows": 4096,
+          "fingerprint": "106188931843360907061",
+          "columns": [
+            "id",
+            "part",
+            "seller_sku",
+            "created_at",
+            "payload"
+          ]
+        }
+      },
+      "after": {
+        "rows": 8192,
+        "fingerprint": "253838296152053650978",
+        "columns": [
+          "id",
+          "part",
+          "seller_sku",
+          "created_at",
+          "payload"
+        ],
+        "data_files": 12,
+        "total_bytes": 659686,
+        "snapshots": 4,
+        "probes": {
+          "sku-0001": {
+            "candidate_data_files": 2,
+            "seconds": [
+              0.07639958100003241,
+              0.0747059170000739,
+              0.07087175800006662
+            ],
+            "n": 3,
+            "warmup": 1
+          }
+        }
+      },
+      "generation_after": {
+        "gen-1": {
+          "rows": 4096,
+          "fingerprint": "106188931843360907061",
+          "columns": [
+            "id",
+            "part",
+            "seller_sku",
+            "created_at",
+            "payload"
+          ]
+        }
+      },
+      "second_plan": {
+        "actions": [
+          {
+            "kind": "remove_orphans",
+            "dry_run": true,
+            "older_than": "2026-10-16T02:31:54.206671+00:00",
+            "reason": "Kiểm kê orphan mặc định không xoá; cutoff ít nhất 72 giờ"
+          }
+        ],
+        "protected_snapshot_ids": [
+          5590756524413128423,
+          6063023505189594677
+        ],
+        "generation_tags": [
+          "gen-1"
+        ],
+        "no_op": true,
+        "reason": "no-op: không hành động thay đổi bảng; chỉ kiểm kê orphan"
+      }
+    },
+    {
+      "table": "local.demo.maintenance_retry",
+      "config": {
+        "min_input_files": 12,
+        "small_file_ratio": 1.0,
+        "target_file_size_bytes": 65536,
+        "zorder_columns": [
+          "seller_sku",
+          "created_at"
+        ],
+        "zorder_min_new_files": 20,
+        "max_snapshot_age_hours": 0.0002777777777777778,
+        "retain_last": 3,
+        "generation_tag_prefix": "gen-",
+        "orphans_dry_run": true,
+        "orphan_age_hours": 72,
+        "max_attempts": 3,
+        "backoff_seconds": 0,
+        "max_backoff_seconds": 8,
+        "probe_predicates": [
+          {
+            "name": "sku-0001",
+            "ranges": {
+              "seller_sku": [
+                "sku-0001",
+                "sku-0001"
+              ]
+            }
+          }
+        ]
+      },
+      "attempts": [
+        {
+          "kind": "compact",
+          "attempt": 1,
+          "status": "failed",
+          "transient": true,
+          "error": "RuntimeError: CommitFailedException: injected transient failure trước procedure",
+          "backoff_seconds": 0
+        },
+        {
+          "kind": "compact",
+          "attempt": 2,
+          "status": "failed",
+          "transient": true,
+          "error": "RuntimeError: CommitFailedException: injected transient failure trước procedure",
+          "backoff_seconds": 0
+        },
+        {
+          "kind": "compact",
+          "attempt": 3,
+          "status": "success",
+          "result": [
+            {
+              "rewritten_data_files_count": 32,
+              "added_data_files_count": 16,
+              "rewritten_bytes_count": 839836,
+              "failed_data_files_count": 0,
+              "removed_delete_files_count": 0
+            }
+          ]
+        },
+        {
+          "kind": "zorder",
+          "attempt": 1,
+          "status": "success",
+          "result": [
+            {
+              "rewritten_data_files_count": 16,
+              "added_data_files_count": 12,
+              "rewritten_bytes_count": 749356,
+              "failed_data_files_count": 0,
+              "removed_delete_files_count": 0
+            }
+          ]
+        },
+        {
+          "kind": "expire_snapshots",
+          "attempt": 1,
+          "status": "success",
+          "result": [
+            {
+              "deleted_data_files_count": 0,
+              "deleted_position_delete_files_count": 0,
+              "deleted_equality_delete_files_count": 0,
+              "deleted_manifest_files_count": 0,
+              "deleted_manifest_lists_count": 30,
+              "deleted_statistics_files_count": 0
+            }
+          ]
+        },
+        {
+          "kind": "remove_orphans",
+          "attempt": 1,
+          "status": "success",
+          "result": []
+        }
+      ],
+      "status": "success",
+      "plan": {
+        "actions": [
+          {
+            "kind": "compact",
+            "partitions": [
+              {
+                "part": 1
+              },
+              {
+                "part": 0
+              }
+            ],
+            "target_file_size_bytes": 65536,
+            "min_input_files": 12,
+            "reason": "Partition có đủ nhiều file và size trung bình dưới ngưỡng"
+          },
+          {
+            "kind": "zorder",
+            "columns": [
+              "seller_sku",
+              "created_at"
+            ],
+            "target_file_size_bytes": 65536,
+            "new_data_files": 32,
+            "reason": "Chưa có mốc z-order/không còn ancestry mốc"
+          },
+          {
+            "kind": "expire_snapshots",
+            "snapshot_ids": [
+              4340740744948082144,
+              5042598506889395869,
+              313640560619712112,
+              7376999517286171296,
+              4050904198514471459,
+              5237608976694848004,
+              2247405891279203121,
+              9109077508542593979,
+              5118911574880443620,
+              9046541848564591972,
+              7035541278251372187,
+              3252842713189141509,
+              7484339578593144802,
+              1606686514640640863,
+              7625524732025585671,
+              6992884908967844896,
+              85987279641461697,
+              4055844348063002183,
+              5955117480720852100,
+              7229072924514982749,
+              8152667202925658171,
+              6165982170968279220,
+              7213180746915182366,
+              8219250885170486952,
+              3690665117376824491,
+              4347710297676183794,
+              5757049813399224691,
+              6712266529389166869
+            ],
+            "older_than": "2026-10-19T02:31:58.927668+00:00",
+            "retain_last": 3,
+            "reason": "Snapshot quá tuổi, ngoài retain_last và không bị ref bảo vệ"
+          },
+          {
+            "kind": "remove_orphans",
+            "dry_run": true,
+            "older_than": "2026-10-16T02:31:59.927668+00:00",
+            "reason": "Kiểm kê orphan mặc định không xoá; cutoff ít nhất 72 giờ"
+          }
+        ],
+        "protected_snapshot_ids": [
+          806814475443751122,
+          976799129318884729
+        ],
+        "generation_tags": [
+          "gen-1"
+        ],
+        "no_op": false,
+        "reason": "Có ngưỡng bảo trì bị vượt"
+      },
+      "sql": [
+        "CALL `local`.system.rewrite_data_files(table => 'demo.maintenance_retry', strategy => 'binpack', where => '(`part` = 1) OR (`part` = 0)', options => map('target-file-size-bytes', '65536', 'min-input-files', '12'))",
+        "CALL `local`.system.rewrite_data_files(table => 'demo.maintenance_retry', strategy => 'sort', sort_order => 'zorder(seller_sku,created_at)', options => map('target-file-size-bytes', '65536', 'rewrite-all', 'true'))",
+        "CALL `local`.system.expire_snapshots(table => 'demo.maintenance_retry', older_than => TIMESTAMP '2026-10-19 02:31:58.927668', retain_last => 3)",
+        "CALL `local`.system.remove_orphan_files(table => 'demo.maintenance_retry', older_than => TIMESTAMP '2026-10-16 02:31:59.927668', dry_run => true)"
+      ],
+      "before": {
+        "rows": 8192,
+        "fingerprint": "253838296152053650978",
+        "columns": [
+          "id",
+          "part",
+          "seller_sku",
+          "created_at",
+          "payload"
+        ],
+        "data_files": 32,
+        "total_bytes": 839836,
+        "snapshots": 32,
+        "probes": {
+          "sku-0001": {
+            "candidate_data_files": 32,
+            "seconds": [
+              0.139601631000005,
+              0.1600978500000565,
+              0.1314476160000595
+            ],
+            "n": 3,
+            "warmup": 1
+          }
+        }
+      },
+      "generation_before": {
+        "gen-1": {
+          "rows": 4096,
+          "fingerprint": "106188931843360907061",
+          "columns": [
+            "id",
+            "part",
+            "seller_sku",
+            "created_at",
+            "payload"
+          ]
+        }
+      },
+      "after": {
+        "rows": 8192,
+        "fingerprint": "253838296152053650978",
+        "columns": [
+          "id",
+          "part",
+          "seller_sku",
+          "created_at",
+          "payload"
+        ],
+        "data_files": 12,
+        "total_bytes": 658498,
+        "snapshots": 4,
+        "probes": {
+          "sku-0001": {
+            "candidate_data_files": 2,
+            "seconds": [
+              0.05724093700018784,
+              0.04537783599994327,
+              0.05035725099992305
+            ],
+            "n": 3,
+            "warmup": 1
+          }
+        }
+      },
+      "generation_after": {
+        "gen-1": {
+          "rows": 4096,
+          "fingerprint": "106188931843360907061",
+          "columns": [
+            "id",
+            "part",
+            "seller_sku",
+            "created_at",
+            "payload"
+          ]
+        }
+      },
+      "second_plan": {
+        "actions": [
+          {
+            "kind": "remove_orphans",
+            "dry_run": true,
+            "older_than": "2026-10-16T02:32:04.590225+00:00",
+            "reason": "Kiểm kê orphan mặc định không xoá; cutoff ít nhất 72 giờ"
+          }
+        ],
+        "protected_snapshot_ids": [
+          806814475443751122,
+          1862908332178699428
+        ],
+        "generation_tags": [
+          "gen-1"
+        ],
+        "no_op": true,
+        "reason": "no-op: không hành động thay đổi bảng; chỉ kiểm kê orphan"
+      }
+    },
+    {
+      "table": "local.demo.maintenance_fatal",
+      "config": {
+        "min_input_files": 12,
+        "small_file_ratio": 1.0,
+        "target_file_size_bytes": 65536,
+        "zorder_columns": [
+          "seller_sku",
+          "created_at"
+        ],
+        "zorder_min_new_files": 20,
+        "max_snapshot_age_hours": 0.0002777777777777778,
+        "retain_last": 3,
+        "generation_tag_prefix": "gen-",
+        "orphans_dry_run": true,
+        "orphan_age_hours": 72,
+        "max_attempts": 3,
+        "backoff_seconds": 0,
+        "max_backoff_seconds": 8,
+        "probe_predicates": [
+          {
+            "name": "sku-0001",
+            "ranges": {
+              "seller_sku": [
+                "sku-0001",
+                "sku-0001"
+              ]
+            }
+          }
+        ]
+      },
+      "attempts": [
+        {
+          "kind": "compact",
+          "attempt": 1,
+          "status": "failed",
+          "transient": false,
+          "error": "ValueError: Injected fatal failure trước procedure"
+        }
+      ],
+      "status": "failed",
+      "plan": {
+        "actions": [
+          {
+            "kind": "compact",
+            "partitions": [
+              {
+                "part": 1
+              },
+              {
+                "part": 0
+              }
+            ],
+            "target_file_size_bytes": 65536,
+            "min_input_files": 12,
+            "reason": "Partition có đủ nhiều file và size trung bình dưới ngưỡng"
+          },
+          {
+            "kind": "zorder",
+            "columns": [
+              "seller_sku",
+              "created_at"
+            ],
+            "target_file_size_bytes": 65536,
+            "new_data_files": 32,
+            "reason": "Chưa có mốc z-order/không còn ancestry mốc"
+          },
+          {
+            "kind": "expire_snapshots",
+            "snapshot_ids": [
+              2722520150448449839,
+              1398501994236704269,
+              1732253619514477383,
+              4317959788259674921,
+              1274920602042300456,
+              6501096463807175825,
+              7759127144416611549,
+              138714558181864968,
+              2735560809255262015,
+              5582711680557860325,
+              7339167366241399888,
+              8417839434911017122,
+              4267753278290063473,
+              8612509912985851387,
+              5100356902684559482,
+              8058726304597536953,
+              6239340170824228002,
+              7267063915061344573,
+              6340874402584964920,
+              7228260256417680102,
+              1950416485816731614,
+              7335788167683147188,
+              4694850933334893576,
+              7159324722376462514,
+              1459901715537811962,
+              5013256189409861045,
+              8390447643806903270,
+              8830962935845204775
+            ],
+            "older_than": "2026-10-19T02:32:08.826834+00:00",
+            "retain_last": 3,
+            "reason": "Snapshot quá tuổi, ngoài retain_last và không bị ref bảo vệ"
+          },
+          {
+            "kind": "remove_orphans",
+            "dry_run": true,
+            "older_than": "2026-10-16T02:32:09.826834+00:00",
+            "reason": "Kiểm kê orphan mặc định không xoá; cutoff ít nhất 72 giờ"
+          }
+        ],
+        "protected_snapshot_ids": [
+          3058727392684616964,
+          3784330570874549303
+        ],
+        "generation_tags": [
+          "gen-1"
+        ],
+        "no_op": false,
+        "reason": "Có ngưỡng bảo trì bị vượt"
+      },
+      "sql": [
+        "CALL `local`.system.rewrite_data_files(table => 'demo.maintenance_fatal', strategy => 'binpack', where => '(`part` = 1) OR (`part` = 0)', options => map('target-file-size-bytes', '65536', 'min-input-files', '12'))",
+        "CALL `local`.system.rewrite_data_files(table => 'demo.maintenance_fatal', strategy => 'sort', sort_order => 'zorder(seller_sku,created_at)', options => map('target-file-size-bytes', '65536', 'rewrite-all', 'true'))",
+        "CALL `local`.system.expire_snapshots(table => 'demo.maintenance_fatal', older_than => TIMESTAMP '2026-10-19 02:32:08.826834', retain_last => 3)",
+        "CALL `local`.system.remove_orphan_files(table => 'demo.maintenance_fatal', older_than => TIMESTAMP '2026-10-16 02:32:09.826834', dry_run => true)"
+      ],
+      "before": {
+        "rows": 8192,
+        "fingerprint": "253838296152053650978",
+        "columns": [
+          "id",
+          "part",
+          "seller_sku",
+          "created_at",
+          "payload"
+        ],
+        "data_files": 32,
+        "total_bytes": 839836,
+        "snapshots": 32,
+        "probes": {
+          "sku-0001": {
+            "candidate_data_files": 32,
+            "seconds": [
+              0.10451136899996527,
+              0.10833662400000321,
+              0.11146403599991572
+            ],
+            "n": 3,
+            "warmup": 1
+          }
+        }
+      },
+      "generation_before": {
+        "gen-1": {
+          "rows": 4096,
+          "fingerprint": "106188931843360907061",
+          "columns": [
+            "id",
+            "part",
+            "seller_sku",
+            "created_at",
+            "payload"
+          ]
+        }
+      },
+      "error": "ValueError: Injected fatal failure trước procedure"
+    }
+  ],
+  "run": {
+    "date": "2026-10-19",
+    "runner": "planner",
+    "command": "docker run --rm --network none --read-only --tmpfs /tmp:rw,size=2g -v fsds_airflow-data:/ivy:ro --mount type=bind,src=$PWD,dst=/workspace,readonly --entrypoint python fsds-airflow:2.10.5-spark3.5.3 /workspace/tests/spark_maintenance_checks.py",
+    "result": "Ran 3 tests in 39.176s OK",
+    "wall_seconds": 40
+  }
+}

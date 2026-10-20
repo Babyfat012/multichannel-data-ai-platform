@@ -7,8 +7,8 @@ trong bộ nhớ (không cần Kafka) và chỉ ra ví dụ cụ thể cho từn
 Số tổng của cả lần chạy nằm trong `stream_manifest.json`; script này trả lời câu
 hỏi khác: "cho tôi xem một trường hợp thật". Chạy:
 
-    uv run python scripts/stream_evidence.py                      # configs/default.yaml
-    uv run python scripts/stream_evidence.py configs/small.yaml
+    uv run python scripts/evidence/measure_order_snapshots_stream.py                      # configs/default.yaml
+    uv run python scripts/evidence/measure_order_snapshots_stream.py configs/small.yaml
 """
 
 from __future__ import annotations

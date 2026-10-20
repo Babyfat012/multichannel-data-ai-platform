@@ -16,10 +16,10 @@ Tài liệu này ghi cách đóng gói generator thành image, cách dựng môi
 | `minio` | `quay.io/minio/minio` (bản cố định theo ngày) | Object storage chứa export dạng file của Channel | Chạy liên tục. API cổng 9000, console cổng 9001 |
 | `minio-init` | như trên (có sẵn `mc`) | Tạo bucket `fsds` | Chạy một lần |
 | `postgres` | `postgres:15` | Hệ thống của phòng ban khác: `walmart.orders`, `seller.skus` | Chạy liên tục, cổng 5432 |
-| `generator-batch` | `data-generator` (build từ `Dockerfile`) | `batch`: sinh lịch sử, ghi thẳng vào MinIO | Chạy một lần, sau `minio-init` |
+| `generator-batch` | `data-generator` (build từ `Dockerfile`) | `generator.generate_order_snapshots`: sinh lịch sử, ghi thẳng vào MinIO | Chạy một lần, sau `minio-init` |
 | `generator-load` | `data-generator` | `load-postgres`: đọc `pg-load/` trên MinIO, nạp vào PostgreSQL | Chạy một lần, sau `generator-batch` và khi `postgres` sẵn sàng |
-| `kafka` (profile `stream`) | `apache/kafka:3.9.1` | Kafka một node, chế độ KRaft. Trong Compose là `kafka:9092`, từ host là `localhost:9094` | Chạy liên tục |
-| `generator-stream` (profile `stream`) | `data-generator` | `stream`: phát message sau `cutoff` vào Kafka, ghi `stream_manifest.json` vào MinIO | Chạy tới khi phát xong, sau khi `kafka` sẵn sàng |
+| `kafka` (profile `generator.publish_order_snapshot_events`) | `apache/kafka:3.9.1` | Kafka một node, chế độ KRaft. Trong Compose là `kafka:9092`, từ host là `localhost:9094` | Chạy liên tục |
+| `generator-stream` (profile `generator.publish_order_snapshot_events`) | `data-generator` | `generator.publish_order_snapshot_events`: phát message sau `cutoff` vào Kafka, ghi `stream_manifest.json` vào MinIO | Chạy tới khi phát xong, sau khi `kafka` sẵn sàng |
 
 Thứ tự được đảm bảo bằng `depends_on` với `service_healthy` (MinIO, PostgreSQL có healthcheck) và `service_completed_successfully` (các bước chạy một lần).
 
@@ -30,7 +30,7 @@ docker compose wait generator-load    # chờ nạp PostgreSQL xong
 GENERATOR_CONFIG=configs/default.yaml docker compose up -d --force-recreate generator-batch generator-load   # đủ quy mô
 ```
 
-**Stream.** Kafka nằm trong profile `stream`, nên `docker compose up -d` không bật nó. `STREAM_SPEED` trong `.env` chỉnh tốc độ: 1 là đúng nhịp (khoảng 40 phút cho 30 ngày), 60 là nhanh gấp 60 lần (khoảng 40 giây).
+**Stream.** Kafka nằm trong profile `generator.publish_order_snapshot_events`, nên `docker compose up -d` không bật nó. `STREAM_SPEED` trong `.env` chỉnh tốc độ: 1 là đúng nhịp (khoảng 40 phút cho 30 ngày), 60 là nhanh gấp 60 lần (khoảng 40 giây).
 
 ```bash
 docker compose --profile stream up -d kafka
@@ -110,7 +110,7 @@ docker images data-generator
 
 Phép đo ở mục 2 là **lịch sử**: khi đó `Dockerfile.naive` cài `pip install .` (không khóa phiên bản), nên câu "cùng
 thư viện, chỉ khác cách build" chưa được chứng minh. Từ 2026-10-19, image naive cài từ `requirements.lock` (xuất từ
-`uv.lock` bằng `scripts/export_requirements_lock.sh`, có hash) rồi `pip install --no-deps .`. `scripts/docker_compare_deps.sh`
+`uv.lock` bằng `scripts/setup/export_requirements_lock.sh`, có hash) rồi `pip install --no-deps .`. `scripts/evidence/compare_docker_dependencies.sh`
 build cả hai từ cùng working tree, liệt kê package bằng `importlib.metadata` trong từng image và **fail nếu khác nhau**.
 
 | Image | Digest | Dung lượng |
@@ -125,6 +125,6 @@ multi-stage, không giữ cache). Receipt: [`evidence/docker-compare-20261019.js
 
 ## 4. Inventory image/service đang nộp
 
-`scripts/docker_inventory.py` đọc `docker compose config` và `docker image inspect` (không pull):
+`scripts/evidence/inspect_docker_images.py` đọc `docker compose config` và `docker image inspect` (không pull):
 [local, mọi profile](evidence/docker-inventory-local-20261019.json) — 20 service;
 [GCP overlay, profile catalog/spark/airflow](evidence/docker-inventory-gcp-20261019.json) — 9 service, mọi port bind `127.0.0.1`.

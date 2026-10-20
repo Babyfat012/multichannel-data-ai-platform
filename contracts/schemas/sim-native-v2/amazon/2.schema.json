@@ -1,0 +1,107 @@
+{
+  "description": "Hợp đồng sim-native-v2/amazon/2; suy luận từ fixture, required là giao các bản ghi.",
+  "properties": {
+    "createdTime": {
+      "type": "string"
+    },
+    "fulfillment": {
+      "properties": {
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "type": "object"
+    },
+    "orderId": {
+      "type": "string"
+    },
+    "orderItems": {
+      "items": {
+        "properties": {
+          "discount": {
+            "properties": {
+              "amount": {
+                "type": "string"
+              },
+              "currencyCode": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "amount",
+              "currencyCode"
+            ],
+            "type": "object"
+          },
+          "orderItemId": {
+            "type": "string"
+          },
+          "price": {
+            "properties": {
+              "amount": {
+                "type": "string"
+              },
+              "currencyCode": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "amount",
+              "currencyCode"
+            ],
+            "type": "object"
+          },
+          "quantityOrdered": {
+            "type": "integer"
+          },
+          "sellerSku": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "discount",
+          "orderItemId",
+          "price",
+          "quantityOrdered",
+          "sellerSku"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "proceeds": {
+      "properties": {
+        "grandTotal": {
+          "properties": {
+            "amount": {
+              "type": "string"
+            },
+            "currencyCode": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount",
+            "currencyCode"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "grandTotal"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "createdTime",
+    "fulfillment",
+    "orderId",
+    "orderItems",
+    "proceeds"
+  ],
+  "type": "object"
+}

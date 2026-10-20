@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Build image generator naive và tối ưu từ cùng working tree, so bộ thư viện cài trong hai image,
 # in dung lượng + digest. Exit khác 0 nếu bộ thư viện khác nhau (claim "chỉ khác cách build" sai).
-# Dùng: bash scripts/docker_compare_deps.sh [thư mục ghi kết quả]
+# Dùng: bash scripts/evidence/compare_docker_dependencies.sh [thư mục ghi kết quả]
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 out=${1:-out/docker-compare}
 mkdir -p "$out"
 docker build -q -t fsds-generator:naive -f docker/Dockerfile.naive . >/dev/null

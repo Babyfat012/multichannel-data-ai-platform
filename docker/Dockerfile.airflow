@@ -17,3 +17,6 @@ RUN pip install --no-cache-dir \
 ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 ENV SPARK_HOME=/home/airflow/.local/lib/python3.11/site-packages/pyspark
 ENV PATH="${SPARK_HOME}/bin:${PATH}"
+
+# Package root used by Spark drivers and Python workers.
+ENV PYTHONPATH=/opt

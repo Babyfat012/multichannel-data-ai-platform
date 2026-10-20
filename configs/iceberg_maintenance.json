@@ -1,0 +1,23 @@
+{
+  "description": "Chính sách DE-N2; bảng demo riêng, planner chọn bảng thật sau khi kiểm tra.",
+  "tables": {
+    "lakehouse.demo.maintenance_demo": {
+      "min_input_files": 5,
+      "small_file_ratio": 0.5,
+      "target_file_size_bytes": 134217728,
+      "zorder_columns": ["seller_sku", "created_at"],
+      "zorder_min_new_files": 20,
+      "max_snapshot_age_hours": 168,
+      "retain_last": 3,
+      "generation_tag_prefix": "gen-",
+      "orphans_dry_run": true,
+      "orphan_age_hours": 72,
+      "max_attempts": 3,
+      "backoff_seconds": 1,
+      "max_backoff_seconds": 8,
+      "probe_predicates": [
+        {"name": "sku-0001", "ranges": {"seller_sku": ["sku-0001", "sku-0001"]}}
+      ]
+    }
+  }
+}

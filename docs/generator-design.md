@@ -12,7 +12,7 @@ generator sở hữu trong root đã chọn, vì thế chỉ dùng khi chủ đ�
 Không chạy restart trên bộ evidence cần giữ. Guard giả định một writer;
 chưa là khóa phân tán hoặc phép kiểm hash toàn bộ file đã sinh.
 [Bản xử lý](audit-remediation-20261018.md) ghi test và giới hạn.
-[Source contract v2](source-contract-v2.md) là đích tiếp theo, chưa được
+[Source contract v2](source-contract-order-lifecycle.md) là đích tiếp theo, chưa được
 thực thi chỉ nhờ có `dataset_version`; logic label hiện tại vẫn là v1.
 
 ## Mục lục
@@ -229,8 +229,8 @@ bỏ qua dấu và sinh lại từ ngày 1.
 
 Điều này đúng được vì mỗi ngày mô phỏng rút số ngẫu nhiên riêng theo
 `(seed, "batch_exports", day)` và không đọc trạng thái ngày trước
-(`tests/test_core.py::test_a_day_does_not_depend_on_previous_days`), nên ngày `d` cho
-ra cùng dữ liệu dù chạy từ ngày 1 hay nhảy vào từ ngày `d`. `tests/test_batch_resume.py`
+(`tests/unit/generator/core/test_simulate.py::test_a_day_does_not_depend_on_previous_days`), nên ngày `d` cho
+ra cùng dữ liệu dù chạy từ ngày 1 hay nhảy vào từ ngày `d`. `tests/unit/generator/test_generate_order_snapshots_resume.py`
 khóa lời hứa đó bằng cách so từng byte giữa một lần chạy liền mạch và một lần bị cắt.
 
 ## 9. Buyer, tiền tệ và thời gian
@@ -328,7 +328,7 @@ Rubric yêu cầu ảnh chụp output tóm tắt chất lượng dữ liệu. Ph
 
 - **Module `generator/report.py`** chứa logic đo, có docstring và unit test, dùng DuckDB (nhẹ, có `approx_count_distinct`, đọc được cả MinIO lẫn PostgreSQL). Có `--dsn` thì Walmart và danh mục SKU được đọc từ PostgreSQL, không có thì đọc file `pg-load/`.
 - **Lệnh `python -m generator report`** in các bảng đo ra terminal để chụp, hoặc in dạng Markdown (`--markdown`) để dán vào tài liệu. Notebook vẽ biểu đồ để sau: cần thêm Jupyter và thư viện vẽ, trong khi bảng chữ đã đủ cho ảnh chụp.
-- **Stream** có hai nguồn số: `stream_manifest.json` giữ số tổng của lần phát, còn `scripts/stream_evidence.py` phát lại Stream trong bộ nhớ và in ví dụ cụ thể cho từng vấn đề (một cặp tin trùng, một tin trễ nặng nhất, bảng Order mỗi giờ của ngày livestream).
+- **Stream** có hai nguồn số: `stream_manifest.json` giữ số tổng của lần phát, còn `scripts/evidence/measure_order_snapshots_stream.py` phát lại Stream trong bộ nhớ và in ví dụ cụ thể cho từng vấn đề (một cặp tin trùng, một tin trễ nặng nhất, bảng Order mỗi giờ của ngày livestream).
 - **Ảnh chụp và báo cáo** tách theo đường thời gian, mỗi bên một tài liệu và một thư mục ảnh: Batch ở [data-quality-report-batch.md](data-quality-report-batch.md) với `docs/images/batch/`, Stream ở [data-quality-report-stream.md](data-quality-report-stream.md) với `docs/images/stream/`. Mỗi ảnh kèm lời giải thích nó chứng minh điều gì.
 
 | Rubric yêu cầu chụp | Báo cáo đo gì |
@@ -438,12 +438,12 @@ Code chia theo đúng ba lớp ở [mục 2](#2-kiến-trúc-ba-lớp). Đọc t
 | `generator/channels/amazon.py`, `walmart.py` | Renderer | Vẽ Order thành bản ghi gốc của Channel |
 | `generator/channels/tiktok.py` | Renderer | Webhook TikTok Shop type 1 (đổi trạng thái đơn) cho Stream |
 | `generator/delivery/stream_events.py` | Giao hàng | Đổi trạng thái sau `cutoff` thành message: lúc đến, trễ, bản trùng, nhịp phát |
-| `generator/stream.py` | | Lệnh `stream`: phát vào Kafka hoặc ra file, đo và ghi `stream_manifest.json` |
-| `generator/batch.py` | | Nối ba lớp, ghi file, ghi manifest |
+| `generator/publish_order_snapshot_events.py` | | Lệnh `generator.publish_order_snapshot_events`: phát vào Kafka hoặc ra file, đo và ghi `stream_manifest.json` |
+| `generator/generate_order_snapshots.py` | | Nối ba lớp, ghi file, ghi manifest |
 | `generator/storage.py` | | Ghi và đọc thư mục local hoặc MinIO qua fsspec |
 | `generator/load_postgres.py` | | Lệnh `load-postgres`: nạp `pg-load/` vào `walmart.orders` và `seller.skus` bằng `COPY` |
 | `generator/report.py` | | Lệnh `report`: đo lại chất lượng dữ liệu Batch bằng DuckDB, đặt cạnh đáp án trong manifest |
-| `scripts/stream_evidence.py` | | Phát lại Stream trong bộ nhớ, in ví dụ cụ thể của trùng, trễ và burst để chụp ảnh |
+| `scripts/evidence/measure_order_snapshots_stream.py` | | Phát lại Stream trong bộ nhớ, in ví dụ cụ thể của trùng, trễ và burst để chụp ảnh |
 
 ### Bốn ý chính của cách làm
 
@@ -473,7 +473,7 @@ Số của tỷ lệ trả khớp mục tiêu vì mọi tác động trong hàm 
 
 ### Stream
 
-Lệnh `stream` sinh lại khoảng 20 ngày cuối trước `cutoff` (để bắt Order cũ còn đổi trạng thái), rồi chạy tiếp `days_stream` ngày. Mỗi lần Order Amazon hoặc TikTok Shop đổi trạng thái trong khoảng `[cutoff, stream_end)` thành một message:
+Lệnh `generator.publish_order_snapshot_events` sinh lại khoảng 20 ngày cuối trước `cutoff` (để bắt Order cũ còn đổi trạng thái), rồi chạy tiếp `days_stream` ngày. Mỗi lần Order Amazon hoặc TikTok Shop đổi trạng thái trong khoảng `[cutoff, stream_end)` thành một message:
 
 | Topic | Dạng | Khóa dedup | Vấn đề |
 |---|---|---|---|

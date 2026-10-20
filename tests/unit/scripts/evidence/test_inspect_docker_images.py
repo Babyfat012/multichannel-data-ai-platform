@@ -2,8 +2,8 @@
 import importlib.util
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("docker_inventory", ROOT / "scripts/docker_inventory.py")
+ROOT = Path(__file__).resolve().parents[4]
+spec = importlib.util.spec_from_file_location("scripts.evidence.inspect_docker_images", ROOT / "scripts/evidence/inspect_docker_images.py")
 inventory = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(inventory)
 

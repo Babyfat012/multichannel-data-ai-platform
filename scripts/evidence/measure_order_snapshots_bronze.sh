@@ -6,7 +6,7 @@
 #   Lần 2 — 20 ngày, AQE BẬT  -> ảnh task đều + số giây. CÙNG 20 ngày nên so giây được.
 #   Lần 3 — 180 ngày, AQE BẬT -> bảng Bronze thật, đầy đủ.
 # Hai lần đầu dùng bảng riêng `raw_amazon_orders_sample` để không đè bảng thật.
-# 20 ngày được chọn RẢI ĐỀU trên cả dải (xem spark_jobs/day_selection.py): lấy 20 ngày
+# 20 ngày được chọn RẢI ĐỀU trên cả dải (xem spark_jobs/lib/day_selection.py): lấy 20 ngày
 # liền nhau ở cuối thì mọi task to bằng nhau và skew không lộ ra.
 #
 # Event log của cả ba lần nằm ở ./out/spark-events -> mở lại bằng History Server để chụp
@@ -22,7 +22,7 @@
 #     --dsn postgresql://<user>:<pass>@localhost:5432/sources
 #
 # Brief 02 (handle skew) có bộ ba riêng, KHÔNG nằm trong `tatca`. Cả ba chạy CÙNG 20 ngày
-# mẫu, AQE TẮT như baseline lan1 (72,3s), chỉ đổi cấu hình — job 01_bronze_baseline.py
+# mẫu, AQE TẮT như baseline lan1 (72,3s), chỉ đổi cấu hình — job bronze/ingest_amazon_order_snapshots.py
 # giữ nguyên. Mỗi lần ghi vào một bảng thử `raw_amazon_orders_skew_*`, đo xong thì DROP:
 #   skew_0 — ĐỐI CHỨNG: đúng cấu hình baseline lan1 (shuffle 200, AQE tắt), nhưng trong CÙNG
 #            môi trường với skew_a/b/c (driver ở worker-1). Đã chạy 3 lần để đo dao động giữa
@@ -38,9 +38,10 @@
 # và bị Docker kill OOM. `table-default.*` là thuộc tính catalog Iceberg: áp cho bảng MỚI
 # tạo, nên chỉ bảng thử bị đổi, mặc định của job và hai bảng thật không đổi.
 #
-# Dùng:  bash scripts/run_bronze_evidence.sh [lan1|lan2|lan3|wal1|wal16|wal|tatca|skew_0|skew_a|skew_b|skew_c]
+# Dùng:  bash scripts/evidence/measure_order_snapshots_bronze.sh [lan1|lan2|lan3|wal1|wal16|wal|tatca|skew_0|skew_a|skew_b|skew_c]
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 
 WHICH="${1:-tatca}"
 MASTER_CONTAINER="${MASTER_CONTAINER:-fsds-spark-master-1}"
@@ -69,52 +70,52 @@ submit() {
 
 case "$WHICH" in
   lan1|tatca)
-    submit "lan1-20ngay-aqe-off" 01_bronze_baseline.py \
+    submit "lan1-20ngay-aqe-off" bronze/ingest_amazon_order_snapshots.py \
       --sample-days 20 --aqe off --table raw_amazon_orders_sample
     ;;&
   lan2|tatca)
-    submit "lan2-20ngay-aqe-on" 01_bronze_baseline.py \
+    submit "lan2-20ngay-aqe-on" bronze/ingest_amazon_order_snapshots.py \
       --sample-days 20 --aqe on --table raw_amazon_orders_sample
     ;;&
   lan3|tatca)
-    submit "lan3-180ngay-aqe-on" 01_bronze_baseline.py --aqe on --table raw_amazon_orders
+    submit "lan3-180ngay-aqe-on" bronze/ingest_amazon_order_snapshots.py --aqe on --table raw_amazon_orders
     ;;&
   wal1|tatca)
-    submit "wal1-jdbc-1ket-noi" 01b_bronze_walmart.py \
+    submit "wal1-jdbc-1ket-noi" bronze/ingest_walmart_order_snapshots.py \
       --num-partitions 1 --table raw_walmart_orders_smoke
     ;;&
   wal16|tatca)
-    submit "wal16-jdbc-16ket-noi" 01b_bronze_walmart.py \
+    submit "wal16-jdbc-16ket-noi" bronze/ingest_walmart_order_snapshots.py \
       --num-partitions 16 --table raw_walmart_orders_smoke
     ;;&
   wal|tatca)
-    submit "wal-that-16ket-noi" 01b_bronze_walmart.py \
+    submit "wal-that-16ket-noi" bronze/ingest_walmart_order_snapshots.py \
       --num-partitions 16 --table raw_walmart_orders
     ;;&
   skew_0)
     # Brief 02, đối chứng: cấu hình y hệt lan1 (shuffle 200 mặc định, AQE tắt), môi trường của skew_a/b/c.
     MASTER_CONTAINER=fsds-spark-worker-1-1 EXTRA_SUBMIT_ARGS="--driver-memory 600m" \
-      submit "skew_0-doichung" 01_bronze_baseline.py \
+      submit "skew_0-doichung" bronze/ingest_amazon_order_snapshots.py \
         --sample-days 20 --aqe off --table raw_amazon_orders_skew_0
     ;;
   skew_a)
     # Brief 02, phương pháp a: giảm số partition shuffle 200 -> 24 (chỉ đổi cờ có sẵn của job).
     MASTER_CONTAINER=fsds-spark-worker-1-1 EXTRA_SUBMIT_ARGS="--driver-memory 600m" \
-      submit "skew_a-shuffle24" 01_bronze_baseline.py \
+      submit "skew_a-shuffle24" bronze/ingest_amazon_order_snapshots.py \
         --sample-days 20 --aqe off --shuffle-partitions 24 --table raw_amazon_orders_skew_a
     ;;
   skew_b)
     # Brief 02, phương pháp b: write.distribution-mode=none cho bảng thử (không shuffle trước khi ghi).
     MASTER_CONTAINER=fsds-spark-worker-1-1 \
       EXTRA_SUBMIT_ARGS="--driver-memory 600m --conf spark.sql.catalog.lakehouse.table-default.write.distribution-mode=none" \
-      submit "skew_b-dist-none" 01_bronze_baseline.py \
+      submit "skew_b-dist-none" bronze/ingest_amazon_order_snapshots.py \
         --sample-days 20 --aqe off --table raw_amazon_orders_skew_b
     ;;
   skew_c)
     # Brief 02, phương pháp c: write.distribution-mode=range cho bảng thử.
     MASTER_CONTAINER=fsds-spark-worker-1-1 \
       EXTRA_SUBMIT_ARGS="--driver-memory 600m --conf spark.sql.catalog.lakehouse.table-default.write.distribution-mode=range" \
-      submit "skew_c-dist-range" 01_bronze_baseline.py \
+      submit "skew_c-dist-range" bronze/ingest_amazon_order_snapshots.py \
         --sample-days 20 --aqe off --table raw_amazon_orders_skew_c
     ;;
   lan1|lan2|lan3|wal1|wal16|wal|tatca|skew_0|skew_a|skew_b|skew_c) ;;

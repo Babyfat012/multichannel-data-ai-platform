@@ -3,8 +3,8 @@
 Mỗi service: image, Dockerfile build, profile, port (kèm host_ip), giới hạn RAM/CPU; image có sẵn
 trên máy thì thêm digest, dung lượng, ngày build qua `docker image inspect`. Không pull, không mạng.
 
-    .venv/bin/python scripts/docker_inventory.py --output docs/evidence/docker-inventory-local.json
-    RAW_BUCKET=x LAKEHOUSE_BUCKET=y FSDS_SPARK_PACKAGES_GCP=z .venv/bin/python scripts/docker_inventory.py \\
+    .venv/bin/python scripts/evidence/inspect_docker_images.py --output docs/evidence/docker-inventory-local.json
+    RAW_BUCKET=x LAKEHOUSE_BUCKET=y FSDS_SPARK_PACKAGES_GCP=z .venv/bin/python scripts/evidence/inspect_docker_images.py \\
         -f docker-compose.yml -f docker-compose.gcp.yml --profile catalog --profile spark --profile airflow \\
         --output docs/evidence/docker-inventory-gcp.json
 """

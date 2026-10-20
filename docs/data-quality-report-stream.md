@@ -16,13 +16,13 @@ Batch đạt ngưỡng 100 GB bằng `configs/scale-100gb.yaml`, nhưng Stream k
 ```bash
 docker compose up -d kafka
 docker compose run --rm generator-stream        # phát và in số đo
-uv run python scripts/stream_evidence.py        # in ví dụ cụ thể của từng vấn đề
+uv run python scripts/evidence/measure_order_snapshots_stream.py        # in ví dụ cụ thể của từng vấn đề
 ```
 
 Hai nguồn số trong báo cáo này:
 
 - **Số tổng** do generator đếm trong lúc phát và ghi vào `stream_manifest.json` trên MinIO. Số tin trong Kafka được đếm lại bằng `kafka-get-offsets.sh` để xác nhận không mất và không thừa tin.
-- **Ví dụ cụ thể** do `scripts/stream_evidence.py` phát lại Stream trong bộ nhớ (không cần Kafka) và chỉ ra một trường hợp thật cho mỗi vấn đề. Đây là phần đối xứng của lệnh `python -m generator report` bên Batch.
+- **Ví dụ cụ thể** do `scripts/evidence/measure_order_snapshots_stream.py` phát lại Stream trong bộ nhớ (không cần Kafka) và chỉ ra một trường hợp thật cho mỗi vấn đề. Đây là phần đối xứng của lệnh `python -m generator report` bên Batch.
 
 ## Tóm tắt theo rubric
 
@@ -100,7 +100,7 @@ Bản trùng giữ **nguyên** `tts_notification_id` và nguyên nội dung, ch�
 
 Tỷ lệ trùng đo bằng `1 - count(distinct tts_notification_id) / count(*)`. Để ra đúng `r` sau khi chèn, xác suất gửi lại mỗi tin phải là `p = r / (1 - r)`, vì bản gửi lại cũng làm tổng số tin tăng lên. Với `r` = 1,5% thì `p` khoảng 1,52%.
 
-Một cặp thật, lấy từ `scripts/stream_evidence.py`:
+Một cặp thật, lấy từ `scripts/evidence/measure_order_snapshots_stream.py`:
 
 ```text
 tts_notification_id : 7702500355104028488
@@ -126,7 +126,7 @@ Cột lệch thứ tự đếm: tin đến nơi mà `EventTime` của nó đã c
 
 TikTok Shop bằng 0 ở cả hai cột là đúng: webhook TikTok chỉ trễ vài giây, còn bản gửi lại chậm nhất cũng chỉ 30 phút, chưa tới ngưỡng 1 giờ.
 
-Tin trễ nặng nhất của lần chạy, lấy từ `scripts/stream_evidence.py`:
+Tin trễ nặng nhất của lần chạy, lấy từ `scripts/evidence/measure_order_snapshots_stream.py`:
 
 ```text
 EventTime   (lúc xảy ra) : 2026-07-03 14:37:39
@@ -163,9 +163,9 @@ Số Order mỗi ngày rút theo phân phối Poisson nên dao động: các ng�
 
 Cả hai cách so đều nằm trong khoảng mục tiêu 5 đến 8 lần. Khi đọc `measured_ratio`, cần nhớ nó so với mặt bằng chung của các ngày khác, nên chịu ảnh hưởng của việc ngày livestream vốn đông hay vắng.
 
-Hai dòng cuối của `scripts/stream_evidence.py` in cả ba con số này, nên kiểm chứng lại được mà không cần Kafka.
+Hai dòng cuối của `scripts/evidence/measure_order_snapshots_stream.py` in cả ba con số này, nên kiểm chứng lại được mà không cần Kafka.
 
-Order TikTok Shop mới mỗi giờ, ngày livestream đặt cạnh ngày ngay trước đó, lấy từ `scripts/stream_evidence.py`:
+Order TikTok Shop mới mỗi giờ, ngày livestream đặt cạnh ngày ngay trước đó, lấy từ `scripts/evidence/measure_order_snapshots_stream.py`:
 
 ```text
 ngày thường 2026-07-13:   30   24   26   21   21   29   20   26   36   18   18   22   25   24   32   29   14   25   28   24   25   21   20   29

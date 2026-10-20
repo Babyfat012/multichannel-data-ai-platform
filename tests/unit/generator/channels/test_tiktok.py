@@ -8,6 +8,7 @@ from generator.core.simulate import Simulator
 
 
 def _tiktok_orders(config, days=range(1, 6)):
+    """Generate TikTok orders for the requested days in the tiny test config."""
     sim = Simulator(config)
     return [o for d in days for o in sim.simulate_day(d) if o.storefront_id == "tiktok_shop_us"]
 

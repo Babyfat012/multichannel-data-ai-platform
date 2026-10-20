@@ -17,7 +17,7 @@ Lần chạy chính dùng `configs/scale-100gb.yaml`: giống `default.yaml` (se
 | `seller.skus` | 2.000 | 2.000 | 0% | 1 | 225.470 |
 | **Tổng** | | | | | **100.012.790.412** |
 
-Tổng **100.012.790.412 byte = 100,01 GB** thập phân (93,14 GiB). Đây là byte thô trong manifest, đã được xác nhận khớp byte thật trên đĩa (`tests/test_batch.py`), không phải số `df` (vốn hiển thị GiB và lệch 7,4%).
+Tổng **100.012.790.412 byte = 100,01 GB** thập phân (93,14 GiB). Đây là byte thô trong manifest, đã được xác nhận khớp byte thật trên đĩa (`tests/unit/generator/test_generate_order_snapshots.py`), không phải số `df` (vốn hiển thị GiB và lệch 7,4%).
 
 ## Lần chạy nhỏ để đo chi tiết
 

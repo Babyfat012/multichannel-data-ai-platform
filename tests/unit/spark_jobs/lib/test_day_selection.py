@@ -1,4 +1,4 @@
-"""Test cho `spark_jobs/day_selection.py` — cách chọn tập ngày export để nạp thử.
+"""Test cho `spark_jobs/lib/day_selection.py` — cách chọn tập ngày export để nạp thử.
 
 Vì sao test phần này: nó quyết định ảnh Spark UI có lộ skew hay không. Lấy ngày liền nhau
 ở cuối dải thì mọi task to gần bằng nhau và bằng chứng skew biến mất, nên "rải đều" là
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from spark_jobs.day_selection import pick_sample_days, pick_window_days
+from spark_jobs.lib.day_selection import pick_sample_days, pick_window_days
 
 # 180 ngày giống thật: 2026-01-01 .. 2026-06-29.
 DAYS = [f"d{i:03d}" for i in range(180)]
@@ -73,6 +73,7 @@ class TestPickWindowDays:
     DAYS = [f"2026-01-{d:02d}" for d in range(1, 21)]
 
     def test_lien_nhau_tu_ngay_chi_dinh(self):
+        """Select consecutive dates ending at the explicit end date."""
         got = pick_window_days(self.DAYS, 3, start="2026-01-05")
         assert got == ["2026-01-05", "2026-01-06", "2026-01-07"]
 
@@ -82,6 +83,7 @@ class TestPickWindowDays:
         assert got == ["2026-01-09", "2026-01-10", "2026-01-11", "2026-01-12"]
 
     def test_cac_ngay_tra_ve_LIEN_TUC_khong_ho(self):
+        """Return a contiguous sequence rather than scattered sample dates."""
         got = pick_window_days(self.DAYS, 7, start="2026-01-02")
         idx = [self.DAYS.index(d) for d in got]
         assert idx == list(range(idx[0], idx[0] + 7))
@@ -93,9 +95,11 @@ class TestPickWindowDays:
         assert got[-1] == "2026-01-20"
 
     def test_n_lon_hon_ca_dai_thi_lay_het(self):
+        """Return all available dates when the requested count is too large."""
         assert pick_window_days(self.DAYS, 99) == self.DAYS
 
     def test_n_bang_khong_thi_rong(self):
+        """Return an empty selection when zero days are requested."""
         assert pick_window_days(self.DAYS, 0) == []
 
     def test_ngay_bat_dau_sai_thi_NEM_LOI(self):

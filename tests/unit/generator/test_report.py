@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from generator.batch import BatchRun
+from generator.generate_order_snapshots import BatchRun
 from generator.report import QualityReport, render_markdown, render_text
 
 

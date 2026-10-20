@@ -184,7 +184,7 @@ class BatchRun:
 
         Kết quả không phụ thuộc việc có bị cắt hay không: mỗi ngày mô phỏng rút số
         ngẫu nhiên riêng theo `(seed, "batch_exports", day)` và không đọc trạng thái
-        của ngày trước (xem `tests/test_core.py`), nên ngày d cho ra cùng dữ liệu dù
+        của ngày trước (xem `tests/unit/generator/core/test_simulate.py`), nên ngày d cho ra cùng dữ liệu dù
         chạy từ ngày 1 hay nhảy vào từ ngày d.
         """
         self._check_resume_identity(restart)
@@ -276,7 +276,7 @@ class BatchRun:
             # có đúng một placement `primary` (xem `plan_exports`) và `rendered.key`
             # chỉ phụ thuộc Order, nên bản trùng luôn lặp lại khóa của bản chính.
             # Set khóa ở quy mô 100 GB là ~117 triệu string trong RAM, chỉ để lấy
-            # `len()`. `tests/test_batch.py` khóa bất biến này bằng một lần đối chiếu.
+            # `len()`. `tests/unit/generator/test_generate_order_snapshots.py` khóa bất biến này bằng một lần đối chiếu.
             stats.unique_keys += placement.kind == PRIMARY
             stats.placements[placement.kind] += 1
 
@@ -418,7 +418,7 @@ class BatchRun:
 
         Phải có ĐỦ mọi thứ mà `_manifest` đọc và `_handle_order`/`_collect_*` cộng
         dồn. Thiếu một cái thì lần chạy tiếp cho ra manifest thiếu số, mà không có
-        lỗi nào báo. `tests/test_batch.py` khóa chuyện này bằng cách so manifest của
+        lỗi nào báo. `tests/unit/generator/test_generate_order_snapshots.py` khóa chuyện này bằng cách so manifest của
         một lần chạy liền mạch với một lần chạy bị cắt.
 
         Khóa `bool` của `amazon_*` ghi thành "sale"/"normal" vì JSON chỉ có khóa

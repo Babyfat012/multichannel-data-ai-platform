@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from generator.batch import BatchRun
+from generator.generate_order_snapshots import BatchRun
 
 
 class _Cut(Exception):

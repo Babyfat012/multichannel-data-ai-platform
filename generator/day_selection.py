@@ -1,6 +1,6 @@
 """Chọn tập ngày export để nạp — phần logic thuần, không chạm PostgreSQL hay fsspec.
 
-Vì sao file này TRÙNG `pick_sample_days` với `spark_jobs/day_selection.py`:
+Vì sao file này TRÙNG `pick_sample_days` với `spark_jobs/lib/day_selection.py`:
 hai bên không import được nhau, dù code giống nhau.
 
   * `spark_jobs/` chỉ được **mount** vào container Spark (`/opt/spark_jobs:ro`) và container

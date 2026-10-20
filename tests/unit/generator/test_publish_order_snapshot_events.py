@@ -9,7 +9,7 @@ import pytest
 from generator.config import parse_config
 from generator.delivery.stream_events import TOPICS, stream_messages, wall_offset
 from generator.storage import OutputStore
-from generator.stream import FileSink, run_stream
+from generator.publish_order_snapshot_events import FileSink, run_stream
 
 
 @pytest.fixture
