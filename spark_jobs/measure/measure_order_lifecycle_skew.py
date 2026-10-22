@@ -181,7 +181,11 @@ def run_measurement(
 
     import spark_jobs.lib.order_lifecycle_gold as gold_job
     from generator.generate_order_lifecycle import ScaleConfig, generate_scaled
-    from spark_jobs.lib.order_lifecycle_lakehouse import bronze_from_root, build_silver
+    from spark_jobs.lib.order_lifecycle_lakehouse import (
+        bronze_from_root,
+        build_silver,
+        read_source_manifest,
+    )
     from spark_jobs.lib.order_lifecycle_skew import bucket_width_days, sku_features_salted
 
     width = bucket_width_days(buckets)
@@ -196,17 +200,27 @@ def run_measurement(
             source,
             ScaleConfig(seed=seed, days=days, orders_per_day=orders_per_day, sku_count=sku_count),
         )
-    source = Path(source).resolve()
-    manifest_bytes = (source / "manifest.json").read_bytes()
-    manifest = json.loads(manifest_bytes)
-    cutoff = manifest["horizons"]["source_observation_end"]
-    os.environ.setdefault("SPARK_LOCAL_IP", "127.0.0.1")
-    os.environ.setdefault("SPARK_LOCAL_HOSTNAME", "localhost")
+    cloud = os.environ.get("FSDS_STORAGE") == "s3"
+    source = Path(source).resolve() if not cloud else str(source)
+    manifest_bytes = None
+    if not cloud:
+        manifest_bytes = (source / "manifest.json").read_bytes()
+        manifest = json.loads(manifest_bytes)
+    if not cloud:
+        os.environ.setdefault("SPARK_LOCAL_IP", "127.0.0.1")
+        os.environ.setdefault("SPARK_LOCAL_HOSTNAME", "localhost")
     os.environ["FSDS_CONTRACTS_DIR"] = str(ROOT / "contracts")
+    builder = SparkSession.builder
+    if cloud:
+        # Nhánh S3 giữ master từ spark-submit; thuật toán đo giữ nguyên.
+        from spark_jobs.lib.iceberg_session import catalog_conf
+
+        for key, value in catalog_conf(os.environ).items():
+            builder = builder.config(key, value)
+    else:
+        builder = builder.master("local[2]").config("spark.driver.bindAddress", "127.0.0.1")
     spark = (
-        SparkSession.builder.master("local[2]")
-        .appName("order-lifecycle-skew-measurement")
-        .config("spark.driver.bindAddress", "127.0.0.1")
+        builder.appName("order-lifecycle-skew-measurement")
         .config("spark.sql.session.timeZone", "UTC")
         .config("spark.sql.shuffle.partitions", str(partitions))
         .config("spark.sql.adaptive.enabled", str(aqe).lower())
@@ -219,6 +233,14 @@ def run_measurement(
         .getOrCreate()
     )
     spark.sparkContext.setLogLevel("ERROR")
+    if cloud:
+        # Lấy byte manifest gốc để hash trùng object S3, không canonicalize JSON.
+        content = spark.read.text(source.rstrip("/") + "/manifest.json", wholetext=True).collect()
+        if len(content) != 1:
+            raise ValueError("Cần đúng một manifest.json")
+        manifest_bytes = content[0]["value"].encode()
+        manifest = read_source_manifest(spark, source)
+    cutoff = manifest["horizons"]["source_observation_end"]
     report = dict(
         input_manifest=manifest,
         manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
@@ -227,7 +249,9 @@ def run_measurement(
         buckets=buckets,
         bucket_width_days=width,
         runtime=dict(
-            spark=spark.version, python=sys.version, application_id=spark.sparkContext.applicationId
+            spark=spark.version,
+            python=sys.version,
+            application_id=spark.sparkContext.applicationId,
         ),
         config={
             k: spark.conf.get(k)
@@ -240,6 +264,8 @@ def run_measurement(
             )
         },
     )
+    if cloud:
+        report["runtime"]["master"] = spark.sparkContext.master
     try:
         spark.sparkContext.setJobGroup("silver_gold_build", "Silver và Gold từ module thật")
         bronze = bronze_from_root(spark, str(source), "skew").cache()
@@ -328,7 +354,7 @@ def run_measurement(
 def main():
     """CLI không cần catalog/Docker service; đầu ra và event log phải nằm ở thư mục ghi được."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", type=Path)
+    parser.add_argument("--source")
     parser.add_argument("--workdir", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--days", type=int, default=90)

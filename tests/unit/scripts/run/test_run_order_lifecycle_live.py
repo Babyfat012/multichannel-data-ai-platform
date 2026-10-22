@@ -146,7 +146,11 @@ elif "cp" in args:
     project = tmp_path / "project"
     (project / "scripts").mkdir(parents=True)
     (project / "configs").mkdir()
-    for script in ("run/run_order_lifecycle_live.sh", "setup/setup_airflow.sh"):
+    for script in (
+        "run/run_order_lifecycle_live.sh",
+        "run/run_aws_measurements.sh",
+        "setup/setup_airflow.sh",
+    ):
         (project / "scripts" / script).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(ROOT / "scripts" / script, project / "scripts" / script)
     shutil.copy(ROOT / "configs/iceberg_maintenance.json", project / "configs")
@@ -225,7 +229,8 @@ def test_source_refuses_partial_directory(fake_runtime):
 
 
 @pytest.mark.parametrize("invalid", [False, True])
-def test_datahub_phase_stops_spark_then_publishes_same_arguments(fake_runtime, invalid):
+@pytest.mark.parametrize("storage", ["minio", "s3"])
+def test_datahub_phase_stops_spark_then_publishes_same_arguments(fake_runtime, invalid, storage):
     """Kiểm dừng Spark trước khi publish DataHub với đúng tham số run."""
     env, log, run_id = fake_runtime
     project = Path(env["FAKE_PROJECT"])
@@ -247,6 +252,7 @@ print("[]")
     curl.write_text("#!/bin/sh\nexit 0\n")
     curl.chmod(0o755)
     env["DATAHUB_PYTHON"] = str(publisher)
+    env.update(FSDS_STORAGE=storage, RAW_BUCKET="test-raw", AWS_REGION="ap-southeast-1")
     result = subprocess.run(
         ["bash", str(project / "scripts/run/run_order_lifecycle_live.sh"), "--phase", "datahub"],
         env=env,
@@ -264,5 +270,96 @@ print("[]")
     dry, publish = calls[-2:]
     assert dry[1] == "--dry-run" and publish[1] == "--publish"
     assert dry[2:] == publish[2:]
+    assert dry[dry.index("--source-root") + 1] == (
+        "s3a://test-raw/order_lifecycle/fixture" if storage == "s3" else "/data/order_lifecycle"
+    )
+    if storage == "s3":
+        assert not any("minio" in arg for call in calls for arg in call)
     assert dry[dry.index("--receipt-dir") + 1] == f"out/receipts-v2-run/{run_id}"
     assert (receipts / "datahub-mcps.json").read_text().strip() == "[]"
+
+
+@pytest.mark.parametrize("from_dotenv", [False, True])
+def test_s3_airflow_uses_remote_source_without_minio(fake_runtime, from_dotenv):
+    """Chạy thật Bash với Docker/aws giả: S3 conf, receipt và ưu tiên environment."""
+    env, log, run_id = fake_runtime
+    project = Path(env["FAKE_PROJECT"])
+    aws = project.parent / "aws"
+    aws.write_text('#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$FAKE_AWS_LOG"\n')
+    aws.chmod(0o755)
+    env["FAKE_AWS_LOG"] = str(project.parent / "aws.log")
+    settings = dict(
+        FSDS_STORAGE="s3",
+        RAW_BUCKET="test-raw",
+        AWS_REGION="ap-southeast-1",
+        FSDS_DATASET_NAME="scale90",
+        FSDS_SPARK_PACKAGES_AWS="test:aws:1",
+    )
+    if from_dotenv:
+        for key in settings:
+            env.pop(key, None)
+        (project / ".env").write_text("\n".join(f"{k}={v}" for k, v in settings.items()) + "\n")
+    else:
+        env.update(settings)
+        (project / ".env").write_text("FSDS_STORAGE=minio\nRAW_BUCKET=wrong\n")
+    # Không có fixture host: nhánh AWS phải kiểm manifest S3, không sinh local.
+    shutil.rmtree(env["FSDS_ORDER_LIFECYCLE_DIR"])
+    result = subprocess.run(
+        ["bash", str(project / "scripts/run/run_order_lifecycle_live.sh"), "--phase", "airflow"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    calls = [json.loads(line) for line in log.read_text().splitlines()]
+    assert not any("minio" in arg for call in calls for arg in call)
+    trigger = next(c for c in calls if "trigger" in c)
+    assert json.loads(trigger[trigger.index("--conf") + 1])["source_root"] == (
+        "s3a://test-raw/order_lifecycle/scale90"
+    )
+    assert (
+        "s3://test-raw/order_lifecycle/scale90/manifest.json"
+        in Path(env["FAKE_AWS_LOG"]).read_text()
+    )
+    assert (project / "out/receipts-v2-run" / run_id / "build_gold.json").is_file()
+
+
+@pytest.mark.parametrize("what", ["skew", "maintenance", "warehouse"])
+def test_aws_measurement_invocations_use_cluster_and_collect_evidence(fake_runtime, what):
+    """Kiểm lệnh wrapper trên Docker giả: packages AWS, resource, JSON và sao chép log."""
+    env, log, _ = fake_runtime
+    env.update(
+        FSDS_STORAGE="s3",
+        RAW_BUCKET="test-raw",
+        AWS_REGION="ap-southeast-1",
+        FSDS_SPARK_PACKAGES_AWS="test:aws:1",
+        FSDS_DATASET_NAME="scale90",
+    )
+    project = Path(env["FAKE_PROJECT"])
+    result = subprocess.run(
+        ["bash", str(project / "scripts/run/run_aws_measurements.sh"), "--what", what],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    calls = [json.loads(line) for line in log.read_text().splitlines()]
+    submits = [c for c in calls if "spark-submit" in c]
+    assert submits
+    for call in submits:
+        assert call[call.index("--master") + 1] == "spark://spark-master:7077"
+        assert call[call.index("--packages") + 1] == "test:aws:1"
+        assert call[call.index("--executor-memory") + 1] == "2g"
+        assert "spark.cores.max=2" in call
+        assert "spark.executor.cores=1" in call
+    if what == "skew":
+        assert "s3a://test-raw/order_lifecycle/scale90" in submits[0]
+    if what == "maintenance":
+        assert "--execute" in submits[0]
+        assert (
+            "lakehouse.gold.lifecycle_fact_order_lines"
+            in submits[0][submits[0].index("--config-json") + 1]
+        )
+        assert "--validate-receipt" in submits[1]
+    assert "cp" in calls[-1]
+    assert calls[-1][-1].startswith("out/aws-evidence/")

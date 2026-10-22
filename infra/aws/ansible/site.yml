@@ -6,6 +6,8 @@
     - role: base
     - role: data_disk
     - role: app
+    - role: datahub
+      when: enable_datahub | default(true) | bool
     - role: source_data
       tags: [never, source_data]
     - role: smoke

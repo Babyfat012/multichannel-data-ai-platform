@@ -73,6 +73,7 @@ services:
       PYSPARK_DRIVER_PYTHON: /usr/local/bin/python
     volumes: !override
       - ./spark_jobs:/opt/spark_jobs:ro
+      - ./generator:/opt/generator:ro
       - ./contracts:/opt/contracts:ro
       - ./sql:/opt/sql:ro
       - /mnt/fsds-data/spark-events:/spark-events
@@ -94,6 +95,7 @@ services:
       SPARK_WORKER_CORES: "1"
     volumes: !override
       - ./spark_jobs:/opt/spark_jobs:ro
+      - ./generator:/opt/generator:ro
       - ./contracts:/opt/contracts:ro
       - ./sql:/opt/sql:ro
       - /mnt/fsds-data/spark-events:/spark-events
@@ -116,6 +118,7 @@ services:
       SPARK_WORKER_CORES: "1"
     volumes: !override
       - ./spark_jobs:/opt/spark_jobs:ro
+      - ./generator:/opt/generator:ro
       - ./contracts:/opt/contracts:ro
       - ./sql:/opt/sql:ro
       - /mnt/fsds-data/spark-events:/spark-events
@@ -139,6 +142,7 @@ services:
       AIRFLOW_VAR_FSDS_ORDER_LIFECYCLE_CUTOFF: ${FSDS_ORDER_LIFECYCLE_CUTOFF:-2026-06-01T00:00:00.000000Z}
     volumes: !override
       - ./spark_jobs:/opt/spark_jobs:ro
+      - ./generator:/opt/generator:ro
       - ./contracts:/opt/contracts:ro
       - ./sql:/opt/sql:ro
       - /mnt/fsds-data/spark-events:/spark-events

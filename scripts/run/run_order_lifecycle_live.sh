@@ -15,7 +15,9 @@ Biến môi trường:
   FSDS_V2_RUN_ID      chọn run mới khi trigger; chọn run cũ khi publish
   FSDS_V2_TIMEOUT    timeout DAG giây (1800); FSDS_V2_START_TIMEOUT (600)
   FSDS_V2_EXECUTOR_MEMORY  mặc định 2g, vừa worker mặc định cho fixture nhỏ
-  FSDS_PYTHON        mặc định .venv/bin/python (generator/capture)
+  FSDS_STORAGE       minio (mặc định) hoặc s3; đọc từ environment hoặc .env
+  FSDS_PYTHON        local .venv/bin/python; S3 /mnt/fsds-data/venv/bin/python
+  RAW_BUCKET, AWS_REGION, FSDS_DATASET_NAME  nguồn S3 đã sync bởi Ansible
   DATAHUB_PYTHON     Python có acryl-datahub SDK, mặc định môi trường uv đã chuẩn bị
   DATAHUB_GMS_URL    mặc định http://127.0.0.1:8089
   DATAHUB_GMS_TOKEN  token tùy chọn, chỉ truyền qua environment
@@ -33,8 +35,27 @@ while (($#)); do
   esac
 done
 case "$phase" in source|airflow|datahub|capture|all) ;; *) echo "Pha không hợp lệ: $phase" >&2; exit 2 ;; esac
+# Đọc giá trị cần thiết từ .env, giữ ưu tiên environment và không export secret.
+if [[ ! -v FSDS_STORAGE && -f .env ]]; then
+  export FSDS_STORAGE="$( (source .env; printf '%s' "${FSDS_STORAGE:-minio}") )"
+fi
+if [[ "${FSDS_STORAGE:-minio}" = s3 && -f .env ]]; then
+  for key in RAW_BUCKET FSDS_DATASET_NAME AWS_REGION FSDS_SPARK_PACKAGES_AWS COMPOSE_FILE FSDS_ORDER_LIFECYCLE_CUTOFF; do
+    if [[ ! -v "$key" ]]; then
+      value=$( (set -a; source .env; printf '%s' "${!key:-}") )
+      export "$key=$value"
+    fi
+  done
+fi
+storage="${FSDS_STORAGE:-minio}"
+source_root=/data/order_lifecycle
 export FSDS_ORDER_LIFECYCLE_DIR="${FSDS_ORDER_LIFECYCLE_DIR:-./out/order_lifecycle_live}"
 py="${FSDS_PYTHON:-.venv/bin/python}"
+if [[ "$storage" = s3 ]]; then
+  source_root="s3a://${RAW_BUCKET:?Cần RAW_BUCKET}/order_lifecycle/${FSDS_DATASET_NAME:-fixture}"
+  py="${FSDS_PYTHON:-/mnt/fsds-data/venv/bin/python}"
+  export FSDS_ORDER_LIFECYCLE_DIR="/mnt/fsds-data/source/${FSDS_DATASET_NAME:-fixture}"
+fi
 cutoff="${FSDS_ORDER_LIFECYCLE_CUTOFF:-2026-06-01T00:00:00.000000Z}"
 timeout="${FSDS_V2_TIMEOUT:-1800}"
 start_timeout="${FSDS_V2_START_TIMEOUT:-600}"
@@ -44,6 +65,9 @@ done
 compose=(docker compose --profile airflow --profile spark)
 # Dừng cả dependency sau pha A, không xóa volume hoặc dừng service dự án khác.
 services=(airflow spark-worker-1 spark-worker-2 spark-master lakekeeper lakekeeper-migrate lakekeeper-db-init airflow-db-init minio-init minio postgres)
+if [[ "$storage" = s3 ]]; then
+  services=(airflow spark-worker-1 spark-worker-2 spark-master lakekeeper lakekeeper-migrate lakekeeper-db-init airflow-db-init postgres)
+fi
 quickstart="${DATAHUB_QUICKSTART_DIR:-$HOME/.datahub/quickstart}"
 export DATAHUB_VERSION="${DATAHUB_VERSION:-v1.7.0.1}"
 export UI_INGESTION_DEFAULT_CLI_VERSION="${UI_INGESTION_DEFAULT_CLI_VERSION:-1.7.0.14}"
@@ -54,7 +78,11 @@ gms="${DATAHUB_GMS_URL:-http://127.0.0.1:8089}"
 cleanup_hint() {
   local code=$?
   echo "Lỗi pha $phase (exit $code). Giữ nguyên dữ liệu/receipt để kiểm log." >&2
+  if [[ "$storage" = s3 ]]; then
+    echo 'Dọn pha A: docker compose --profile airflow --profile spark stop airflow spark-worker-1 spark-worker-2 spark-master lakekeeper postgres' >&2
+  else
   echo 'Dọn pha A: docker compose --profile airflow --profile spark stop airflow spark-worker-1 spark-worker-2 spark-master lakekeeper postgres minio' >&2
+  fi
   echo 'Dọn pha B: chạy lại lệnh Compose DataHub trong docs/datahub.md, thay up -d bằng stop.' >&2
   echo 'Không dùng down -v; không xóa volume. Xem log rồi dùng run_id mới nếu cần chạy lại Gold.' >&2
   exit "$code"
@@ -70,6 +98,10 @@ wait_until() {
   done
 }
 source_phase() {
+  if [[ "$storage" = s3 ]]; then
+    aws s3 ls "s3://${RAW_BUCKET}/order_lifecycle/${FSDS_DATASET_NAME:-fixture}/manifest.json" --region "${AWS_REGION:?Cần AWS_REGION}"
+    return
+  fi
   if [[ -f "$FSDS_ORDER_LIFECYCLE_DIR/manifest.json" ]]; then
     echo "Giữ fixture đã có: $FSDS_ORDER_LIFECYCLE_DIR"
   else
@@ -114,7 +146,7 @@ print(json.dumps({"state": r.state, "directory": r.execution_date.strftime("%Y%m
 PY
 }
 airflow_phase() {
-  [[ -f "$FSDS_ORDER_LIFECYCLE_DIR/manifest.json" ]] || { echo 'Chạy --phase source trước' >&2; return 1; }
+  [[ "$storage" = s3 || -f "$FSDS_ORDER_LIFECYCLE_DIR/manifest.json" ]] || { echo 'Chạy --phase source trước' >&2; return 1; }
   if [[ -n "$(docker ps -q --filter label=com.docker.compose.project=datahub)" ]]; then
     echo 'Dừng Compose DataHub trước pha A để đủ RAM (docs/datahub.md).' >&2; return 1
   fi
@@ -122,8 +154,13 @@ airflow_phase() {
   # User Airflow phải ghi được bind mount vừa tạo. Không đụng quyền file receipt cũ.
   chmod 0777 out/receipts
   # minio-init chạy một lần rồi thoát; Compose mới coi thoát là lỗi của --wait nên tách riêng.
+  if [[ "$storage" = s3 ]]; then
+    source_phase
+    "${compose[@]}" up -d --wait --wait-timeout "$start_timeout" airflow spark-master spark-worker-1 spark-worker-2
+  else
   "${compose[@]}" up -d minio-init
   "${compose[@]}" up -d --wait --wait-timeout "$start_timeout" airflow spark-master spark-worker-1 spark-worker-2 minio
+  fi
   wait_until Airflow airflow_ready
   wait_until Spark spark_ready
   wait_until DAG-v2 dag_ready
@@ -136,7 +173,11 @@ airflow_phase() {
     run_id="live_v2__$(date -u +%Y%m%dT%H%M%S)_$("$py" -c 'import uuid; print(uuid.uuid4().hex[:8])')"
   fi
   validate_run_id
+  if [[ "$storage" = s3 ]]; then
+  conf=$("$py" -c 'import json,sys; print(json.dumps({"source_root":sys.argv[2], "cutoff":sys.argv[1]}))' "$cutoff" "$source_root")
+  else
   conf=$("$py" -c 'import json,sys; print(json.dumps({"source_root":"/data/order_lifecycle", "cutoff":sys.argv[1]}))' "$cutoff")
+  fi
   "${compose[@]}" exec -T airflow airflow dags unpause dp_order_lifecycle
   "${compose[@]}" exec -T airflow airflow dags trigger dp_order_lifecycle --run-id "$run_id" --conf "$conf"
   echo "run_id=$run_id"
@@ -178,7 +219,7 @@ PY
   "${hub[@]}" up -d
   wait_until GMS curl --fail --silent --show-error --max-time 5 "$gms/health"
   local publisher="${DATAHUB_PYTHON:-$HOME/.local/share/uv/tools/acryl-datahub/bin/python}"
-  local args=(--receipt-dir "$receipts" --source-root /data/order_lifecycle --server "$gms")
+  local args=(--receipt-dir "$receipts" --source-root "$source_root" --server "$gms")
   "$publisher" scripts/run/publish_order_lifecycle_datahub.py --dry-run "${args[@]}" > "$receipts/datahub-mcps.json"
   "$publisher" scripts/run/publish_order_lifecycle_datahub.py --publish "${args[@]}"
 }
@@ -191,5 +232,12 @@ case "$phase" in
   airflow) airflow_phase ;;
   datahub) datahub_phase ;;
   capture) capture_phase ;;
-  all) source_phase; airflow_phase; datahub_phase; capture_phase ;;
+  all)
+    source_phase; airflow_phase; datahub_phase
+    if [[ "$storage" = s3 ]]; then
+      echo 'Chạy trên laptop qua tunnel: .venv/bin/python scripts/evidence/capture_order_lifecycle_datahub_evidence.py'
+    else
+      capture_phase
+    fi
+    ;;
 esac

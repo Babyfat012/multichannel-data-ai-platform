@@ -118,7 +118,7 @@ def test_no_default_ssh_key_and_outputs_for_ansible():
     ports = block("output", "port_forward_command")
     assert "AWS-StartSSHSession" in ports
     assert "-i ~/.ssh/fsds_aws" in ports
-    for port in (8080, 8081, 8181):
+    for port in (8080, 8081, 8181, 9002, 8089):
         assert f"-L 127.0.0.1:{port}:127.0.0.1:{port}" in ports
 
 
@@ -182,3 +182,28 @@ def test_s3_catalog_has_region_and_no_static_keys():
     assert not any("key" in k.lower() for k in conf)
     with pytest.raises(KeyError):
         catalog_conf({"FSDS_STORAGE": "s3"})
+
+
+def test_datahub_is_prepared_without_starting_and_all_ports_are_loopback():
+    """SDK/Compose cho người học, secret tạo một lần; không chạy pha B lúc provision."""
+    site = yaml.safe_load((ANSIBLE / "site.yml").read_text())
+    role = next(r for r in site[0]["roles"] if r["role"] == "datahub")
+    assert "enable_datahub" in role["when"]
+    variables = yaml.safe_load((ANSIBLE / "group_vars/all.example.yml").read_text())
+    assert variables["enable_datahub"] is True
+    tasks = yaml.safe_load((ANSIBLE / "roles/datahub/tasks/main.yml").read_text())
+    assert "acryl-datahub==1.7.0.14" in str(tasks)
+    assert not any("docker compose" in str(t.get("ansible.builtin.command", "")) for t in tasks)
+    secret = next(t for t in tasks if t.get("no_log"))
+    assert secret["ansible.builtin.command"]["creates"].endswith(".local-secrets.env")
+    services = yaml.load(
+        (ROOT / "docker/datahub-compose.override.yml").read_text(), Loader=ComposeLoader
+    )["services"]
+    for name in (
+        "datahub-gms-quickstart",
+        "frontend-quickstart",
+        "mysql",
+        "kafka-broker",
+        "opensearch",
+    ):
+        assert all(p.startswith("127.0.0.1:") for p in services[name]["ports"])

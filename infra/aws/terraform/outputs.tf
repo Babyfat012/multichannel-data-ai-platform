@@ -41,5 +41,5 @@ output "ssm_command" {
 
 output "port_forward_command" {
   description = "Tunnel SSH qua SSM; dùng cùng key path với inventory mẫu (đổi -i nếu lưu key nơi khác)."
-  value       = "ssh -N -i ~/.ssh/fsds_aws -o ExitOnForwardFailure=yes -o ProxyCommand='aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p --region ${var.region}' -L 127.0.0.1:8080:127.0.0.1:8080 -L 127.0.0.1:8081:127.0.0.1:8081 -L 127.0.0.1:8181:127.0.0.1:8181 ubuntu@${aws_instance.de.id}"
+  value       = "ssh -N -i ~/.ssh/fsds_aws -o ExitOnForwardFailure=yes -o ProxyCommand='aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p --region ${var.region}' -L 127.0.0.1:8080:127.0.0.1:8080 -L 127.0.0.1:8081:127.0.0.1:8081 -L 127.0.0.1:8181:127.0.0.1:8181 -L 127.0.0.1:9002:127.0.0.1:9002 -L 127.0.0.1:8089:127.0.0.1:8089 ubuntu@${aws_instance.de.id}"
 }

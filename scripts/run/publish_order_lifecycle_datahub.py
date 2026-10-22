@@ -139,8 +139,13 @@ def schema_fields(schema, prefix="", optional=False):
 def source_inventory(contracts_dir, source_root, walmart_jdbc):
     """Đọc schema hợp đồng cho từng feed; dùng manifest nếu có để lấy thư mục thật."""
     registry = json.loads((contracts_dir / "registry.json").read_text())
+    source_uri = str(source_root).rstrip("/")
+    remote = "://" in source_uri
+    source_root = Path(source_root)
     manifest_path = source_root / "manifest.json"
-    manifest = json.loads(manifest_path.read_text()) if manifest_path.is_file() else None
+    manifest = (
+        json.loads(manifest_path.read_text()) if not remote and manifest_path.is_file() else None
+    )
     feeds = {}
     for subject, item in registry["subjects"].items():
         group, feed = subject.split("/", 1)
@@ -164,7 +169,11 @@ def source_inventory(contracts_dir, source_root, walmart_jdbc):
                 fields[key]["description"] = "Hợp đồng: " + ", ".join(
                     v["schema_id"] for v in selected
                 )
-        paths = [str(source_root / "dataset_version=*" / "producer=*" / f"feed={feed}")]
+        paths = (
+            [f"{source_uri}/dataset_version=*/producer=*/feed={feed}"]
+            if remote
+            else [str(source_root / "dataset_version=*" / "producer=*" / f"feed={feed}")]
+        )
         if manifest:
             paths = sorted(
                 {
@@ -427,7 +436,7 @@ def main():
     parser.add_argument("--receipt-dir", type=Path)
     parser.add_argument("--receipt", action="append", default=[], metavar="TASK=PATH")
     parser.add_argument("--contracts-dir", type=Path, default=ROOT / "contracts")
-    parser.add_argument("--source-root", type=Path, default=Path("/data/order_lifecycle"))
+    parser.add_argument("--source-root", default="/data/order_lifecycle")
     parser.add_argument("--walmart-jdbc", default=None)
     parser.add_argument("--server", default=os.getenv("DATAHUB_GMS_URL", "http://localhost:8089"))
     args = parser.parse_args()

@@ -9,7 +9,7 @@ Dựng: VPC `10.42.0.0/16` + 1 public subnet + Internet Gateway, security group
 IAM role (instance profile, không access key), 2 bucket S3 (`raw`, `lakehouse`),
 budget tùy chọn. Sơ đồ: [`docs/diagrams/aws-infra.html`](../../../docs/diagrams/aws-infra.html).
 
-Trước khi chạy: xem [rà soát sẵn sàng AWS](../../../docs/aws-readiness-20261022.md).
+Trước khi chạy: xem rà soát sẵn sàng AWS.
 Credit không tự mở quyền dùng mọi loại EC2: ảnh tài khoản ngày 2026-10-22 vẫn là
 Free plan; `t3.xlarge` chưa được xác nhận có thể launch trên tài khoản này.
 

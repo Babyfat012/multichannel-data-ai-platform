@@ -3,8 +3,16 @@
 services:
   mysql:
     image: mysql:8.0
+    ports: !override ["127.0.0.1:3306:3306"]
   frontend-quickstart:
     # v1.7.0.1 has zero-byte Play JARs on this host; this tag has intact JARs.
     image: acryldata/datahub-frontend-react:v1.6.0.2
+    ports: !override ["127.0.0.1:${DATAHUB_MAPPED_FRONTEND_PORT:-9002}:9002"]
     environment:
       DATAHUB_APP_VERSION: v1.6.0.2
+  datahub-gms-quickstart:
+    ports: !override ["127.0.0.1:${DATAHUB_MAPPED_GMS_PORT:-8089}:8080"]
+  kafka-broker:
+    ports: !override ["127.0.0.1:9092:9092"]
+  opensearch:
+    ports: !override ["127.0.0.1:9200:9200"]

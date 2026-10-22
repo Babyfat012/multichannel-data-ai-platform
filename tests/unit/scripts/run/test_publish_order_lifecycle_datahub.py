@@ -190,3 +190,11 @@ def test_refuse_evidence_without_original_run_id(tmp_path):
     )
     assert result.returncode != 0
     assert "run_id gốc" in result.stderr
+
+
+def test_s3_source_uri_is_preserved_in_lineage(tmp_path):
+    """CLI giữ s3a:// nguyên vẹn, dry-run không đọc nguồn hay gọi mạng."""
+    proposals = dry_run(tmp_path, ("--source-root", "s3a://test-raw/order_lifecycle/scale90"))
+    serialized = json.dumps(proposals)
+    assert "s3a://test-raw/order_lifecycle/scale90/dataset_version=*" in serialized
+    assert "s3a:/test-raw" not in serialized

@@ -1,0 +1,44 @@
+# Chuẩn bị pha B, tuyệt đối không chạy Compose/DataHub trong role này.
+- name: Cài uv trong venv công cụ riêng
+  ansible.builtin.pip:
+    name: uv==0.9.5
+    virtualenv: /mnt/fsds-data/uv
+    virtualenv_command: python3 -m venv
+- name: Cài SDK và CLI đúng phiên bản quickstart
+  become_user: '{{ ansible_user }}'
+  ansible.builtin.command:
+    argv: [/mnt/fsds-data/uv/bin/uv, tool, install, '--python', /usr/bin/python3, 'acryl-datahub==1.7.0.14']
+  environment:
+    UV_TOOL_DIR: '/home/{{ ansible_user }}/.local/share/uv/tools'
+    UV_TOOL_BIN_DIR: '/home/{{ ansible_user }}/.local/bin'
+  register: datahub_install
+  changed_when: "'Installed' in datahub_install.stderr"
+- name: Chuẩn bị thư mục quickstart và plugins
+  ansible.builtin.file:
+    path: '/home/{{ ansible_user }}/.datahub/{{ item }}'
+    state: directory
+    owner: '{{ ansible_user }}'
+    mode: '0700'
+  loop: [quickstart, plugins]
+- name: Lấy Compose quickstart ghim theo GMS
+  ansible.builtin.get_url:
+    url: https://raw.githubusercontent.com/datahub-project/datahub/v1.7.0.1/docker/quickstart/docker-compose.quickstart-profile.yml
+    dest: '/home/{{ ansible_user }}/.datahub/quickstart/docker-compose.yml'
+    owner: '{{ ansible_user }}'
+    mode: '0600'
+- name: Sinh secret quickstart một lần, không xuất ra log
+  ansible.builtin.command:
+    argv:
+      - python3
+      - '-c'
+      - |
+        import os, secrets, sys
+        path = sys.argv[1]
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, 'w') as stream:
+            for key in ('DATAHUB_SYSTEM_CLIENT_SECRET', 'DATAHUB_TOKEN_SERVICE_SALT', 'DATAHUB_TOKEN_SERVICE_SIGNING_KEY'):
+                stream.write(key + '=' + secrets.token_hex(32) + '\n')
+      - '/home/{{ ansible_user }}/.datahub/quickstart/.local-secrets.env'
+    creates: '/home/{{ ansible_user }}/.datahub/quickstart/.local-secrets.env'
+  become_user: '{{ ansible_user }}'
+  no_log: true

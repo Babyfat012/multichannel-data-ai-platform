@@ -22,6 +22,7 @@
 - name: Tạo thư mục app
   ansible.builtin.file:
     path: '{{ app_dir }}'
+    owner: '{{ ansible_user }}'
     state: directory
     mode: '0755'
 - name: Đồng bộ repo bằng rsync, loại secret và thư mục phát sinh
@@ -44,7 +45,7 @@
       - '--exclude=__pycache__/'
       - '--exclude=infra/aws/ansible/group_vars/'
       - '--exclude=infra/aws/terraform/'
-      - '--exclude=infra/gcp/'
+      - '--exclude=.archive/'
   register: app_sync
 - name: Tạo các thư mục persistent cho Spark
   ansible.builtin.file:
@@ -63,6 +64,7 @@
   ansible.builtin.template:
     src: env.j2
     dest: '{{ app_dir }}/.env'
+    owner: '{{ ansible_user }}'
     mode: '0600'
   no_log: true
 - name: Kiểm image đã được build

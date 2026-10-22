@@ -33,5 +33,5 @@ Overlay chỉ bật PostgreSQL, Lakekeeper, Spark (1 master + 2 worker) và Airf
 tổng giới hạn ≈14 GiB để vừa `t3.xlarge` 16 GiB. Kafka, Flink, Trino, Debezium
 tắt mặc định; bật từng phần khi cần và tắt phần khác để không hết RAM.
 
-Xem [kết quả rà soát và các điều kiện còn thiếu](../../../docs/aws-readiness-20261022.md)
+Xem kết quả rà soát và các điều kiện còn thiếu
 trước khi chạy playbook trên EC2.
