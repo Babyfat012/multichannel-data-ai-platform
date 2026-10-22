@@ -1,6 +1,7 @@
 # Airflow chạy spark-submit ở client mode: container này chính là Spark driver.
-# PySpark phải cùng phiên bản với cụm Spark standalone; Java 17 đọc được jar Iceberg 1.11.
-FROM apache/airflow:2.10.5-python3.11
+# PySpark và Python phải cùng phiên bản với worker (apache/spark:3.5.3 dùng Python 3.10);
+# Java 17 đọc được jar Iceberg 1.11.
+FROM apache/airflow:2.10.5-python3.10
 
 USER root
 RUN apt-get update \
@@ -14,8 +15,15 @@ RUN pip install --no-cache-dir \
     "pyspark==3.5.3" \
     "psycopg2-binary==2.9.10"
 
+# Feast ở venv riêng (cả pipeline RAG: postgres = pgvector online store, fastembed = embedding): phụ thuộc của nó (numpy 2, starlette, pydantic mới) xung đột với Airflow 2.10.
+# Cài bằng uv: pip mất >10 phút giải phụ thuộc feast + fastembed trên Python 3.10 (đo 2026-10-21), uv vài giây.
+RUN python -m venv /home/airflow/feast-venv \
+    && /home/airflow/feast-venv/bin/pip install --no-cache-dir "uv==0.9.5" \
+    && /home/airflow/feast-venv/bin/uv pip install --no-cache --python /home/airflow/feast-venv/bin/python \
+       "feast[redis,aws,postgres]==0.66.0" "s3fs==2026.9.0" "fastembed==0.8.1"
+
 ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-ENV SPARK_HOME=/home/airflow/.local/lib/python3.11/site-packages/pyspark
+ENV SPARK_HOME=/home/airflow/.local/lib/python3.10/site-packages/pyspark
 ENV PATH="${SPARK_HOME}/bin:${PATH}"
 
 # Package root used by Spark drivers and Python workers.

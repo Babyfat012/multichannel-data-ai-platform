@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
@@ -138,7 +138,7 @@ def _segment_rows(row):
 
 def label_inputs(inputs: DataFrame, cutoff, run_id: str, computed_at=None) -> DataFrame:
     """Tính một nhãn cho mỗi line đầu vào tại một ảnh chụp quan sát."""
-    computed = computed_at or datetime.now(UTC)
+    computed = computed_at or datetime.now(timezone.utc)
     return inputs.sparkSession.createDataFrame(
         inputs.rdd.map(lambda row: _label_row(row, cutoff, run_id, computed)), LABEL_DDL
     )
@@ -255,15 +255,12 @@ def _feature_windows(segments: DataFrame, skus: DataFrame) -> DataFrame:
     )
 
 
-def sku_features(fact: DataFrame, segments: DataFrame) -> DataFrame:
-    """Feature mỗi line: lịch sử có nhãn của cùng SKU, biết tại thời điểm đặt, 90 ngày cohort.
+def _sweep(windows: DataFrame, queries: DataFrame) -> DataFrame:
+    """Tổng dồn (n, p) của các cửa sổ đang mở tại mỗi truy vấn (dataset, SKU, time, line_id).
 
-    Quét theo (dataset, SKU): +1/+nhãn khi cửa sổ mở, −1/−nhãn khi đóng, rồi đọc tổng dồn tại
-    thời điểm đặt. Cùng timestamp thì đổi cửa sổ xếp trước truy vấn (a ≤ t được đếm, b ≤ t
-    không). Trừ đi cửa sổ của chính line.
+    +1/+nhãn khi cửa sổ mở, −1/−nhãn khi đóng. Cùng timestamp thì đổi cửa sổ xếp trước truy
+    vấn (a ≤ t được đếm, b ≤ t không).
     """
-    skus = fact.select(*KEY, "seller_sku")
-    windows = _feature_windows(segments, skus)
     group = ["dataset_version", "seller_sku"]
     opens = windows.select(
         *group,
@@ -281,9 +278,9 @@ def sku_features(fact: DataFrame, segments: DataFrame) -> DataFrame:
         (-F.col("label")).alias("dp"),
         F.lit(None).cast("string").alias("line_id"),
     )
-    queries = fact.filter(F.col("created_at").isNotNull()).select(
+    queries = queries.select(
         *group,
-        F.col("created_at").alias("time"),
+        "time",
         F.lit(1).alias("kind"),
         F.lit(0).alias("dc"),
         F.lit(0).alias("dp"),
@@ -292,14 +289,37 @@ def sku_features(fact: DataFrame, segments: DataFrame) -> DataFrame:
     running = (
         Window.partitionBy(*group).orderBy("time", "kind").rowsBetween(Window.unboundedPreceding, 0)
     )
-    swept = (
+    return (
         opens.unionByName(closes)
         .unionByName(queries)
         .withColumn("n", F.sum("dc").over(running))
         .withColumn("p", F.sum("dp").over(running))
         .filter(F.col("kind") == 1)
-        .select("dataset_version", "line_id", "n", "p")
+        .select(*group, "time", "line_id", "n", "p")
     )
+
+
+def _with_rate(frame: DataFrame) -> DataFrame:
+    """Tỷ lệ = dương / có nhãn; NULL khi chưa có line nào có nhãn."""
+    return frame.withColumn(
+        "return_or_refund_rate_90d",
+        F.when(
+            F.col("labeled_count_90d") > 0,
+            F.col("positive_count_90d") / F.col("labeled_count_90d"),
+        ),
+    )
+
+
+def sku_features(fact: DataFrame, segments: DataFrame) -> DataFrame:
+    """Feature mỗi line: lịch sử có nhãn của cùng SKU, biết tại thời điểm đặt, 90 ngày cohort.
+
+    Đọc tổng dồn của `_sweep` tại thời điểm đặt rồi trừ đi cửa sổ của chính line.
+    """
+    windows = _feature_windows(segments, fact.select(*KEY, "seller_sku"))
+    queries = fact.filter(F.col("created_at").isNotNull()).select(
+        "dataset_version", "seller_sku", F.col("created_at").alias("time"), "line_id"
+    )
+    swept = _sweep(windows, queries).select("dataset_version", "line_id", "n", "p")
     own = (
         windows.join(fact.select(*KEY, "created_at"), KEY)
         .filter((F.col("a") <= F.col("created_at")) & (F.col("created_at") < F.col("b")))
@@ -315,16 +335,46 @@ def sku_features(fact: DataFrame, segments: DataFrame) -> DataFrame:
             (F.col("p") - F.col("own_p")).cast("bigint").alias("positive_count_90d"),
         )
     )
-    return (
+    return _with_rate(
         fact.select(*KEY, "seller_sku", "created_at")
         .join(counts, KEY, "left")
         .fillna(0, subset=["labeled_count_90d", "positive_count_90d"])
-        .withColumn(
-            "return_or_refund_rate_90d",
-            F.when(
-                F.col("labeled_count_90d") > 0,
-                F.col("positive_count_90d") / F.col("labeled_count_90d"),
-            ),
+    )
+
+
+def sku_daily_features(fact: DataFrame, segments: DataFrame, cutoff) -> DataFrame:
+    """Ảnh chụp feature SKU tại 00:00 UTC mỗi ngày, từ ngày đặt đầu tiên của SKU tới cutoff.
+
+    Cùng định nghĩa với `sku_features` (cùng cửa sổ, cùng `_sweep`) nhưng hỏi theo ngày thay vì
+    theo line, nên Feast dùng được cho cả train (PIT join) lẫn serve (bản mới nhất). Không có
+    "line của chính mình" để trừ. `event_timestamp` = mốc ảnh chụp.
+    """
+    windows = _feature_windows(segments, fact.select(*KEY, "seller_sku"))
+    days = (
+        fact.filter(F.col("created_at").isNotNull())
+        .groupBy("dataset_version", "seller_sku")
+        .agg(F.to_date(F.min("created_at")).alias("first_day"))
+        .select(
+            "dataset_version",
+            "seller_sku",
+            F.explode(
+                F.sequence("first_day", F.to_date(F.lit(utc(cutoff))), F.expr("INTERVAL 1 DAY"))
+            ).alias("day"),
+        )
+        .select(
+            "dataset_version",
+            "seller_sku",
+            F.to_timestamp("day").alias("time"),
+            F.lit(None).cast("string").alias("line_id"),
+        )
+    )
+    return _with_rate(
+        _sweep(windows, days).select(
+            "dataset_version",
+            "seller_sku",
+            F.col("time").alias("event_timestamp"),
+            F.col("n").cast("bigint").alias("labeled_count_90d"),
+            F.col("p").cast("bigint").alias("positive_count_90d"),
         )
     )
 
@@ -338,7 +388,7 @@ def build_gold(silver: dict, cutoff, run_id: str, computed_at=None) -> dict:
     spark = silver["line_lifecycle"].sparkSession
     spark.conf.set("spark.sql.session.timeZone", "UTC")
     distribute_python_packages(spark.sparkContext)
-    computed = computed_at or datetime.now(UTC)
+    computed = computed_at or datetime.now(timezone.utc)
     native = silver["native_order_lines"].select(
         "dataset_version", "channel", "native_order_id", "native_line_id", "seller_sku"
     )

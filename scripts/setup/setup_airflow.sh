@@ -51,3 +51,7 @@ fi
 airflow_cmd variables set fsds_order_lifecycle_cdc_control_dir '/opt/airflow/fsds-control/order_lifecycle_cdc'
 airflow_cmd variables set fsds_order_lifecycle_cdc_oracle '/opt/airflow/fsds-control/order_lifecycle_cdc/order_lifecycle_cdc_expected.json'
 airflow_cmd variables set fsds_order_lifecycle_cdc_spark_packages 'org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.11.0,org.apache.iceberg:iceberg-aws-bundle:1.11.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3'
+
+# MLE: kho feature. Redis nằm trong cụm kind (scripts/setup/setup_kind_feature_store.sh).
+airflow_cmd variables set fsds_feast_root 's3://fsds/feature-store'
+airflow_cmd variables set fsds_feast_redis 'fsds-ml-control-plane:30379'
