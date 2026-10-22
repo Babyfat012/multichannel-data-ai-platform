@@ -46,7 +46,7 @@ def catalog_conf(env) -> dict[str, str]:
         "spark.sql.iceberg.compression-codec": "zstd",
         "spark.sql.session.timeZone": "UTC",
         "spark.eventLog.enabled": "true",
-        "spark.eventLog.dir": "file:///spark-events",
+        "spark.eventLog.dir": env.get("FSDS_SPARK_EVENT_LOG_DIR", "file:///spark-events"),
     }
     storage = env.get("FSDS_STORAGE", "minio")
     if storage == "minio":
@@ -67,15 +67,6 @@ def catalog_conf(env) -> dict[str, str]:
                 f"{prefix}.client.region": region,
                 # File raw đọc qua s3a:// (hadoop-aws); trỏ endpoint theo region để khỏi bị redirect.
                 "spark.hadoop.fs.s3a.endpoint": f"s3.{region}.amazonaws.com",
-            }
-        )
-    elif storage == "gcs":
-        conf.update(
-            {
-                f"{prefix}.io-impl": "org.apache.iceberg.gcp.gcs.GCSFileIO",
-                "spark.hadoop.fs.gs.impl": "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem",
-                "spark.hadoop.fs.AbstractFileSystem.gs.impl": "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS",
-                "spark.hadoop.fs.gs.auth.service.account.enable": "true",
             }
         )
     else:

@@ -1,4 +1,4 @@
-"""Kiểm offline cấu hình GCP, giữ nguyên MinIO và các chốt bảo vệ triển khai."""
+"""Kiểm offline cấu hình catalog Iceberg (MinIO local, S3 AWS) và đọc manifest."""
 
 import ast
 import json
@@ -21,7 +21,7 @@ ComposeLoader.add_constructor("!override", lambda loader, node: loader.construct
 
 
 def test_default_configuration_is_original():
-    """So toàn bộ dict với cấu hình trước khi thêm GCS, không chỉ kiểm vài key."""
+    """So toàn bộ dict cấu hình MinIO mặc định, không chỉ kiểm vài key."""
     p = "spark.sql.catalog.lakehouse"
     expected = {
         "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
@@ -55,59 +55,10 @@ def test_default_configuration_is_original():
     assert catalog_conf(env) == expected
 
 
-def test_gcs_has_no_s3_or_key_configuration():
-    """GCS dùng FileIO riêng và metadata VM, không chuyển access key sang Spark conf."""
-    conf = catalog_conf({"FSDS_STORAGE": "gcs", "AWS_ACCESS_KEY_ID": "ignored"})
-    assert conf["spark.sql.catalog.lakehouse.io-impl"] == "org.apache.iceberg.gcp.gcs.GCSFileIO"
-    assert conf["spark.hadoop.fs.gs.impl"].endswith(".GoogleHadoopFileSystem")
-    assert conf["spark.hadoop.fs.AbstractFileSystem.gs.impl"].endswith(".GoogleHadoopFS")
-    assert conf["spark.hadoop.fs.gs.auth.service.account.enable"] == "true"
-    assert not any("s3." in k or "key" in k.lower() for k in conf)
+def test_unknown_storage_is_rejected():
+    """Chỉ nhận minio (local) và s3 (AWS); gõ sai thì dừng ngay."""
     with pytest.raises(ValueError):
         catalog_conf({"FSDS_STORAGE": "typo"})
-
-
-def test_overlay_ports_services_secrets_and_budget():
-    """Mọi port loopback, MinIO bị vô hiệu, tổng quota dưới giới hạn một VM."""
-    text = (ROOT / "docker-compose.gcp.yml").read_text()
-    services = yaml.load(text, Loader=ComposeLoader)["services"]
-    for svc in services.values():
-        assert all(port.startswith("127.0.0.1:") for port in svc.get("ports", []))
-    for name in ("minio", "minio-init", "generator-batch", "generator-load"):
-        assert services[name]["scale"] == 0
-        assert services[name]["profiles"] == ["disabled-gcp"]
-    assert "0.0.0.0:" not in text
-    assert "PRIVATE KEY" not in text
-    assert "AWS_ACCESS_KEY_ID" not in text
-    assert sum(float(svc.get("cpus", 0)) for svc in services.values()) <= 8
-    memory_gib = sum(
-        float(str(svc.get("mem_limit", "0g"))[:-1])
-        / (1024 if str(svc.get("mem_limit", "0g")).endswith("m") else 1)
-        for svc in services.values()
-    )
-    assert memory_gib <= 32
-    for name in ("postgres", "airflow", "spark-worker-1", "spark-worker-2"):
-        assert any("/mnt/fsds-data/" in v for v in services[name]["volumes"])
-    for name in ("airflow", "spark-master", "spark-worker-1", "spark-worker-2"):
-        assert any(
-            "gcs-connector-hadoop3-2.2.26-shaded.jar" in v for v in services[name]["volumes"]
-        )
-    variables = yaml.safe_load((ROOT / "infra/gcp/ansible/group_vars/all.example.yml").read_text())
-    assert all(
-        len(package.split(":")) == 3 for package in variables["spark_packages_gcp"].split(",")
-    )
-
-
-def test_disk_and_rsync_guards():
-    """mkfs phụ thuộc kết quả blkid; rsync không chép env và Git."""
-    disk = (ROOT / "infra/gcp/ansible/roles/data_disk/tasks/main.yml").read_text()
-    tasks = yaml.safe_load(disk)
-    fmt = next(t for t in tasks if "mkfs.ext4" in str(t.get("ansible.builtin.command", "")))
-    assert fmt["when"] == "disk_blkid.rc == 2"
-    assert disk.index("argv: [blkid") < disk.index("argv: [mkfs.ext4")
-    assert "UUID={{ disk_uuid.stdout" in disk
-    app = (ROOT / "infra/gcp/ansible/roles/app/tasks/main.yml").read_text()
-    assert "--exclude=.env" in app and "--exclude=.git/" in app
 
 
 def manifest_reader():
@@ -134,7 +85,7 @@ def test_manifest_local_uses_pathlib(tmp_path):
     assert manifest_reader()(None, str(tmp_path)) == {"dataset_version": "test"}
 
 
-@pytest.mark.parametrize("root", ["file:/tmp/fixture", "gs://raw/fixture", "s3a://raw/fixture"])
+@pytest.mark.parametrize("root", ["file:/tmp/fixture", "s3a://raw/fixture"])
 def test_manifest_uri_uses_spark(root):
     """URI giữ nguyên scheme và dùng wholetext trên session được truyền vào."""
     calls = []

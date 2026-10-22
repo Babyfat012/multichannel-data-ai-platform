@@ -22,7 +22,7 @@ def resolve_runtime_env(
     unknown = set(groups) - _GROUPS.keys()
     if unknown:
         raise ValueError(f"unknown runtime connection group(s): {', '.join(sorted(unknown))}")
-    if storage not in {"minio", "s3", "gcs"}:
+    if storage not in {"minio", "s3"}:
         raise ValueError(f"unknown runtime storage: {storage!r}")
 
     env: dict[str, str] = {}

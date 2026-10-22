@@ -54,7 +54,7 @@ def test_resolve_runtime_env_rejects_unknown_groups():
         resolve_runtime_env({}, {}, ("unkown",))
 
 
-@pytest.mark.parametrize("storage", ["s3", "gcs"])
+@pytest.mark.parametrize("storage", ["s3"])
 def test_cloud_runtime_uses_machine_identity_without_minio(storage):
     """Cloud không đọc Connection MinIO hoặc đưa placeholder key vào Spark."""
     variables = {
@@ -73,7 +73,7 @@ def test_runtime_rejects_unknown_storage():
         resolve_runtime_env({}, {}, (), storage="typo")
 
 
-@pytest.mark.parametrize("storage", ["s3", "gcs"])
+@pytest.mark.parametrize("storage", ["s3"])
 @pytest.mark.parametrize("fails", [False, True])
 def test_cloud_operator_clears_inherited_keys_and_restores_state(monkeypatch, storage, fails):
     """Thực thi operator thật với biên Airflow giả; giữ credential ngoài process Spark."""

@@ -40,13 +40,6 @@ airflow_cmd variables set fsds_order_lifecycle_driver_memory '3g'
 airflow_cmd variables set fsds_order_lifecycle_executor_memory '4g'
 airflow_cmd variables set fsds_order_lifecycle_executor_cores '2'
 
-# Chỉ ghi Variable GCP riêng; DAG trên VM chọn qua AIRFLOW_VAR_FSDS_SPARK_PACKAGES.
-if [ "${FSDS_STORAGE:-minio}" = gcs ]; then
-  airflow_cmd variables set fsds_spark_packages_gcp "${FSDS_SPARK_PACKAGES_GCP:?Cần package GCP}"
-  airflow_cmd variables set fsds_order_lifecycle_source_root "gs://${RAW_BUCKET:?}/order_lifecycle/${FSDS_DATASET_NAME:-fixture}"
-  airflow_cmd variables set fsds_order_lifecycle_cutoff "${FSDS_ORDER_LIFECYCLE_CUTOFF:-2026-06-01T00:00:00.000000Z}"
-fi
-
 # AWS (t3.xlarge): worker chỉ có 3g/1 core nên hạ executor; nguồn đọc qua s3a://.
 if [ "${FSDS_STORAGE:-minio}" = s3 ]; then
   airflow_cmd variables set fsds_spark_packages_aws "${FSDS_SPARK_PACKAGES_AWS:?Cần package AWS}"
