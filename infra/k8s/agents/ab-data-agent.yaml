@@ -1,0 +1,51 @@
+# A/B agent (rubric mle 52): nhánh B của Data Agent — CÙNG prompt + tool, chỉ khác ModelConfig (Qwen 0.5B).
+# agentgateway chia 50/50 lời gọi A2A tới /a2a/data-agent-ab/ giữa data-agent (A, 1.5B) và data-agent-b.
+# Đo theo model thật trên Grafana (dashboard FSDS — A/B LLM). Scale về 0 khi xong.
+apiVersion: kagent.dev/v1alpha2
+kind: ModelConfig
+metadata:
+  name: ab-small-model-config
+  namespace: kagent
+spec:
+  provider: OpenAI
+  model: qwen2.5-0.5b-instruct
+  apiKeySecret: kagent-agw-key
+  apiKeySecretKey: AGW_AGENT_KEY
+  openAI:
+    apiFormat: chatCompletions
+    baseUrl: http://agentgateway.agentgateway.svc.cluster.local:3000/v1
+    temperature: "0.1"
+---
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: data-agent-b
+  namespace: kagent
+spec:
+  type: Declarative
+  # Mô tả = mô tả tool mà Coordinator thấy ⇒ tiếng Anh, có từ khoá.
+  description: Looks up the return history numbers of a SKU (return rate 90 days, returns 24 hours) and chunk text by chunk id.
+  declarative:
+    modelConfig: ab-small-model-config
+    stream: false
+    # Model 1.5B: prompt ngắn, luật rõ để nó gọi tool thay vì bịa số.
+    systemMessage: |
+      You are the FSDS Data Agent for an online seller.
+      You answer questions about product return features of SKUs (ids look like "sku-00001").
+      Always call the get_sku_features tool with the SKU ids from the question; never guess numbers.
+      A null value means the feature is not available yet; say so.
+      Reply briefly with the numbers: labeled_count_90d, positive_count_90d,
+      return_or_refund_rate_90d, approved_returns_24h.
+      When given chunk ids (16 hex characters), call get_policy_chunks and quote the text.
+    tools:
+      - type: McpServer
+        mcpServer:
+          apiGroup: kagent.dev
+          kind: RemoteMCPServer
+          name: feature-tools
+          toolNames: [get_sku_features, get_policy_chunks]
+    deployment:
+      replicas: 0   # chỉ bật khi chạy A/B
+      resources:
+        requests: {cpu: 50m, memory: 192Mi}
+        limits: {memory: 512Mi}

@@ -1,0 +1,21 @@
+{"i": 0, "sku": "sku-00002", "ok": true, "seconds": 4.46}
+{"i": 1, "sku": "sku-00003", "ok": true, "seconds": 4.95}
+{"i": 2, "sku": "sku-00007", "ok": true, "seconds": 5.0}
+{"i": 3, "sku": "sku-00010", "ok": true, "seconds": 2.96}
+{"i": 4, "sku": "sku-00002", "ok": true, "seconds": 4.77}
+{"i": 5, "sku": "sku-00003", "ok": true, "seconds": 4.98}
+{"i": 6, "sku": "sku-00007", "ok": true, "seconds": 4.5}
+{"i": 7, "sku": "sku-00010", "ok": true, "seconds": 2.77}
+{"i": 8, "sku": "sku-00002", "ok": true, "seconds": 1.47}
+{"i": 9, "sku": "sku-00003", "ok": true, "seconds": 4.78}
+{"i": 10, "sku": "sku-00007", "ok": true, "seconds": 1.48}
+{"i": 11, "sku": "sku-00010", "ok": true, "seconds": 2.66}
+{"i": 12, "sku": "sku-00002", "ok": true, "seconds": 4.42}
+{"i": 13, "sku": "sku-00003", "ok": true, "seconds": 1.38}
+{"i": 14, "sku": "sku-00007", "ok": true, "seconds": 4.73}
+{"i": 15, "sku": "sku-00010", "ok": true, "seconds": 4.76}
+{"i": 16, "sku": "sku-00002", "ok": true, "seconds": 4.42}
+{"i": 17, "sku": "sku-00003", "ok": true, "seconds": 4.75}
+{"i": 18, "sku": "sku-00007", "ok": true, "seconds": 4.4}
+{"i": 19, "sku": "sku-00010", "ok": true, "seconds": 4.7}
+{"llm_calls_delta_by_model": {"qwen2.5-1.5b-instruct": 28.0, "qwen2.5-0.5b-instruct": 12.0}}
