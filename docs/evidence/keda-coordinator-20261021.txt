@@ -1,0 +1,28 @@
+# KEDA autoscale coordinator (kind fsds-ml, 2026-10-21)
+# Tải: 3 request/giây vào route a2a-coordinator (header x-kagent-host) trong 150 s; ngưỡng 500m/pod; pods = Running thật.
+t=0s target=0 pods=2
+t=15s target=0 pods=2
+t=30s target=0 pods=2
+t=45s target=866m pods=3
+t=60s target=828m pods=3
+t=75s target=1 pods=3
+t=90s target=1 pods=3
+t=105s target=978m pods=3
+t=120s target=978m pods=3
+t=135s target=978m pods=3
+t=150s target=1 pods=3
+t=165s target=1 pods=3
+t=180s target=823m pods=3
+after t+30s pods=3
+after t+60s pods=3
+after t+90s pods=3
+after t+120s pods=3
+after t+150s pods=3
+after t+180s pods=3
+after t+210s pods=3
+after t+240s pods=3
+after t+270s pods=3
+after t+300s pods=3
+after t+330s pods=2
+  Normal  SuccessfulRescale  7m42s  horizontal-pod-autoscaler  New size: 3; reason: external metric s0-prometheus(prometheus) above target
+  Normal  SuccessfulRescale  12s    horizontal-pod-autoscaler  New size: 2; reason: All metrics below target

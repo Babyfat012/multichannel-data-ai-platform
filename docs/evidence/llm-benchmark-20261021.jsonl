@@ -1,0 +1,8 @@
+# Benchmark llama.cpp Qwen2.5-1.5B Q4_K_M, CPU i5-11400H (6 nhân), kind fsds-ml, 2026-10-21
+# A: threads 4, parallel 2, ctx 8192, KV f16 | B: threads 6, parallel 4, ctx 16384, flash-attn on, KV q8_0
+{"label": "A", "concurrency": 1, "requests": 8, "p50_s": 2.68, "p95_s": 2.79, "req_per_s": 0.413, "output_tok_per_s": 21.4, "avg_prompt_tokens": 520}
+{"label": "A", "concurrency": 2, "requests": 8, "p50_s": 4.71, "p95_s": 7.87, "req_per_s": 0.381, "output_tok_per_s": 20.1, "avg_prompt_tokens": 520}
+{"label": "A", "concurrency": 4, "requests": 8, "p50_s": 6.53, "p95_s": 9.56, "req_per_s": 0.475, "output_tok_per_s": 25.3, "avg_prompt_tokens": 520}
+{"label": "B", "concurrency": 1, "requests": 8, "p50_s": 2.62, "p95_s": 2.92, "req_per_s": 0.413, "output_tok_per_s": 21.2, "avg_prompt_tokens": 520}
+{"label": "B", "concurrency": 2, "requests": 8, "p50_s": 4.57, "p95_s": 8.85, "req_per_s": 0.372, "output_tok_per_s": 19.3, "avg_prompt_tokens": 520}
+{"label": "B", "concurrency": 4, "requests": 8, "p50_s": 6.29, "p95_s": 7.0, "req_per_s": 0.578, "output_tok_per_s": 29.6, "avg_prompt_tokens": 520}

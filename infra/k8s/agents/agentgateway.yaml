@@ -1,0 +1,251 @@
+# agentgateway: cổng duy nhất cho Agent gọi LLM (/v1/...) và MCP tool (/mcp). Đặt chính sách ở một chỗ:
+# API key (Secret agentgateway-keys, tạo từ scripts/setup/deploy_kind_agents.sh), rate limit, chỉ cho gọi tool đã duyệt.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agentgateway
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentgateway-config
+  namespace: agentgateway
+data:
+  config.yaml: |
+    config:
+      adminAddr: 0.0.0.0:15000
+      statsAddr: 0.0.0.0:15020       # /metrics Prometheus: request, token LLM, tool call
+      readinessAddr: 0.0.0.0:15021
+      tracing:                       # trace mỗi request LLM/MCP/A2A gửi Jaeger (OTLP gRPC)
+        otlpEndpoint: http://jaeger.observability.svc.cluster.local:4317
+        randomSampling: true
+    gateways:
+      default:
+        port: 3000
+    llm:
+      policies:
+        apiKey:                      # thiếu/sai key ⇒ 401
+          mode: strict
+          keys:
+          - key: $AGW_AGENT_KEY
+            metadata: {name: kagent-agents}
+        localRateLimit:              # token bucket: tối đa 60 request dồn, hồi 1 request/giây
+        - maxTokens: 60
+          tokensPerFill: 1
+          fillInterval: 1s
+          type: requests
+      models:
+      - name: qwen2.5-1.5b-instruct
+        provider:
+          custom:
+            formats:
+            - type: completions
+        params:
+          model: qwen2.5-1.5b-instruct
+          baseUrl: http://qwen.llm.svc.cluster.local:8080/v1
+        # PII (rubric 50): chặn request chứa email / thẻ tín dụng / SSN (403), che PII trong câu trả lời.
+        # Không chặn số điện thoại ở request: số lượng, giá, mã SKU dễ bị nhận nhầm. Đếm ở
+        # agentgateway_guardrail_checks_total.
+        guardrails: &pii
+          request:
+          - regex:
+              action: reject
+              rules:
+              - builtin: email
+              - builtin: creditCard
+              - builtin: ssn
+            rejection:
+              status: 403
+              headers:
+                set: {content-type: application/json}
+              body: '{"error":{"message":"Request blocked: contains personal data (PII)","code":"pii_detected"}}'
+          response:
+          - regex:
+              action: mask
+              rules:
+              - builtin: email
+              - builtin: phoneNumber
+              - builtin: creditCard
+      # A/B (rubric 52–53, docs/mle-ab-test.md): nhánh B = bản nhỏ hơn cùng họ Qwen.
+      - name: qwen2.5-0.5b-instruct
+        provider:
+          custom:
+            formats:
+            - type: completions
+        params:
+          model: qwen2.5-0.5b-instruct
+          baseUrl: http://qwen-small.llm.svc.cluster.local:8080/v1
+        guardrails: *pii
+      # Agent/client gọi model ảo `fsds-chat`; gateway chia 50/50 giữa A và B. Metric/trace ghi model
+      # thật (gen_ai_response_model) ⇒ so được độ trễ, token, lỗi theo từng nhánh trên Grafana.
+      virtualModels:
+      - name: fsds-chat
+        routing:
+          weighted:
+            targets:
+            - model: qwen2.5-1.5b-instruct
+              weight: 1
+            - model: qwen2.5-0.5b-instruct
+              weight: 1
+    # A2A: Agent không gọi thẳng nhau. kagent bật `proxy.url` = gateway ⇒ lời gọi Agent→Agent tới đây kèm header
+    # x-kagent-host = "<agent>.<ns>" (kagent applyProxyURL); route chọn Agent theo header đó. Client ngoài cụm
+    # dùng đường /a2a/<agent>/. Policy a2a viết lại `url` trong agent card về gateway. Agent mới = thêm route.
+    routes:
+    - name: a2a-data-agent
+      matches:
+      - path: {pathPrefix: /}
+        headers:
+        - name: x-kagent-host
+          value: {exact: data-agent.kagent}
+      policies:
+        apiKey: &a2a-key
+          mode: strict
+          keys:
+          - key: $AGW_AGENT_KEY
+            metadata: {name: kagent-agents}
+        a2a: {}
+      backends:
+      - host: data-agent.kagent.svc.cluster.local:8080
+    - name: a2a-data-agent-path
+      matches:
+      - path: {pathPrefix: /a2a/data-agent/}
+      policies:
+        apiKey: *a2a-key
+        a2a: {}
+        urlRewrite:
+          path: {prefix: /}
+      backends:
+      - host: data-agent.kagent.svc.cluster.local:8080
+    # Đường thẳng tới nhánh B (eval harness ML-N1 chấm riêng từng nhánh).
+    - name: a2a-data-agent-b-path
+      matches:
+      - path: {pathPrefix: /a2a/data-agent-b/}
+      policies:
+        apiKey: *a2a-key
+        a2a: {}
+        urlRewrite:
+          path: {prefix: /}
+      backends:
+      - host: data-agent-b.kagent.svc.cluster.local:8080
+    # A/B agent (rubric 52): một đường vào, hai bản Data Agent khác ModelConfig, chia theo trọng số.
+    - name: a2a-data-agent-ab
+      matches:
+      - path: {pathPrefix: /a2a/data-agent-ab/}
+      policies:
+        apiKey: *a2a-key
+        a2a: {}
+        urlRewrite:
+          path: {prefix: /}
+      backends:
+      - host: data-agent.kagent.svc.cluster.local:8080
+        weight: 1
+      - host: data-agent-b.kagent.svc.cluster.local:8080
+        weight: 1
+    - name: a2a-model-agent
+      matches:
+      - path: {pathPrefix: /}
+        headers:
+        - name: x-kagent-host
+          value: {exact: model-agent.kagent}
+      policies:
+        apiKey: *a2a-key
+        a2a: {}
+      backends:
+      - host: model-agent.kagent.svc.cluster.local:8080
+    - name: a2a-model-agent-path
+      matches:
+      - path: {pathPrefix: /a2a/model-agent/}
+      policies:
+        apiKey: *a2a-key
+        a2a: {}
+        urlRewrite:
+          path: {prefix: /}
+      backends:
+      - host: model-agent.kagent.svc.cluster.local:8080
+    - name: a2a-coordinator
+      matches:
+      - path: {pathPrefix: /}
+        headers:
+        - name: x-kagent-host
+          value: {exact: coordinator.kagent}
+      policies:
+        apiKey: *a2a-key
+        a2a: {}
+      backends:
+      - host: coordinator.kagent.svc.cluster.local:8080
+    - name: a2a-coordinator-path
+      matches:
+      - path: {pathPrefix: /a2a/coordinator/}
+      policies:
+        apiKey: *a2a-key
+        a2a: {}
+        urlRewrite:
+          path: {prefix: /}
+      backends:
+      - host: coordinator.kagent.svc.cluster.local:8080
+    # MCP gateway: một route /mcp (không dùng khối `mcp:` rút gọn: khối đó nhận MỌI đường dẫn và đứng trước
+    # các route A2A theo header). Rate limit không đặt: bản 1.6.0 không áp dụng cho MCP (đo 2026-10-21:
+    # 300 request/0,4 s đều 200); rate limit có hiệu lực ở nhánh LLM.
+    - name: mcp
+      matches:
+      - path: {pathPrefix: /mcp}
+      policies:
+        apiKey: *a2a-key
+        mcpAuthorization:            # tool ngoài danh sách bị ẩn khỏi tools/list và bị chặn khi gọi
+          rules:
+          - 'mcp.tool.name == "get_sku_features"'
+          - 'mcp.tool.name == "get_policy_chunks"'
+          - 'mcp.tool.name == "search_policy_chunks"'
+          - 'mcp.tool.name == "predict_return_risk"'
+      backends:
+      - mcp:
+          targets:
+          - name: features
+            mcp:
+              host: http://feature-api.feature-store.svc.cluster.local:8000/mcp/
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentgateway
+  namespace: agentgateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: agentgateway}
+  template:
+    metadata:
+      labels: {app: agentgateway}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "15020"
+    spec:
+      containers:
+        - name: agentgateway
+          image: ghcr.io/agentgateway/agentgateway:v1.6.0@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
+          args: ["-f", "/config/config.yaml"]
+          envFrom: [{secretRef: {name: agentgateway-keys}}]
+          ports:
+            - {name: http, containerPort: 3000}
+            - {name: metrics, containerPort: 15020}
+          volumeMounts: [{name: config, mountPath: /config}]
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          readinessProbe:
+            httpGet: {path: /healthz/ready, port: 15021}
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap: {name: agentgateway-config}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentgateway
+  namespace: agentgateway
+spec:
+  selector: {app: agentgateway}
+  ports:
+    - {name: http, port: 3000, targetPort: http}
+    - {name: metrics, port: 15020, targetPort: metrics}

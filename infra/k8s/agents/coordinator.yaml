@@ -1,0 +1,31 @@
+# Coordinator Agent: nhận câu hỏi của Seller, giao việc cho Data Agent hoặc Model Agent (Agent-as-tool, A2A).
+# kagent `proxy.url` = agentgateway ⇒ lời gọi A2A đi qua gateway (route theo header x-kagent-host), kèm API key.
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: coordinator
+  namespace: kagent
+spec:
+  type: Declarative
+  description: Điều phối câu hỏi của Seller tới Data Agent (feature, chunk) hoặc Model Agent (dự đoán, chính sách).
+  declarative:
+    modelConfig: default-model-config
+    stream: false
+    # System prompt quản lý trên Langfuse (prompt fsds-coordinator, label production); scripts/setup/sync_agent_prompts.py
+    # đẩy bản production vào ConfigMap agent-prompts. Bản gốc lần đầu: infra/k8s/agents/prompts/coordinator.txt.
+    systemMessageFrom: {type: ConfigMap, name: agent-prompts, key: coordinator}
+    tools:
+      - type: Agent
+        agent: {name: data-agent}
+        headersFrom:
+          - name: Authorization
+            valueFrom: {type: Secret, name: kagent-agw-key, key: AUTH_HEADER}
+      - type: Agent
+        agent: {name: model-agent}
+        headersFrom:
+          - name: Authorization
+            valueFrom: {type: Secret, name: kagent-agw-key, key: AUTH_HEADER}
+    deployment:
+      resources:
+        requests: {cpu: 50m, memory: 192Mi}
+        limits: {memory: 512Mi}

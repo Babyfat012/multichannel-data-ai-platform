@@ -1,0 +1,52 @@
+# Langfuse v2 (quản lý prompt, rubric mle dòng 34): system prompt của Agent sống ở đây, có version + label production.
+# Bản v2 chỉ cần Postgres (dùng database `langfuse` trên pgvector, ns rag); v3+ cần thêm ClickHouse/Redis/S3.
+# Secret langfuse-env (DATABASE_URL, khoá, tài khoản khởi tạo) do scripts/setup/deploy_kind_langfuse.sh tạo.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: langfuse
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: langfuse
+  namespace: langfuse
+spec:
+  replicas: 1
+  strategy: {type: Recreate}   # migration Prisma chạy lúc khởi động: không để 2 pod chạy migration cùng lúc
+  selector:
+    matchLabels: {app: langfuse}
+  template:
+    metadata:
+      labels: {app: langfuse}
+    spec:
+      containers:
+        - name: langfuse
+          image: langfuse/langfuse:2.95.11
+          envFrom: [{secretRef: {name: langfuse-env}}]
+          env:
+            - {name: NEXTAUTH_URL, value: "http://langfuse.langfuse.svc.cluster.local:3000"}
+            - {name: HOSTNAME, value: "0.0.0.0"}
+            - {name: TELEMETRY_ENABLED, value: "false"}
+            - {name: LANGFUSE_INIT_ORG_ID, value: fsds}
+            - {name: LANGFUSE_INIT_ORG_NAME, value: FSDS}
+            - {name: LANGFUSE_INIT_PROJECT_ID, value: fsds-agents}
+            - {name: LANGFUSE_INIT_PROJECT_NAME, value: FSDS Agents}
+            - {name: LANGFUSE_INIT_USER_NAME, value: admin}
+          ports: [{name: http, containerPort: 3000}]
+          resources:
+            requests: {cpu: 50m, memory: 192Mi}
+            limits: {memory: 512Mi}
+          readinessProbe:
+            httpGet: {path: /api/public/health, port: http}
+            periodSeconds: 10
+            failureThreshold: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: langfuse
+  namespace: langfuse
+spec:
+  selector: {app: langfuse}
+  ports: [{name: http, port: 3000, targetPort: http}]

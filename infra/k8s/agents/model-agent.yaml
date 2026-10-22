@@ -1,0 +1,29 @@
+# Agent 2 (Model + RAG Agent): dữ liệu từ Online Feature Store + 2 tool chính: dự đoán qua KServe
+# (`predict_return_risk`) và RAG (`search_policy_chunks`, Feast pgvector). Mọi tool đi qua agentgateway /mcp.
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: model-agent
+  namespace: kagent
+spec:
+  type: Declarative
+  # Mô tả này là mô tả tool mà Coordinator (LLM) thấy ⇒ tiếng Anh, có từ khoá để model nhỏ chọn đúng.
+  description: Answers ALL return/refund policy questions (Amazon, Walmart, Shopify, TikTok Shop, Shopee, seller playbook) from documents, and scores the return risk of a new order.
+  declarative:
+    modelConfig: default-model-config
+    stream: false
+    # System prompt quản lý trên Langfuse (prompt fsds-model-agent, label production); scripts/setup/sync_agent_prompts.py
+    # đẩy bản production vào ConfigMap agent-prompts. Bản gốc lần đầu: infra/k8s/agents/prompts/model-agent.txt.
+    systemMessageFrom: {type: ConfigMap, name: agent-prompts, key: model-agent}
+    tools:
+      - type: McpServer
+        mcpServer:
+          apiGroup: kagent.dev
+          kind: RemoteMCPServer
+          name: feature-tools
+          toolNames: [get_sku_features, predict_return_risk, search_policy_chunks]
+    deployment:
+      # Không khai `replicas`: KEDA quyết định (model-agent-keda.yaml).
+      resources:
+        requests: {cpu: 50m, memory: 192Mi}
+        limits: {memory: 512Mi}

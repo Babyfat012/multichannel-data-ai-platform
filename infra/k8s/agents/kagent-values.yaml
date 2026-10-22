@@ -1,0 +1,49 @@
+# Giá trị Helm cho kagent 0.10.3 bản tối giản trên máy 14 GB: tắt mọi agent/tool mẫu, chỉ giữ controller, UI,
+# Postgres đi kèm và kmcp. Model mặc định trỏ qua agentgateway (không gọi thẳng LLM).
+providers:
+  default: openAI
+  openAI:
+    provider: OpenAI
+    model: qwen2.5-1.5b-instruct
+    apiKeySecretRef: kagent-agw-key          # tạo bởi scripts/setup/deploy_kind_agents.sh
+    apiKeySecretKey: AGW_AGENT_KEY
+    config:
+      baseUrl: http://agentgateway.agentgateway.svc.cluster.local:3000/v1
+      temperature: "0.1"
+controller:
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {memory: 384Mi}
+ui:
+  resources:
+    requests: {cpu: 50m, memory: 192Mi}
+    limits: {memory: 512Mi}
+database:
+  postgres:
+    bundled:
+      resources:
+        requests: {cpu: 50m, memory: 128Mi}
+        limits: {memory: 384Mi}
+# Lời gọi Agent→Agent (Agent-as-tool) và tới MCP có URL nội bộ đi qua agentgateway (A2A/MCP gateway).
+proxy:
+  url: http://agentgateway.agentgateway.svc.cluster.local:3000
+kagent-tools: {enabled: false}
+grafana-mcp: {enabled: false}
+k8s-agent: {enabled: false}
+kgateway-agent: {enabled: false}
+istio-agent: {enabled: false}
+promql-agent: {enabled: false}
+observability-agent: {enabled: false}
+argo-rollouts-agent: {enabled: false}
+helm-agent: {enabled: false}
+cilium-policy-agent: {enabled: false}
+cilium-manager-agent: {enabled: false}
+cilium-debug-agent: {enabled: false}
+# Trace của controller và Agent (mỗi lượt LLM, tool call) gửi Jaeger.
+otel:
+  tracing:
+    enabled: true
+    exporter:
+      otlp:
+        endpoint: jaeger.observability.svc.cluster.local:4317
+        insecure: true

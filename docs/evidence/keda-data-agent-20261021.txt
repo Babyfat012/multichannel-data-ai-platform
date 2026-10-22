@@ -1,0 +1,28 @@
+# KEDA autoscale data-agent (kind fsds-ml, 2026-10-21)
+# Tải: 3 request/giây vào route a2a-data-agent của agentgateway (lấy agent card) trong 150 s.
+# target = sum(rate(agentgateway_requests_total{route="default/a2a-data-agent"}[1m])) / số pod, ngưỡng 500m; pods = số pod Running thật.
+t=0s target=0/500m pods=2
+t=15s target=0/500m pods=2
+t=30s target=400m/500m pods=2
+t=45s target=822m/500m pods=3
+t=60s target=811m/500m pods=3
+t=75s target=978m/500m pods=3
+t=90s target=978m/500m pods=3
+t=105s target=1/500m pods=3
+t=120s target=1/500m pods=3
+t=135s target=1/500m pods=3
+t=150s target=1/500m pods=3
+t=165s target=1/500m pods=3
+t=180s target=734m/500m pods=3
+t=195s target=400m/500m pods=3
+t=210s target=67m/500m pods=3
+t=225s target=0/500m pods=3
+t=240s target=0/500m pods=3
+t=255s target=0/500m pods=3
+t=270s target=0/500m pods=3
+t=285s target=0/500m pods=3
+
+# HPA events
+  Normal  SuccessfulRescale  9m11s  horizontal-pod-autoscaler  New size: 2; reason: Current number of replicas below Spec.MinReplicas
+  Normal  SuccessfulRescale  7m56s  horizontal-pod-autoscaler  New size: 3; reason: external metric s0-prometheus(prometheus) above target
+  Normal  SuccessfulRescale  25s    horizontal-pod-autoscaler  New size: 2; reason: All metrics below target
