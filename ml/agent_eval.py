@@ -1,8 +1,9 @@
 """ML-N1: eval harness cho agent + cổng hồi quy (regression gate).
 
 Hỏi agent (qua agentgateway, giao thức A2A) cùng một bộ câu về SKU; đáp án chuẩn lấy từ Feature API
-(chính nguồn agent phải gọi tool). Câu trả lời ĐẠT khi chứa đúng số line có nhãn, số line bị trả và tỷ
-lệ trả 90 ngày. Độ chính xác dưới ngưỡng ⇒ thoát mã 1 ⇒ CI báo build đỏ sau deploy agent.
+(chính nguồn agent phải gọi tool). Agent được yêu cầu trả JSON ba trường; không có JSON thì đọc câu
+văn, số phải đứng cạnh tên trường. ĐẠT khi số line có nhãn, số line bị trả và tỷ lệ trả 90 ngày đều đúng
+TRƯỜNG. Độ chính xác dưới ngưỡng ⇒ thoát mã 1 ⇒ CI báo build đỏ sau deploy agent.
 Chạy: `python -m ml.agent_eval --agent data-agent --skus sku-00001,sku-00002 --min-accuracy 0.6`.
 """
 
@@ -21,17 +22,29 @@ import uuid
 
 NUMBER = re.compile(r"(?<![\w.])-?\d+(?:[.,]\d+)?%?")
 SKU_ID = re.compile(r"sku-\d+", re.IGNORECASE)
+CLAUSE = re.compile(r"[;\n]|[.,](?=\s|$)")  # "0.333", "33,3%" không bị cắt
+FIELDS = {  # tên trường → cách agent hay gọi nó trong câu văn
+    "labeled_count_90d": re.compile(r"\w*label\w*", re.IGNORECASE),
+    "positive_count_90d": re.compile(r"\w*(?:positive|returned|refunded)\w*", re.IGNORECASE),
+    "return_or_refund_rate_90d": re.compile(r"\w*rate\w*", re.IGNORECASE),
+}
+ASK_JSON = (
+    " Reply with one JSON object with exactly these keys: "
+    '{"labeled_count_90d": int, "positive_count_90d": int, "return_or_refund_rate_90d": float}.'
+)
+
+
+def value(raw: str) -> str:
+    """Chuẩn hoá một số: '33.3%' → '0.333', '0,25' → '0.25', '7' → '7'."""
+    number = float(raw.rstrip("%").replace(",", "."))
+    if raw.endswith("%"):
+        number /= 100
+    return f"{number:.3f}".rstrip("0").rstrip(".")
 
 
 def numbers(text: str) -> set[str]:
-    """Mọi số trong câu, chuẩn hoá: '33.3%' → '0.333', '0,25' → '0.25', '7' → '7'."""
-    out = set()
-    for raw in NUMBER.findall(SKU_ID.sub(" ", text)):  # "sku-00002" không phải số 2
-        value = float(raw.rstrip("%").replace(",", "."))
-        if raw.endswith("%"):
-            value /= 100
-        out.add(f"{value:.3f}".rstrip("0").rstrip("."))
-    return out
+    """Mọi số trong câu, đã chuẩn hoá."""
+    return {value(raw) for raw in NUMBER.findall(SKU_ID.sub(" ", text))}  # "sku-00002" không phải 2
 
 
 def expected(features: dict) -> dict[str, str] | None:
@@ -52,18 +65,68 @@ def rate_close(found: set[str], target: str) -> bool:
     return any(abs(float(x) - float(target)) <= 0.005 for x in found if float(x) <= 1)
 
 
+def from_json(answer: str) -> dict[str, set[str]] | None:
+    """Đọc 'phiếu có ô': object JSON đầu tiên có đủ ba trường. None khi agent không trả JSON."""
+    for chunk in re.findall(r"\{[^{}]*\}", answer):
+        try:
+            data = json.loads(chunk)
+            if isinstance(data, dict) and set(FIELDS) <= data.keys():
+                return {field: {value(str(data[field]))} for field in FIELDS}
+        except ValueError:  # JSON hỏng hoặc ô không phải số ⇒ thử chunk sau, rồi về câu văn
+            continue
+    return None
+
+
+def from_text(answer: str) -> dict[str, set[str]]:
+    """Đọc câu văn: mỗi lần nhắc tên trường lấy số GẦN nó nhất trong cùng mệnh đề (hoà ⇒ số đứng sau).
+
+    Số không đứng cạnh tên trường nào thì không tính ⇒ câu đoán mò "10, 30, 0.333" trượt; câu tráo
+    "labeled 10, positive 30" trượt; nhắc một trường hai lần với hai số khác nhau cũng trượt.
+    """
+    # ponytail: heuristic khoảng cách ký tự, câu lòng vòng có thể chấm sai; JSON là đường chính,
+    # cột mode cho biết bao nhiêu câu đi đường này.
+    out: dict[str, set[str]] = {field: set() for field in FIELDS}
+    for clause in CLAUSE.split(SKU_ID.sub(" ", answer)):
+        nums = [(m.start(), m.end(), m.group()) for m in NUMBER.finditer(clause)]
+        for field, label in FIELDS.items():
+            for hit in label.finditer(clause):
+                gaps = [
+                    (
+                        start - hit.end() if start >= hit.end() else hit.start() - end,
+                        start < hit.start(),
+                        raw,
+                    )
+                    for start, end, raw in nums
+                ]
+                if gaps:
+                    out[field].add(value(min(gaps)[2]))
+    return out
+
+
 def score(answer: str, features: dict) -> dict:
-    """Chấm một câu trả lời: từng con số có mặt không, và cả câu có đạt không."""
+    """Chấm một câu trả lời: mỗi trường phải có đúng MỘT giá trị và giá trị đó đúng."""
     want = expected(features)
     if want is None:
         return {"gradable": False, "pass": None}
-    found = numbers(answer)
+    found = from_json(answer)
+    mode = "json" if found else "text"
+    found = found or from_text(answer)
     checks = {
-        "labeled_count_90d": want["labeled_count_90d"] in found,
-        "positive_count_90d": want["positive_count_90d"] in found,
-        "return_or_refund_rate_90d": rate_close(found, want["return_or_refund_rate_90d"]),
+        field: len(found[field]) == 1
+        and (
+            rate_close(found[field], want[field])
+            if field == "return_or_refund_rate_90d"
+            else want[field] in found[field]
+        )
+        for field in FIELDS
     }
-    return {"gradable": True, "pass": all(checks.values()), "checks": checks, "expected": want}
+    return {
+        "gradable": True,
+        "pass": all(checks.values()),
+        "mode": mode,
+        "checks": checks,
+        "expected": want,
+    }
 
 
 def texts(node) -> list[str]:
@@ -111,7 +174,7 @@ def main(argv=None) -> int:
     key = {"Authorization": f"Bearer {os.environ['AGW_AGENT_KEY']}"}
     rows = []
     for item in truth:
-        question = f"What are the return features of {item['seller_sku']}?"
+        question = f"What are the return features of {item['seller_sku']}?" + ASK_JSON
         started = time.perf_counter()
         try:
             reply = post(
