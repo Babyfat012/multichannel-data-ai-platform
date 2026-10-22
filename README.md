@@ -1,6 +1,6 @@
-# FSDS: Nền tảng dữ liệu đa kênh cho Seller thương mại điện tử
+# Multichannel E-commerce Data & AI Platform
 
-Data platform gom dữ liệu bán hàng của một Seller trên 5 nền tảng thương mại điện tử (Amazon, TikTok Shop, Shopify, Walmart, Shopee) vào một lakehouse, dự đoán khả năng trả hàng của từng dòng đơn, rồi cho agent trả lời Seller bằng số thật. Toàn bộ dữ liệu được sinh giả lập.
+Nền tảng dữ liệu và AI gom dữ liệu bán hàng của một Seller trên 5 nền tảng thương mại điện tử (Amazon, TikTok Shop, Shopify, Walmart, Shopee) vào một lakehouse, dự đoán khả năng trả hàng của từng dòng đơn, rồi cho agent trả lời Seller bằng số thật. Toàn bộ dữ liệu được sinh giả lập.
 
 > **Chấm điểm:** đối chiếu từng dòng rubric với artifact và bằng chứng ở
 > [ma trận rubric DE](docs/de-rubric-matrix.md) và [ma trận rubric MLE](docs/mle-rubric-matrix.md).
