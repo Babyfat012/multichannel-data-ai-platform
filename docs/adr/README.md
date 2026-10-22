@@ -25,5 +25,5 @@ hơn số lớn nhất hiện có (hiện là 0013).
 
 Quyết định Q mới đã được xác nhận thay phần cũ tương ứng; ghi rõ quan hệ
 thay thế thay vì diễn giải đoạn lịch sử là policy hiện hành. Ledger quy định
-nghiệm thu, ADR ghi trade-off, [readiness](../implementation-readiness.md)
+nghiệm thu, ADR ghi trade-off, readiness
 ghi gate còn mở; không tài liệu nào tự chứng minh runtime đạt.

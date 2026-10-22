@@ -23,7 +23,7 @@ Q52 chưa quyết định lại nhãn Q41: mốc giao khi split delivery và s�
 Return/Refund nào kích hoạt nhãn phải được chốt tường minh. Grain dự đoán
 vẫn là Order Line; việc thêm shipment/return/refund không được nhân bản fact
 sales hoặc biến score xếp hạng thành xác suất. Xem
-[impact assessment và quyết định phụ thuộc](../expanded-scope-design.md).
+impact assessment và quyết định phụ thuộc.
 
 Cập nhật cùng ngày: người dùng đã xác nhận Q56–Q59; phần nhãn và các policy
 tiếp theo ở [ADR-0010](0010-shipment-windows-return-label-v2.md). Đoạn trên

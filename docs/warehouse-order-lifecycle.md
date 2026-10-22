@@ -4,7 +4,7 @@
 Rubric dòng 21 yêu cầu tối ưu warehouse/indexing. Lát Walmart v1 không đại diện
 năm Channel và mất index sau overwrite. Job `spark_jobs/warehouse/export_order_lifecycle.py` đọc `build_gold`, ghi schema mới
 `warehouse_lifecycle` trên PostgreSQL service của VM. Giữ nguyên v1, không quy đổi hay
-cộng chung currency. Cấu hình VM/storage/auth xem [gcp-runtime.md](gcp-runtime.md).
+cộng chung currency. Cấu hình VM/storage/auth xem gcp-runtime.md.
 
 | Bảng | Grain và dữ liệu giữ lại |
 |---|---|

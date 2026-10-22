@@ -28,7 +28,7 @@ Quyết định nền: Q32–Q49 và D1–D25 (xem `de-expansion-review.md`,
 
 Cloud POC, bảo mật endpoint và chuẩn bị vận hành bắt đầu ở phase cần dùng;
 P4 hoàn thiện triển khai/proof. Thứ tự dependency và điều kiện full-scale
-theo [G0–G4](implementation-readiness.md), không chờ P4 mới thử Cloud.
+theo G0–G4, không chờ P4 mới thử Cloud.
 
 ## Quy cách đóng một dòng nghiệm thu
 
@@ -36,7 +36,7 @@ Mỗi dòng chỉ được đánh dấu đạt khi evidence ghi rubric ID, expec
 pass/fail, code/config/runtime version, dataset/run/generation, Channel/ngày,
 local hay Cloud và đường dẫn log/report/ảnh giải thích kết quả. Ảnh đơn lẻ
 không chứng minh tính đúng hoặc phạm vi full-scale. Gate/scenario S01–S18
-và phần bất định còn mở tại [readiness](implementation-readiness.md).
+và phần bất định còn mở tại readiness.
 
 Các dòng pipeline/feature/API liên quan phải có đối soát key/count/amount/
 coverage hoặc expected output tương ứng; lỗi phải chặn publication. Một run
@@ -191,7 +191,7 @@ prompt injection, A/B có kiểm định ý nghĩa.
 7. GKE/K8s + Kubeflow/KServe trên quota trial (D8/Q32 ngân sách).
 
 Tiêu chí cụ thể/failure cases và tác động khi fail xem bảng POC trong
-[readiness](implementation-readiness.md). Vector fallback không tự đạt
+readiness. Vector fallback không tự đạt
 `mle` 9; phải giữ mục này chưa đạt hoặc có xác nhận nghiệm thu thay thế.
 CI có thể test/build tự động; deploy job thực thi tự động sau khi người dùng
 chủ động kích hoạt (Q33), có proof cả deploy và rollback theo yêu cầu tương
@@ -202,7 +202,7 @@ chủ động kích hoạt (Q33), có proof cả deploy và rollback theo yêu c
 Cập nhật 2026-10-18 theo Q52–Q55 đã được người dùng xác nhận: thêm partial
 lifecycle, Listing history, inventory nhỏ và queue/decomposition/drilldown
 read-only. Q56–Q59 cũng đã được người dùng xác nhận; impact cùng S19–S30 tại
-[expanded-scope-design.md](expanded-scope-design.md); gate readiness được
+expanded-scope-design.md; gate readiness được
 mở rộng tương ứng, chưa có evidence đạt và chưa đổi số dòng rubric.
 Q54 thay một phần Q31 (inventory nhỏ từ roadmap vào phạm vi kế tiếp);
 Q56/Q57 làm rõ/thay phần ngữ nghĩa Q41 bằng label v2; Q58 chốt pool/movement
@@ -216,12 +216,12 @@ tầng thành raw100GB hoặc dùng proof dataset cũ cho scope mới.
 Q28–Q30 cũng là acceptance sản phẩm: sales/returns/canceled/delivery,
 basket/concentration/geography/discount và repeat/first-observed customer
 phải có nguồn/coverage, Gold/mart, API/UI và phép đối chiếu. Mapping ở bảng
-đầu ra Seller trong [readiness](implementation-readiness.md). Chỉ đạt các
+đầu ra Seller trong readiness. Chỉ đạt các
 dòng công nghệ chưa đủ chứng minh trải nghiệm Seller đã hoàn thành.
 
 ## Audit tích hợp và điều kiện đóng issue
 
-[Sổ IR01–IR25](integration-risk-register.md) phân biệt reproduced, code
+Sổ IR01–IR25 phân biệt reproduced, code
 evidence, contract gap, cần quyết định và chờ POC. Một generator resume
 đổi seed đã tái hiện và sửa với regression test. Input/offset
 fencing, model knowledge cutoff, affected linkage scope, logical row
@@ -230,7 +230,7 @@ bổ sung trong scope hiện hành. Giữ số dòng rubric; không dùng count 
 hoặc số scenario để thay evidence pass. Q60/Q61 đã chốt: headline sales
 trừ phần hủy trước ship, Refund tách riêng; nguồn Seller giả lập có authority.
 [Source contract](source-contract-order-lifecycle.md), [publication contract](run-publication-contract.md)
-và [bản xử lý](audit-remediation-20261018.md) ghi chi tiết và giới hạn proof.
+và bản xử lý ghi chi tiết và giới hạn proof.
 
 ## Ghi chú khoá
 

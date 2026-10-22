@@ -1,12 +1,12 @@
 # Tiến độ DE scope mở rộng (v2) — bảng một trang
 
-Cập nhật: **2026-10-20**, gồm các kết quả planner xác nhận trong brief codex-26 (ghi chú nội bộ, không nằm trong repo).
-Gói theo [scope](scope-de-gap-20261018.md); ánh xạ đủ 38 dòng tại [ma trận rubric](de-rubric-matrix.md).
-Đích triển khai: **GCP** (người học tự chạy mọi lệnh Cloud theo [checklist](gcp-checklist.md)).
-"Local" = đã kiểm trên máy dev, fixture/harness/container tạm; **chưa** phải bằng chứng GCP.
+Đích cloud cập nhật **2026-10-22**; bằng chứng giữ mốc **2026-10-20**, gồm các kết quả planner xác nhận trong brief codex-26 (ghi chú nội bộ, không nằm trong repo).
+Gói theo scope; ánh xạ đủ 38 dòng tại [ma trận rubric](de-rubric-matrix.md).
+Đích triển khai: **AWS**, region `ap-southeast-1`, DE batch trên EC2 + S3 (người học chạy theo [runbook](aws-deploy.md)).
+"Local" = đã kiểm trên máy dev, fixture/harness/container tạm; **chưa** phải bằng chứng AWS.
 Một gói có kiểm local không đồng nghĩa đã đóng đủ proof rubric hoặc full-scale.
 
-| Gói | Nội dung | Tài liệu | Local | GCP |
+| Gói | Nội dung | Tài liệu | Local | AWS |
 |---|---|---|---|---|
 | B | Nguồn v2 fixture 5 Channel | [silver-v2](silver-order-lifecycle.md) | ✅ fixture 15 Order / 30 line | ⏳ |
 | B+ | Nguồn v2 scale (60k đơn ≈ 1,55 GB / 7 phút) | [source-v2-scale](source-order-lifecycle-scale.md) | ✅ sinh 60k; Spark 3/3 trên 2.000 đơn (200 × 10), reconcile = 0; chưa ≥100 GB | ⏳ |
@@ -18,15 +18,15 @@ Một gói có kiểm local không đồng nghĩa đã đóng đủ proof rubric
 | F | Warehouse v2 PostgreSQL, publish an toàn | [warehouse-v2](warehouse-order-lifecycle.md) | ✅ PostgreSQL thật; warehouse-checks PASS 116 s trước đổi tên; chưa kết luận lợi ích index scale | ⏳ EXPLAIN scale |
 | I-1 | DAG dp_order_lifecycle / dp_order_lifecycle_cdc / dp_order_lifecycle_warehouse + DataHub dry-run + ERD | [airflow-v2](airflow-order-lifecycle.md), [datahub-v2](datahub-order-lifecycle.md), [ERD](diagrams/schema-order-lifecycle.md) | ✅ DagBag 10 DAG / 0 lỗi; dry-run không phải publish thật | ⏳ |
 | E2E-small | Nguồn → Bronze → Silver → Gold → PostgreSQL → EXPLAIN | [e2e-v2-local](e2e-order-lifecycle-local.md) | ✅ small 45 ngày × 50 đơn, 100 SKU, 3.631 fact: PASS 92 s sau sửa và đổi tên; mọi check = 0 | ⏳ |
-| E2E-medium | Chuỗi đầu-cuối trên nguồn medium | [e2e-v2-local](e2e-order-lifecycle-local.md) | ⏳ chưa chạy lại; trước sửa: 500 × 60, 48.874 fact, Silver 2.090 s, gold_build 42 s, gold_validate OOM | Đo trên GCP: `bash tests/harness/run_order_lifecycle_scale.sh --profile medium --driver-memory 6g` |
-| Skew v2 | Baseline / salted, cùng input và bag equality | [spark-v2](spark-order-lifecycle.md) | ⏳ chưa đo, chưa có kết luận giảm skew | Đo trên GCP: `python tests/spark/check_order_lifecycle_skew.py` trong runtime Spark; lệnh container tại [Spark v2](spark-order-lifecycle.md) |
-| I-live | Chạy thật DAG v2 + publish/capture DataHub v2 | [airflow-v2](airflow-order-lifecycle.md), [datahub-v2](datahub-order-lifecycle.md) | ⏳ chưa chạy DAG/publish/capture; chưa có receipt/Graph/Grid/Lineage/Quality | Đo trên GCP: `bash scripts/run/run_order_lifecycle_live.sh --phase all`, host chuẩn bị theo [runbook](datahub-order-lifecycle.md#chạy-thật) và checklist GCP |
-| K | Terraform + Ansible + overlay GCS | [gcp-deploy](gcp-deploy.md), [gcp-runtime](gcp-runtime.md), [checklist](gcp-checklist.md) | ✅ validate / syntax / jar; chưa triển khai Cloud | ⏳ người học |
+| E2E-medium | Chuỗi đầu-cuối trên nguồn medium | [e2e-v2-local](e2e-order-lifecycle-local.md) | ⏳ chưa chạy lại; trước sửa: 500 × 60, 48.874 fact, Silver 2.090 s, gold_build 42 s, gold_validate OOM | ⏳ nghiệm thu medium theo [runbook AWS](aws-deploy.md#pipeline); harness local giữ làm tham chiếu |
+| Skew v2 | Baseline / salted, cùng input và bag equality | [spark-v2](spark-order-lifecycle.md) | ⏳ chưa đo, chưa có kết luận giảm skew | ⏳ đo S3 theo [runbook AWS](aws-deploy.md#do); không dùng nguyên lệnh container MinIO local |
+| I-live | Chạy thật DAG v2 + publish/capture DataHub v2 | [airflow-v2](airflow-order-lifecycle.md), [datahub-v2](datahub-order-lifecycle.md) | ⏳ chưa chạy DAG/publish/capture; chưa có receipt/Graph/Grid/Lineage/Quality | ⏳ pipeline → DataHub → capture theo [runbook AWS](aws-deploy.md#pipeline) |
+| K | Terraform + Ansible + overlay S3 | [IaC](IaC.md), [runbook AWS](aws-deploy.md), rà soát offline | ✅ kiểm offline gói AWS; chưa triển khai Cloud | ⏳ người học |
 | D | Stream v2 Kafka → Flink + oracle | [stream-v2](stream-order-lifecycle.md), [evidence](evidence/stream-v2-local-20261019.json) | ✅ harness 2/2 epoch + restart; không phải HA hay official sales/label | — |
 | A | CDC v2 trên walmart_lifecycle.orders | [cdc-v2](cdc-order-lifecycle.md), [evidence](evidence/cdc-v2-local-20261019.json) | ✅ harness insert/update/delete + tiêm extra bị chặn | — |
-| Docker | Inventory + so naive/opt cùng bộ thư viện | [Docker](Docker.md), [so sánh](evidence/docker-compare-20261019.json), [inventory local](evidence/docker-inventory-local-20261019.json), [overlay](evidence/docker-inventory-gcp-20261019.json) | ✅ 27 package giống, 2,39 GB → 698 MB; cả inventory overlay được thu local | — |
+| Docker | Inventory + so naive/opt cùng bộ thư viện | [Docker](Docker.md), [so sánh](evidence/docker-compare-20261019.json), [inventory local](evidence/docker-inventory-local-20261019.json), [overlay GCP lưu trữ](evidence/docker-inventory-gcp-20261019.json) | ✅ 27 package giống, 2,39 GB → 698 MB; cả inventory overlay được thu local | — |
 
-✅ đã kiểm trong phạm vi ghi · ⏳ chờ chạy · 🔨 đang chạy · — chưa lên kế hoạch GCP
+✅ đã kiểm trong phạm vi ghi · ⏳ chờ chạy · 🔨 đang chạy · — ngoài mốc 1 AWS batch
 
 ## Số đo và giới hạn ngày 2026-10-19
 
@@ -44,22 +44,22 @@ Silver `collect_set`; kết quả OOM trong bảng là lần trước sửa.
 
 Các số trên do planner xác nhận trong brief; receipt ở `out/` không commit,
 chỉ ghi số, không dẫn link receipt. Không suy từ small/fixture sang medium,
-≥100 GB hoặc GCP; không dùng thời lượng warehouse-checks làm số cải thiện index.
+≥100 GB hoặc AWS; không dùng thời lượng warehouse-checks làm số cải thiện index.
 
 ## Còn mở
 
-- **Đo trên GCP:** chạy lại e2e medium sau sửa, đo skew v2, chạy thật DAG v2 +
+- **Đo trên AWS:** theo [runbook](aws-deploy.md#pipeline), chạy lại e2e medium sau sửa, đo skew v2, chạy thật DAG v2 +
   gửi/capture DataHub v2 bằng các lệnh trong bảng trên. Người học chọn bỏ các bước
   lâu ở local; chưa có số đo/ảnh.
-- GCP fixture → scale, receipt pipeline/warehouse và EXPLAIN cùng input theo
-  [checklist](gcp-checklist.md); DataHub chạy local cần receipt đúng generation GCP.
-- Nguồn v2 **≥100 GB** trên GCP (dòng 5), sau nghiệm thu scale nhỏ; không đổi số
+- AWS fixture → scale, receipt pipeline/warehouse và EXPLAIN cùng input theo
+  [runbook](aws-deploy.md#pipeline); DataHub chạy local cần receipt đúng generation AWS.
+- Nguồn v2 **≥100 GB** trên AWS (dòng 5), sau nghiệm thu scale nhỏ; không đổi số
   100 GB nguồn v1 thành bằng chứng v2 hoặc cộng volume nhiều tầng.
 - DE-N2 trên **bảng nghiệp vụ thật**, lịch maintenance/retention và kiểm sau chạy;
   Spark 3/3 hiện mới bao phủ bảng demo local.
 - Ảnh/schema inventory bảng v2 đã deploy (dòng 34), ảnh Spark UI v2 và proof
   dimension SCD2/quan hệ dimension–fact v2 (dòng 35/37) còn thiếu. Inventory Docker
-  local và overlay đã có; overlay không thay inventory runtime của VM GCP.
+  local và overlay đã có; overlay không thay inventory runtime của EC2 AWS.
 - DE-N1/DE-N2 là ứng viên bổ sung cho hồ sơ v1, chưa tự thay Novel 1/2 đã nộp;
   xem [Novel v2](de-rubric-matrix.md#novel-v2). Việc chọn cho scope mở rộng trong
   ledger được giữ nguyên.

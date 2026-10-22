@@ -53,7 +53,7 @@ qua Jinja tại runtime. Subclass trong mỗi DAG mở rộng `template_fields`,
 Bronze; không phụ thuộc provider có template tài nguyên hay không. Setup nạp lại
 giá trị mặc định khi chạy lại; đổi Variable sau setup nếu cần. Driver nằm trong
 Airflow (client mode); chỉ chạy một DAG Spark tại một thời điểm và đo RAM thật
-trước khi tăng cấu hình. Xem [checklist GCP](gcp-checklist.md).
+trước khi tăng cấu hình. Xem checklist GCP.
 
 DAG còn dùng `fsds_spark_packages` đã có trong script setup. Connections, MinIO,
 warehouse và REST catalog dùng cấu hình runtime chung như [Airflow v1](airflow.md).
@@ -145,7 +145,7 @@ công bố chung. Fixture nhỏ không chứng minh scale hoặc refresh product
 
 **Chưa đo — Đo trên GCP:** `bash scripts/run/run_order_lifecycle_live.sh --phase source`
 rồi `bash scripts/run/run_order_lifecycle_live.sh --phase airflow` trên host đã chuẩn bị
-theo [runbook](datahub-order-lifecycle.md#chạy-thật) và [checklist GCP](gcp-checklist.md).
+theo [runbook](datahub-order-lifecycle.md#chạy-thật) và checklist GCP.
 Người học chọn bỏ bước lâu ở local; chưa có run_id, receipt chạy thật DAG,
 ảnh Graph/Grid hay thời gian chạy. Kết quả e2e small local PASS 92 s tại
 [e2e local](e2e-order-lifecycle-local.md) là harness, chưa chứng minh DAG chạy thành công.

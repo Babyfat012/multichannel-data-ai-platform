@@ -29,5 +29,5 @@ snapshot đối soát, return chờ kiểm trước sellable. Q59 chốt ba nhó
 đợi độc lập return-risk, inventory/Listing availability và biến động sales;
 không có một điểm thiệt hại tổng hợp xuyên currency. Chi tiết vận hành và
 counterexample ở [contract nhãn](../return-label-contract.md) và
-[thiết kế scope](../expanded-scope-design.md). Đây là quyết định thiết kế,
+thiết kế scope. Đây là quyết định thiết kế,
 chưa là evidence implementation hoặc POC đạt.

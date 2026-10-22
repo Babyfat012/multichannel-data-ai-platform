@@ -8,7 +8,7 @@ giả lập qua Bronze/Silver để quan sát nhãn v2. Đây là đặc tả đ
 kết nối API thật, dịch vụ trả phí hoặc quyền Cloud mới.
 
 Policy nhãn giữ nguyên [return-label-contract](return-label-contract.md);
-topology/queue theo [expanded-scope-design](expanded-scope-design.md).
+topology/queue theo expanded-scope-design.
 Các schema dưới đây là quy định của **nguồn giả lập do dự án sở hữu**, không
 phải lời khẳng định schema API Channel thật. Căn cứ hiện trạng là source
 code renderer/model/RNG, được dẫn tại từng phần; các thay đổi đề nghị không
@@ -506,9 +506,9 @@ bytes/runtime phải được pin/chứng minh trong G0–G2 trước full-scale
 ## Căn cứ và giới hạn
 
 Thiết kế quantity/identity dựa các phản ví dụ có nguồn code trong
-[audit cross-domain](audit-cross-domain-20261018.md); clock, uncertainty và
-same-world dựa [audit temporal](audit-temporal-labels-20261018.md).
-Mapping vấn đề/ưu tiên theo [IR register](integration-risk-register.md).
+audit cross-domain; clock, uncertainty và
+same-world dựa audit temporal.
+Mapping vấn đề/ưu tiên theo IR register.
 Field policy giữ nguyên [label v2](return-label-contract.md), không đổi
 target thành physical return hoặc return request trước duyệt. Các API thật
 trong [channel-sources](channel-sources.md) là nghiên cứu riêng có mức tin

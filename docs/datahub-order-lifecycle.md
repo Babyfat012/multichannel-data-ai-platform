@@ -124,7 +124,7 @@ Planner kiểm JSON rồi gửi thật bằng môi trường SDK sẵn có (toke
 Dùng cùng arguments cho dry-run/publish và giữ nguyên receipt để MCP tương ứng.
 Lệnh gửi thật **chưa chạy**. **Chưa đo — Đo trên GCP:**
 `bash scripts/run/run_order_lifecycle_live.sh --phase datahub` sau khi pha airflow
-thành công trên host đã chuẩn bị theo runbook dưới đây và [checklist GCP](gcp-checklist.md).
+thành công trên host đã chuẩn bị theo runbook dưới đây và checklist GCP.
 Chưa có xác nhận ingest MCP, UI/Lineage/Quality hay số assertion thực;
 brief codex-26 (ghi chú nội bộ, không nằm trong repo) xác nhận người học bỏ bước lâu ở local.
 

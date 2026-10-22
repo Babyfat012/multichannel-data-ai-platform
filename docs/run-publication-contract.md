@@ -7,9 +7,9 @@ phạm vi Cloud. Chưa triển khai protocol này và chưa có POC đạt. Nh�
 ID/hash dưới đây là giá trị minh họa, không phải artifact runtime.
 
 Tài liệu cụ thể hóa [ADR-0007](adr/0007-versioned-publication.md),
-[readiness](implementation-readiness.md), [label contract](return-label-contract.md)
+readiness, [label contract](return-label-contract.md)
 và IR02/06/10/17/18/19/20/22/23/25 trong
-[sổ rủi ro](integration-risk-register.md). Sửa resume/CDC/validator riêng không
+sổ rủi ro. Sửa resume/CDC/validator riêng không
 đủ đóng các IR này. Không lấy kiểm link hoặc JSON parse làm proof pipeline.
 
 ## 1. Bất biến và lựa chọn backend local

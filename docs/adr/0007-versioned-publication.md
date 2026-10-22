@@ -19,6 +19,6 @@ trả kèm `data_as_of`/version (Q46). Lựa chọn khó đảo ngược nên đ
 
 Chưa có proof cơ chế này đã triển khai. Physical namespace của từng store,
 manifest store, request pin, concurrent publish và recovery phải được POC
-theo [G2 và S10–S13](../implementation-readiness.md). Retention/expiry phải
+theo G2 và S10–S13. Retention/expiry phải
 bảo vệ generation đang được request hoặc training tham chiếu. Live view có
 freshness/version riêng; correction daily metrics qua generation mới.

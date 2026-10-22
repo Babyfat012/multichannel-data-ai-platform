@@ -125,7 +125,7 @@ identity có thể gây vùng uncertainty lớn hơn theo envelope nguồn. Khô
 
 Nguồn actual delivery/approval/refund/allocation cần capability/authority
 tường minh. Q61 đã chốt nguồn Seller operational giả lập theo
-[source contract](source-contract-order-lifecycle.md) và [sổ vấn đề](integration-risk-register.md);
+[source contract](source-contract-order-lifecycle.md) và sổ vấn đề;
 không lấy promised delivery thay
 actual hoặc biến truth ẩn thành nguồn Seller quan sát được.
 

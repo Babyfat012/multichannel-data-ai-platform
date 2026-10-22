@@ -11,7 +11,7 @@ Dùng root mới khi cần world khác. `--restart` giữ nghĩa tái sinh dữ 
 generator sở hữu trong root đã chọn, vì thế chỉ dùng khi chủ động muốn làm lại.
 Không chạy restart trên bộ evidence cần giữ. Guard giả định một writer;
 chưa là khóa phân tán hoặc phép kiểm hash toàn bộ file đã sinh.
-[Bản xử lý](audit-remediation-20261018.md) ghi test và giới hạn.
+Bản xử lý ghi test và giới hạn.
 [Source contract v2](source-contract-order-lifecycle.md) là đích tiếp theo, chưa được
 thực thi chỉ nhờ có `dataset_version`; logic label hiện tại vẫn là v1.
 

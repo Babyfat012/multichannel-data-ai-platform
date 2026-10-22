@@ -26,4 +26,4 @@ Trade-off: thêm feed/schema/reconciliation và tail làm tăng dữ liệu/POC,
 Không chọn suy delivery/refund từ trạng thái Order cuối vì không chứng minh
 được lịch sử và linkage. [Source contract](../source-contract-order-lifecycle.md),
 [publication contract](../run-publication-contract.md) và
-[readiness](../implementation-readiness.md) quy định phần còn phải thực hiện.
+readiness quy định phần còn phải thực hiện.

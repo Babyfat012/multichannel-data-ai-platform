@@ -36,3 +36,6 @@ reference/
 mutants/
 .hypothesis/
 .coverage
+
+# Tài liệu quá trình và bản GCP cũ: giữ trên máy, không thuộc hồ sơ rubric
+.archive/
