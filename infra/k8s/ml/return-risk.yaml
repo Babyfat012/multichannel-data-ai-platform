@@ -1,0 +1,38 @@
+# KServe InferenceService return-risk (RawDeployment, model-inside-image).
+# Image và version do scripts/run/deploy_return_risk.sh điền (@@IMAGE@@, @@VERSION@@).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ml-serving
+---
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: return-risk
+  namespace: ml-serving
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+    # prometheus-server kéo /metrics (độ trễ KServe + metric nghiệp vụ return_risk_*). Khai thẳng cổng
+    # 8080: cờ enable-prometheus-scraping của KServe trỏ 9091 (sidecar gộp metric, RawDeployment không có).
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: /metrics
+  labels:
+    model-version: "@@VERSION@@"
+spec:
+  predictor:
+    minReplicas: 1
+    maxReplicas: 1
+    containers:
+      - name: kserve-container
+        image: "@@IMAGE@@"
+        imagePullPolicy: IfNotPresent
+        args: ["--model_name", "return-risk", "--http_port", "8080"]
+        env:
+          - {name: MIN_HISTORY, value: "20"}
+          - {name: FEAST_REDIS, value: "redis.feature-store.svc.cluster.local:6379"}
+        envFrom:
+          - secretRef: {name: fsds-minio}
+        resources:
+          requests: {cpu: 100m, memory: 256Mi}
+          limits: {memory: 768Mi}
