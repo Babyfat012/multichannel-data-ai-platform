@@ -1,0 +1,59 @@
+# Nhận diện đúng data disk; blkid bảo vệ filesystem hiện hữu trước mkfs.
+- name: Xác nhận tên disk đã điền
+  ansible.builtin.assert:
+    that:
+      - data_disk_name is match('^[a-z][a-z0-9-]+$')
+      - data_disk_name != 'CHANGE_ME'
+- name: Tìm disk theo tên Google gắn vào VM
+  ansible.builtin.stat:
+    path: '/dev/disk/by-id/google-{{ data_disk_name }}'
+    follow: true
+  register: data_disk
+- name: Phải có block device
+  ansible.builtin.assert:
+    that: [data_disk.stat.exists, data_disk.stat.isblk]
+- name: Kiểm chữ ký filesystem bằng blkid
+  ansible.builtin.command:
+    argv: [blkid, -p, '-o', value, '-s', TYPE, '/dev/disk/by-id/google-{{ data_disk_name }}']
+  register: disk_blkid
+  changed_when: false
+  failed_when: disk_blkid.rc not in [0, 2]
+- name: Kiểm toàn bộ chữ ký và partition trước khi cho phép format
+  ansible.builtin.command:
+    argv: [lsblk, --json, --output, NAME,FSTYPE,MOUNTPOINT,PTTYPE, '/dev/disk/by-id/google-{{ data_disk_name }}']
+  register: disk_layout
+  changed_when: false
+- name: Từ chối format disk có partition hoặc mount dù blkid không thấy filesystem
+  ansible.builtin.assert:
+    that:
+      - (disk_layout.stdout | from_json).blockdevices[0].children is not defined
+      - not (disk_layout.stdout | from_json).blockdevices[0].pttype
+      - not (disk_layout.stdout | from_json).blockdevices[0].mountpoint
+  when: disk_blkid.rc == 2
+- name: Chỉ mkfs khi blkid xác nhận chưa có filesystem
+  ansible.builtin.command:
+    argv: [mkfs.ext4, '/dev/disk/by-id/google-{{ data_disk_name }}']
+  when: disk_blkid.rc == 2
+  changed_when: true
+- name: Đọc UUID của filesystem
+  ansible.builtin.command:
+    argv: [blkid, '-o', value, '-s', UUID, '/dev/disk/by-id/google-{{ data_disk_name }}']
+  register: disk_uuid
+  changed_when: false
+- name: Đọc loại filesystem thực tế
+  ansible.builtin.command:
+    argv: [blkid, '-o', value, '-s', TYPE, '/dev/disk/by-id/google-{{ data_disk_name }}']
+  register: disk_fstype
+  changed_when: false
+- name: Tạo mountpoint
+  ansible.builtin.file:
+    path: /mnt/fsds-data
+    state: directory
+    mode: '0755'
+- name: Ghi mount UUID và mount nếu chưa có
+  ansible.posix.mount:
+    path: /mnt/fsds-data
+    src: 'UUID={{ disk_uuid.stdout | trim }}'
+    fstype: '{{ disk_fstype.stdout | trim }}'
+    opts: defaults
+    state: mounted

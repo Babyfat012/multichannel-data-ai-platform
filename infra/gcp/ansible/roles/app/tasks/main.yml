@@ -1,0 +1,144 @@
+# Đồng bộ mã và triển khai Compose; không chép credential hay dữ liệu local lên VM.
+- name: Kiểm biến bắt buộc và secret đã điền
+  ansible.builtin.assert:
+    that:
+      - raw_bucket != 'CHANGE_ME'
+      - lakehouse_bucket != 'CHANGE_ME'
+      - postgres_password != 'CHANGE_ME'
+      - lakekeeper_encryption_key != 'CHANGE_ME'
+      - postgres_password is match('^[A-Za-z0-9_-]{16,}$')
+      - lakekeeper_encryption_key is match('^[A-Za-z0-9_-]{32,}$')
+      - source_dataset_name is match('^[a-zA-Z0-9_-]+$')
+      - warehouse_name is match('^[a-zA-Z0-9_-]+$')
+  no_log: true
+- name: Kiểm Compose hỗ trợ override
+  ansible.builtin.command: docker compose version --short
+  register: compose_version
+  changed_when: false
+- name: Yêu cầu Compose tối thiểu 2.24.4
+  ansible.builtin.assert:
+    that: (compose_version.stdout | trim | regex_replace('^v', '')) is version('2.24.4', '>=')
+- name: Tạo thư mục app
+  ansible.builtin.file:
+    path: '{{ app_dir }}'
+    state: directory
+    mode: '0755'
+- name: Đồng bộ repo bằng rsync, loại secret và thư mục phát sinh
+  ansible.posix.synchronize:
+    src: '{{ repo_local }}/'
+    dest: '{{ app_dir }}/'
+    use_ssh_args: true
+    rsync_path: sudo rsync
+    rsync_opts:
+      - '--exclude=.venv/'
+      - '--exclude=out/'
+      - '--exclude=.git/'
+      - '--exclude=.env'
+      - '--exclude=.env.*'
+      - '--exclude=.briefs/'
+      - '--exclude=.vibe-wise/'
+      - '--exclude=.aws/'
+      - '--exclude=.codex/'
+      - '--exclude=.claude/'
+      - '--exclude=__pycache__/'
+      - '--exclude=infra/gcp/ansible/group_vars/'
+      - '--exclude=infra/gcp/terraform/'
+  register: app_sync
+- name: Tạo các thư mục persistent cho Spark
+  ansible.builtin.file:
+    path: '/mnt/fsds-data/{{ item }}'
+    state: directory
+    mode: '0775'
+    owner: '{{ airflow_uid }}'
+    group: '0'
+  loop: [airflow, spark-events, spark-worker-1, spark-worker-2, source]
+- name: Tạo thư mục PostgreSQL riêng
+  ansible.builtin.file:
+    path: /mnt/fsds-data/postgres
+    state: directory
+    mode: '0700'
+- name: Sinh env từ biến đã điền
+  ansible.builtin.template:
+    src: env.j2
+    dest: '{{ app_dir }}/.env'
+    mode: '0600'
+  no_log: true
+- name: Kiểm image đã được build
+  ansible.builtin.command: docker image inspect fsds-airflow:2.10.5-spark3.5.3
+  register: airflow_image
+  changed_when: false
+  failed_when: false
+- name: Build image driver và executor cùng Python 3.10
+  ansible.builtin.command: docker compose --profile airflow build airflow
+  args:
+    chdir: '{{ app_dir }}'
+  when: app_sync.changed or airflow_image.rc != 0
+  changed_when: true
+- name: Tạo thư mục connector trên data disk
+  ansible.builtin.file:
+    path: /mnt/fsds-data/jars
+    state: directory
+    mode: '0755'
+- name: Tải GCS connector Hadoop 3 shaded từ Maven Central và kiểm checksum
+  ansible.builtin.get_url:
+    url: '{{ gcs_connector_url }}'
+    checksum: '{{ gcs_connector_checksum }}'
+    dest: /mnt/fsds-data/jars/gcs-connector-hadoop3-2.2.26-shaded.jar
+    mode: '0644'
+- name: Tạo khóa Fernet một lần trước khi Airflow khởi động
+  ansible.builtin.command:
+    argv:
+      - python3
+      - infra/gcp/ansible/roles/app/files/ensure_fernet.py
+      - /mnt/fsds-data/airflow/.fernet_key
+      - '{{ airflow_uid | string }}'
+    chdir: '{{ app_dir }}'
+  register: fernet_setup
+  changed_when: "'created' in fernet_setup.stdout"
+  no_log: true
+- name: Bật đúng dịch vụ DE v2, chờ healthcheck
+  ansible.builtin.command: >-
+    docker compose --profile catalog --profile spark --profile airflow up -d --wait --wait-timeout 300
+    postgres lakekeeper spark-master spark-worker-1 spark-worker-2 airflow
+  args:
+    chdir: '{{ app_dir }}'
+  register: compose_up
+  changed_when: "'Started' in compose_up.stderr or 'Created' in compose_up.stderr or 'Recreated' in compose_up.stderr"
+  no_log: true
+- name: Chờ Airflow metadata và scheduler sẵn sàng
+  ansible.builtin.uri:
+    url: http://127.0.0.1:8081/health
+    return_content: true
+  register: airflow_health
+  until: >-
+    airflow_health.status == 200 and
+    airflow_health.json.metadatabase.status == 'healthy' and
+    airflow_health.json.scheduler.status == 'healthy'
+  retries: 60
+  delay: 5
+- name: Bootstrap Lakekeeper GCS và kiểm cấu hình warehouse khi chạy lại
+  ansible.builtin.command: bash scripts/setup/setup_lakekeeper_gcs.sh
+  args:
+    chdir: '{{ app_dir }}'
+  register: warehouse_setup
+  changed_when: "'Đã tạo' in warehouse_setup.stdout"
+- name: Nạp cấu hình Airflow và các Variable GCP
+  ansible.builtin.shell: |
+    set -a
+    source .env
+    set +a
+    bash scripts/setup/setup_airflow.sh
+  args:
+    executable: /bin/bash
+    chdir: '{{ app_dir }}'
+  # Các lệnh upsert đưa DB về cùng cấu hình, không tạo bản ghi trùng.
+  changed_when: false
+  no_log: true
+- name: Chuẩn bị venv cho sinh nguồn và nạp PostgreSQL
+  ansible.builtin.pip:
+    name:
+      - 'psycopg[binary]==3.2.13'
+      # Loader Walmart dùng load_settings từ setup_debezium, nơi import client Kafka.
+      - 'confluent-kafka==2.15.1'
+    virtualenv: /mnt/fsds-data/venv
+    virtualenv_command: python3 -m venv

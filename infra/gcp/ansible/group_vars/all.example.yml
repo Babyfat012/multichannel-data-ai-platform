@@ -1,0 +1,31 @@
+# Sao chép thành all.yml, điền output Terraform và mã hóa secret bằng ansible-vault.
+gcp_project: CHANGE_ME
+raw_bucket: CHANGE_ME
+lakehouse_bucket: CHANGE_ME
+service_account_email: CHANGE_ME
+# Là `device_name` của attached_disk trong infra/gcp/terraform/compute.tf (VM thấy ở
+# /dev/disk/by-id/google-fsds-data) — không phải tên VM hay tên resource disk.
+data_disk_name: fsds-data
+app_dir: /opt/fsds
+# Đường dẫn tuyệt đối của repo trên máy điều khiển Ansible.
+repo_local: /ABSOLUTE/PATH/FSDS
+postgres_user: fsds
+postgres_db: sources
+postgres_password: CHANGE_ME
+lakekeeper_encryption_key: CHANGE_ME
+airflow_uid: 50000
+warehouse_name: fsds-gcp
+source_mode: fixture
+# Mỗi cấu hình nguồn mới phải dùng tên mới; không ghi đè dữ liệu đã sinh.
+source_dataset_name: fixture
+source_seed: 7
+source_days: 10
+source_orders_per_day: 200
+source_followup_days: 270
+source_observation_days: 285
+source_cutoff: '2026-06-01T00:00:00.000000Z'
+# Spark --packages chỉ nhận group:artifact:version; JAR connector shaded được mount riêng.
+spark_packages_gcp: 'org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.11.0,org.apache.iceberg:iceberg-gcp-bundle:1.11.0,org.postgresql:postgresql:42.7.4'
+# Planner đối chiếu artifact/checksum Maven trước khi triển khai VM.
+gcs_connector_url: 'https://repo.maven.apache.org/maven2/com/google/cloud/bigdataoss/gcs-connector/hadoop3-2.2.26/gcs-connector-hadoop3-2.2.26-shaded.jar'
+gcs_connector_checksum: 'sha1:https://repo.maven.apache.org/maven2/com/google/cloud/bigdataoss/gcs-connector/hadoop3-2.2.26/gcs-connector-hadoop3-2.2.26-shaded.jar.sha1'

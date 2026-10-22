@@ -1,0 +1,3 @@
+# Sao chép thành terraform.tfvars (gitignored) rồi điền project thật.
+project_id = "your-project-id"
+# spot = true   # rẻ hơn nhiều, chấp nhận node bị thu hồi
