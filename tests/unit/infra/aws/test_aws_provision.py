@@ -1,0 +1,184 @@
+# Mục đích: kiểm offline các chốt an toàn của provision AWS (Terraform, Ansible, Compose, Spark).
+"""Kiểm offline Terraform/Ansible/Compose AWS bằng text và YAML, không gọi Cloud."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+import pytest
+import yaml
+
+from spark_jobs.lib.iceberg_session import catalog_conf
+
+ROOT = Path(__file__).resolve().parents[4]
+TF_DIR = ROOT / "infra/aws/terraform"
+ANSIBLE = ROOT / "infra/aws/ansible"
+CODE = re.sub(
+    r"(?m)^\s*#.*$", "", "\n".join(p.read_text(encoding="utf-8") for p in TF_DIR.glob("*.tf"))
+)
+
+
+class ComposeLoader(yaml.SafeLoader):
+    """Đọc được tag `!override` của Compose."""
+
+
+ComposeLoader.add_constructor(
+    "!override",
+    lambda loader, node: (
+        loader.construct_mapping(node)
+        if isinstance(node, yaml.MappingNode)
+        else loader.construct_sequence(node)
+    ),
+)
+
+
+def block(kind: str, name: str) -> str:
+    """Lấy đúng một block cấp cao theo loại và tên."""
+    found = re.findall(rf'(?ms)^{kind}\s+"{re.escape(name)}"[^\n]*\{{\n.*?^\}}', CODE)
+    assert len(found) == 1, (kind, name)
+    return found[0]
+
+
+def test_security_group_has_no_ingress_and_no_access_keys():
+    """SSH đi qua SSM: không ingress, không access key, không user_data cài runtime."""
+    sg = block("resource", "aws_security_group")
+    assert not re.search(r"ingress\s*\{", sg)
+    assert "aws_vpc_security_group_ingress_rule" not in CODE
+    assert "aws_iam_access_key" not in CODE
+    assert "user_data" not in CODE
+    assert "AmazonSSMManagedInstanceCore" in CODE
+
+
+def test_instance_uses_imdsv2_hop_two_and_encrypted_disks():
+    """Container lấy được credential (hop 2); IMDSv1 bị tắt; ổ được mã hóa."""
+    vm = block("resource", "aws_instance")
+    assert re.search(r'http_tokens\s*=\s*"required"', vm)
+    assert re.search(r"http_put_response_hop_limit\s*=\s*2", vm)
+    assert re.search(r"associate_public_ip_address\s*=\s*true", vm)
+    assert len(re.findall(r"encrypted\s*=\s*true", CODE)) == 2
+    assert not re.search(r'resource\s+"aws_nat_gateway"', CODE)
+
+
+def test_iam_only_touches_the_two_buckets():
+    """Policy chỉ trỏ vào ARN của bucket do Terraform tạo, không có `*` toàn cục."""
+    policy = re.search(r'(?ms)^data "aws_iam_policy_document" "buckets".*?^\}', CODE)[0]
+    assert 'resources = ["*"]' not in policy
+    assert "aws_s3_bucket.data" in policy
+
+
+def test_buckets_private_versioned_with_bounded_lifecycle():
+    """Chặn public, tắt ACL, bật versioning, chỉ dọn bản cũ và prefix tmp/."""
+    assert re.search(r'for_each\s*=\s*toset\(\["raw", "lakehouse"\]\)', CODE)
+    pab = block("resource", "aws_s3_bucket_public_access_block")
+    for flag in (
+        "block_public_acls",
+        "block_public_policy",
+        "ignore_public_acls",
+        "restrict_public_buckets",
+    ):
+        assert re.search(rf"{flag}\s*=\s*true", pab)
+    assert '"BucketOwnerEnforced"' in CODE
+    assert re.search(r'status\s*=\s*"Enabled"', block("resource", "aws_s3_bucket_versioning"))
+    life = block("resource", "aws_s3_bucket_lifecycle_configuration")
+    assert 'prefix = "tmp/"' in life
+    assert "noncurrent_days = var.noncurrent_retention_days" in life
+    assert "force_destroy = var.force_destroy" in CODE
+
+
+def test_budget_optional_excludes_credits_and_needs_email():
+    """Budget tắt mặc định, không trừ credit, 3 ngưỡng, bắt buộc có email."""
+    budget = block("resource", "aws_budgets_budget")
+    assert re.search(r"count\s*=\s*var.enable_budget\s*\?\s*1\s*:\s*0", budget)
+    assert re.search(r"include_credit\s*=\s*false", budget)
+    assert "[50, 90, 100]" in budget
+    assert "var.budget_email != null" in budget
+
+
+@pytest.mark.parametrize(
+    ("name", "default"),
+    [
+        ("region", '"ap-southeast-1"'),
+        ("instance_type", '"t3.xlarge"'),
+        ("cpu_credits", '"standard"'),
+        ("enable_budget", "false"),
+        ("force_destroy", "false"),
+    ],
+)
+def test_defaults(name, default):
+    """Mặc định rẻ và an toàn cho người dùng free tier."""
+    assert re.search(rf"(?m)^\s*default\s*=\s*{re.escape(default)}\s*$", block("variable", name))
+
+
+def test_no_default_ssh_key_and_outputs_for_ansible():
+    """Không có khóa mặc định; đủ output Ansible cần."""
+    assert "default" not in block("variable", "ssh_public_key")
+    for name in ("raw_bucket", "lakehouse_bucket", "instance_id", "data_volume_id", "region"):
+        block("output", name)
+    ports = block("output", "port_forward_command")
+    assert "AWS-StartSSHSession" in ports
+    assert "-i ~/.ssh/fsds_aws" in ports
+    for port in (8080, 8081, 8181):
+        assert f"-L 127.0.0.1:{port}:127.0.0.1:{port}" in ports
+
+
+def test_region_and_machine_size_match_the_runtime():
+    """Chặn AZ khác region và máy 8 GiB không đủ cho overlay 14 GiB."""
+    assert 'startswith(var.availability_zone, "${var.region}")' in CODE
+    assert '"t3.large"' not in block("variable", "instance_type")
+
+
+def test_overlay_fits_t3_xlarge_without_keys_or_gcs():
+    """Service chạy thường trực vừa 4 vCPU/16 GiB, port loopback, không key, không GCS."""
+    text = (ROOT / "docker-compose.aws.yml").read_text()
+    services = yaml.load(text, Loader=ComposeLoader)["services"]
+    for svc in services.values():
+        assert all(port.startswith("127.0.0.1:") for port in svc.get("ports", []))
+    assert "AWS_ACCESS_KEY_ID" not in text and "gcs" not in text.lower()
+    running = [
+        "postgres",
+        "lakekeeper",
+        "spark-master",
+        "spark-worker-1",
+        "spark-worker-2",
+        "airflow",
+    ]
+
+    def gib(value: str) -> float:
+        """Đổi mem_limit Compose (g/m) ra GiB."""
+        return float(value[:-1]) / (1024 if value.endswith("m") else 1)
+
+    assert sum(float(services[n]["cpus"]) for n in running) <= 4
+    assert sum(gib(str(services[n]["mem_limit"])) for n in running) <= 15
+    for name in ("minio", "kafka", "flink-jobmanager", "trino"):
+        assert services[name]["profiles"] == ["disabled-aws"]
+    assert services["airflow"]["environment"][
+        "AIRFLOW_VAR_FSDS_ORDER_LIFECYCLE_SOURCE_ROOT"
+    ].startswith("s3a://")
+
+
+def test_ansible_finds_ebs_by_volume_id_and_guards_mkfs():
+    """Đường dẫn nvme theo volume ID; mkfs chỉ chạy khi blkid báo trống."""
+    path = yaml.safe_load((ANSIBLE / "roles/data_disk/vars/main.yml").read_text())["data_disk_path"]
+    assert path.startswith("/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_")
+    tasks = yaml.safe_load((ANSIBLE / "roles/data_disk/tasks/main.yml").read_text())
+    fmt = next(t for t in tasks if "mkfs.ext4" in str(t.get("ansible.builtin.command", "")))
+    assert fmt["when"] == "disk_blkid.rc == 2"
+    variables = yaml.safe_load((ANSIBLE / "group_vars/all.example.yml").read_text())
+    assert all(len(p.split(":")) == 3 for p in variables["spark_packages_aws"].split(","))
+    for path in ANSIBLE.rglob("*"):
+        if path.is_file():
+            assert not re.search(r"gcloud|gs://|google-", path.read_text()), path
+
+
+def test_s3_catalog_has_region_and_no_static_keys():
+    """Nhánh s3: S3FileIO + region, không endpoint MinIO, không access key."""
+    conf = catalog_conf({"FSDS_STORAGE": "s3", "AWS_REGION": "ap-southeast-1"})
+    p = "spark.sql.catalog.lakehouse"
+    assert conf[p + ".io-impl"] == "org.apache.iceberg.aws.s3.S3FileIO"
+    assert conf[p + ".client.region"] == "ap-southeast-1"
+    assert conf["spark.hadoop.fs.s3a.endpoint"] == "s3.ap-southeast-1.amazonaws.com"
+    assert p + ".s3.endpoint" not in conf
+    assert not any("key" in k.lower() for k in conf)
+    with pytest.raises(KeyError):
+        catalog_conf({"FSDS_STORAGE": "s3"})

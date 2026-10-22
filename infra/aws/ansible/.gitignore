@@ -1,0 +1,3 @@
+# Không đưa inventory thật và biến secret (kể cả đã vault) vào Git; chỉ giữ bản .example.
+inventory.ini
+group_vars/all.yml

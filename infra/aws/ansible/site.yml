@@ -1,0 +1,12 @@
+# Người học chạy playbook này trên EC2; mặc định không sinh nguồn hoặc smoke Cloud.
+- name: Chuẩn bị runtime DE v2 trên một VM
+  hosts: aws
+  become: true
+  roles:
+    - role: base
+    - role: data_disk
+    - role: app
+    - role: source_data
+      tags: [never, source_data]
+    - role: smoke
+      tags: [never, smoke]

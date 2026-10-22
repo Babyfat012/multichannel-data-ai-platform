@@ -1,0 +1,58 @@
+# Nhận diện đúng EBS theo volume ID (máy Nitro đổi tên /dev/sdf thành nvme); blkid bảo vệ filesystem hiện hữu trước mkfs.
+- name: Xác nhận volume ID đã điền
+  ansible.builtin.assert:
+    that:
+      - data_volume_id is match('^vol-[0-9a-f]+$')
+- name: Tìm EBS theo volume ID
+  ansible.builtin.stat:
+    path: '{{ data_disk_path }}'
+    follow: true
+  register: data_disk
+- name: Phải có block device
+  ansible.builtin.assert:
+    that: [data_disk.stat.exists, data_disk.stat.isblk]
+- name: Kiểm chữ ký filesystem bằng blkid
+  ansible.builtin.command:
+    argv: [blkid, -p, '-o', value, '-s', TYPE, '{{ data_disk_path }}']
+  register: disk_blkid
+  changed_when: false
+  failed_when: disk_blkid.rc not in [0, 2]
+- name: Kiểm toàn bộ chữ ký và partition trước khi cho phép format
+  ansible.builtin.command:
+    argv: [lsblk, --json, --output, NAME,FSTYPE,MOUNTPOINT,PTTYPE, '{{ data_disk_path }}']
+  register: disk_layout
+  changed_when: false
+- name: Từ chối format disk có partition hoặc mount dù blkid không thấy filesystem
+  ansible.builtin.assert:
+    that:
+      - (disk_layout.stdout | from_json).blockdevices[0].children is not defined
+      - not (disk_layout.stdout | from_json).blockdevices[0].pttype
+      - not (disk_layout.stdout | from_json).blockdevices[0].mountpoint
+  when: disk_blkid.rc == 2
+- name: Chỉ mkfs khi blkid xác nhận chưa có filesystem
+  ansible.builtin.command:
+    argv: [mkfs.ext4, '{{ data_disk_path }}']
+  when: disk_blkid.rc == 2
+  changed_when: true
+- name: Đọc UUID của filesystem
+  ansible.builtin.command:
+    argv: [blkid, '-o', value, '-s', UUID, '{{ data_disk_path }}']
+  register: disk_uuid
+  changed_when: false
+- name: Đọc loại filesystem thực tế
+  ansible.builtin.command:
+    argv: [blkid, '-o', value, '-s', TYPE, '{{ data_disk_path }}']
+  register: disk_fstype
+  changed_when: false
+- name: Tạo mountpoint
+  ansible.builtin.file:
+    path: /mnt/fsds-data
+    state: directory
+    mode: '0755'
+- name: Ghi mount UUID và mount nếu chưa có
+  ansible.posix.mount:
+    path: /mnt/fsds-data
+    src: 'UUID={{ disk_uuid.stdout | trim }}'
+    fstype: '{{ disk_fstype.stdout | trim }}'
+    opts: defaults
+    state: mounted

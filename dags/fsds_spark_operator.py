@@ -25,8 +25,11 @@ class FsdsSparkSubmitOperator(SparkSubmitOperator):
     def execute(self, context):
         """Resolve credentials at execution time and restore operator state afterward."""
         conn_ids = {"iceberg": "fsds_minio", "postgres": "fsds_postgres", "kafka": "fsds_kafka"}
+        storage = os.environ.get("FSDS_STORAGE", "minio")
         connections = {}
         for group in self.runtime_groups:
+            if group == "iceberg" and storage != "minio":
+                continue
             conn = BaseHook.get_connection(conn_ids[group])
             connections[conn_ids[group]] = {
                 "host": conn.host,
@@ -36,16 +39,18 @@ class FsdsSparkSubmitOperator(SparkSubmitOperator):
                 "password": conn.password,
             }
         variable_names = (
-            ("fsds_minio_internal_endpoint", "fsds_warehouse_name", "fsds_lakekeeper_catalog_uri")
+            ("fsds_warehouse_name", "fsds_lakekeeper_catalog_uri")
             if "iceberg" in self.runtime_groups
             else ()
         ) + (("fsds_dp1_cdc_topic",) if "kafka" in self.runtime_groups else ())
+        if "iceberg" in self.runtime_groups and storage == "minio":
+            variable_names += ("fsds_minio_internal_endpoint",)
         variables = {name: Variable.get(name) for name in variable_names}
         original_env = self.env_vars
         self.env_vars = {
             "PYTHONPATH": os.environ.get("PYTHONPATH", "/opt"),
             **(original_env or {}),
-            **resolve_runtime_env(connections, variables, self.runtime_groups),
+            **resolve_runtime_env(connections, variables, self.runtime_groups, storage=storage),
         }
         inherited_secrets = {
             key: os.environ.pop(key)
@@ -53,6 +58,7 @@ class FsdsSparkSubmitOperator(SparkSubmitOperator):
                 "MINIO_ROOT_PASSWORD",
                 "AWS_ACCESS_KEY_ID",
                 "AWS_SECRET_ACCESS_KEY",
+                "AWS_SESSION_TOKEN",
                 "POSTGRES_PASSWORD",
                 "LAKEKEEPER_ENCRYPTION_KEY",
             )

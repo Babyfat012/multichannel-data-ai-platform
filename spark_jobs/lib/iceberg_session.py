@@ -58,6 +58,17 @@ def catalog_conf(env) -> dict[str, str]:
                 f"{prefix}.s3.region": "local-01",
             }
         )
+    elif storage == "s3":
+        # AWS thật: không endpoint/key; credential tạm lấy từ IAM role của EC2.
+        region = env["AWS_REGION"]
+        conf.update(
+            {
+                f"{prefix}.io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
+                f"{prefix}.client.region": region,
+                # File raw đọc qua s3a:// (hadoop-aws); trỏ endpoint theo region để khỏi bị redirect.
+                "spark.hadoop.fs.s3a.endpoint": f"s3.{region}.amazonaws.com",
+            }
+        )
     elif storage == "gcs":
         conf.update(
             {

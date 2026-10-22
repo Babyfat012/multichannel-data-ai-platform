@@ -47,6 +47,16 @@ if [ "${FSDS_STORAGE:-minio}" = gcs ]; then
   airflow_cmd variables set fsds_order_lifecycle_cutoff "${FSDS_ORDER_LIFECYCLE_CUTOFF:-2026-06-01T00:00:00.000000Z}"
 fi
 
+# AWS (t3.xlarge): worker chỉ có 3g/1 core nên hạ executor; nguồn đọc qua s3a://.
+if [ "${FSDS_STORAGE:-minio}" = s3 ]; then
+  airflow_cmd variables set fsds_spark_packages_aws "${FSDS_SPARK_PACKAGES_AWS:?Cần package AWS}"
+  airflow_cmd variables set fsds_order_lifecycle_source_root "s3a://${RAW_BUCKET:?}/order_lifecycle/${FSDS_DATASET_NAME:-fixture}"
+  airflow_cmd variables set fsds_order_lifecycle_cutoff "${FSDS_ORDER_LIFECYCLE_CUTOFF:-2026-06-01T00:00:00.000000Z}"
+  airflow_cmd variables set fsds_order_lifecycle_driver_memory '2g'
+  airflow_cmd variables set fsds_order_lifecycle_executor_memory '2g'
+  airflow_cmd variables set fsds_order_lifecycle_executor_cores '1'
+fi
+
 # CDC v2 riêng: oracle phải được planner tạo và mount trước khi trigger DAG paused.
 airflow_cmd variables set fsds_order_lifecycle_cdc_control_dir '/opt/airflow/fsds-control/order_lifecycle_cdc'
 airflow_cmd variables set fsds_order_lifecycle_cdc_oracle '/opt/airflow/fsds-control/order_lifecycle_cdc/order_lifecycle_cdc_expected.json'
