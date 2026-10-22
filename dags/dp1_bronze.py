@@ -5,7 +5,7 @@ Chạy tay trên bảng thử `_dp1`, một Spark task mỗi lần để vừa R
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from airflow import DAG
 from fsds_spark_operator import FsdsSparkSubmitOperator
@@ -38,7 +38,7 @@ SPARK_CONF = {
 with DAG(
     dag_id="dp1_bronze",
     description="Raw 5 Channel -> Bronze; kiểm số dòng, payload và provenance",
-    start_date=datetime(2026, 1, 1, tzinfo=UTC),
+    start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
     schedule=None,
     catchup=False,
     is_paused_upon_creation=False,

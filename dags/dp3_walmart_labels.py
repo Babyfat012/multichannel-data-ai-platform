@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from airflow import DAG
 from fsds_spark_operator import FsdsSparkSubmitOperator as SparkSubmitOperator
@@ -10,7 +10,7 @@ from fsds_spark_operator import FsdsSparkSubmitOperator as SparkSubmitOperator
 with DAG(
     dag_id="dp3_walmart_labels",
     description="Nối nhãn Walmart với Gold fact qua ba mã Order Line",
-    start_date=datetime(2026, 1, 1, tzinfo=UTC),
+    start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
     schedule=None,
     catchup=False,
     is_paused_upon_creation=False,

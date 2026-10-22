@@ -48,7 +48,7 @@ def source_rows(root):
             rows.append(row)
     rows.sort(
         key=lambda r: (
-            datetime.fromisoformat(r["source_observed_at"]),
+            datetime.fromisoformat(r["source_observed_at"].replace("Z", "+00:00")),
             r["feed"],
             r["source_sequence"],
             r["source_event_id"],

@@ -5,13 +5,13 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 
 def completed_at_utc() -> str:
     """Trả thời điểm hiện tại theo ISO-8601 UTC, kết thúc bằng Z."""
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _validate_type(schema, location):

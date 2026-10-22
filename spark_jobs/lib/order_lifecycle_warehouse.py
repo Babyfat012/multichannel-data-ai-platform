@@ -6,7 +6,7 @@ import hashlib
 import json
 import os
 import re
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 TABLES = ("fact_order_lines", "label_return", "feat_sku_return_rate_90d")
@@ -75,7 +75,7 @@ def cutoff_utc(value):
     instant = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if instant.tzinfo is None:
         raise ValueError("cutoff phải có timezone")
-    return instant.astimezone(UTC).replace(tzinfo=None)
+    return instant.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 def table_metrics(cur, table):

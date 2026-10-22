@@ -10,7 +10,7 @@ import sys
 import tempfile
 import time
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -42,7 +42,9 @@ def parse_args(argv=None):
     parser.add_argument("--sku-zipf-s", type=float, default=1.2)
     parser.add_argument("--source", type=Path)
     parser.add_argument("--cutoff")
-    parser.add_argument("--run-id", default=datetime.now(UTC).strftime("e2e-%Y%m%dT%H%M%S%fZ"))
+    parser.add_argument(
+        "--run-id", default=datetime.now(timezone.utc).strftime("e2e-%Y%m%dT%H%M%S%fZ")
+    )
     parser.add_argument("--receipt", type=Path, required=True)
     parser.add_argument("--sql-dir", type=Path, default=ROOT / "sql/warehouse_lifecycle")
     args = parser.parse_args(argv)

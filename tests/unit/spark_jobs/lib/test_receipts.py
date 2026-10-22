@@ -1,7 +1,7 @@
 """Kiểm receipt/schema offline bằng thư viện chuẩn, không cần Spark hoặc DataHub."""
 
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -89,7 +89,7 @@ def test_relative_schema_round_trip_and_completed_at(tmp_path, monkeypatch):
         json.loads(m["aspect"]["value"]) for m in mcps if m["aspectName"] == "assertionRunEvent"
     )
     assert event["timestampMillis"] == int(
-        datetime(2026, 10, 19, 1, 2, 3, tzinfo=UTC).timestamp() * 1000
+        datetime(2026, 10, 19, 1, 2, 3, tzinfo=timezone.utc).timestamp() * 1000
     )
     assert event["result"]["nativeResults"]["timestamp_source"] == "completed_at"
 
@@ -163,8 +163,8 @@ def test_refuse_empty_or_incomplete_schema(tmp_path, tables, message):
 
 def test_completed_at_is_current_utc():
     """Giờ hoàn tất có hậu tố Z và nằm giữa hai lần đọc đồng hồ UTC."""
-    before = datetime.now(UTC)
+    before = datetime.now(timezone.utc)
     completed = receipt_schemas.completed_at_utc()
-    after = datetime.now(UTC)
+    after = datetime.now(timezone.utc)
     assert completed.endswith("Z")
     assert before <= datetime.fromisoformat(completed.replace("Z", "+00:00")) <= after

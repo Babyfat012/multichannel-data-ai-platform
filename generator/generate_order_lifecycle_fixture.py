@@ -14,7 +14,7 @@ import platform
 import time
 from collections import defaultdict
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 CHANNELS = ("amazon", "walmart", "shopify", "tiktok_shop", "shopee")
@@ -137,7 +137,7 @@ class FixtureConfig:
 
 def _stamp(value):
     """Định dạng datetime thành ISO-8601 UTC, có micro giây và hậu tố Z."""
-    return value.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 def _world(config):
@@ -1418,8 +1418,8 @@ def _resequence_by_observation(e):
 def _delay_seconds(row):
     """Độ trễ quan sát của một dòng: `source_observed_at − effective_at`, tính bằng giây."""
     return (
-        datetime.fromisoformat(row["source_observed_at"])
-        - datetime.fromisoformat(row["effective_at"])
+        datetime.fromisoformat(row["source_observed_at"].replace("Z", "+00:00"))
+        - datetime.fromisoformat(row["effective_at"].replace("Z", "+00:00"))
     ).total_seconds()
 
 
@@ -1668,7 +1668,7 @@ def generate_fixture(
     root = Path(output_root)
     identity = _fixture_identity(config, world, delivery_parts, native_schema, native_schemas)
     dataset = stable_id("dataset", identity)
-    recorded = _stamp(datetime.now(UTC))
+    recorded = _stamp(datetime.now(timezone.utc))
     e = _Emitter(world, dataset, recorded)
     start = config.validate()
     _emit_sources(e, start, config, delivery_parts)

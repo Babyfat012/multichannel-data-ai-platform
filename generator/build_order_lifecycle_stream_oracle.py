@@ -71,7 +71,9 @@ def _event_time(row):
     effective_at là thời điểm lifecycle cụ thể: requested/approved/received,
     refund failed/success, stock operation; delivery dùng actual_delivered_at.
     """
-    ts = datetime.fromisoformat(row["payload"].get("actual_delivered_at", row["effective_at"]))
+    ts = datetime.fromisoformat(
+        row["payload"].get("actual_delivered_at", row["effective_at"]).replace("Z", "+00:00")
+    )
     return ts.replace(microsecond=(ts.microsecond // 1000) * 1000)
 
 
@@ -152,7 +154,7 @@ def expected(source, stream_manifest, delay_seconds=3600):
         row = records[sha]
         if topic != prefix + row["feed"]:
             raise ValueError("ledger topic mismatch")
-        known = datetime.fromisoformat(row["source_observed_at"])
+        known = datetime.fromisoformat(row["source_observed_at"].replace("Z", "+00:00"))
         if previous_known is not None and known < previous_known:
             raise ValueError("ledger known-time order mismatch")
         previous_known = known

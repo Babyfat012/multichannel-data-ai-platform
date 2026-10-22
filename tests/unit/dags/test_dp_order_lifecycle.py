@@ -122,7 +122,8 @@ def test_v2_resource_variables_and_templates():
             for n in resource_class.body
             if isinstance(n, ast.Assign) and n.targets[0].id == "template_fields"
         )
-        assert set(resources) <= {
+        # Provider lưu tham số ở thuộc tính `_driver_memory`...; template tên công khai sẽ lỗi.
+        assert {f"_{field}" for field in resources} <= {
             n.value
             for n in ast.walk(assignment)
             if isinstance(n, ast.Constant) and isinstance(n.value, str)

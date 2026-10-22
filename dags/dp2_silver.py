@@ -5,7 +5,7 @@ Các Spark task chạy tuần tự để vừa RAM máy dev.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from airflow import DAG
 from fsds_spark_operator import FsdsSparkSubmitOperator as SparkSubmitOperator
@@ -27,7 +27,7 @@ SPARK_CONF = {
 with DAG(
     dag_id="dp2_silver",
     description="Bronze 5 Channel -> Silver Order Line; kiểm đầu ra từng kênh",
-    start_date=datetime(2026, 1, 1, tzinfo=UTC),
+    start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
     schedule=None,
     catchup=False,
     is_paused_upon_creation=False,

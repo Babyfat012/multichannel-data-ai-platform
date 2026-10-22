@@ -1,13 +1,13 @@
 """Independent hand-built oracles from return-label-contract.md; no simulator truth."""
 
 from copy import deepcopy
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from spark_jobs.lib.return_label import label_line, sku_return_feature
 
-D0 = datetime(2026, 1, 1, tzinfo=UTC)
+D0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 
 def day(n):

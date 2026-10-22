@@ -121,7 +121,9 @@ airflow_phase() {
   mkdir -p out/receipts out/receipts-v2-run
   # User Airflow phải ghi được bind mount vừa tạo. Không đụng quyền file receipt cũ.
   chmod 0777 out/receipts
-  "${compose[@]}" up -d --wait --wait-timeout "$start_timeout" airflow spark-master spark-worker-1 spark-worker-2 minio minio-init
+  # minio-init chạy một lần rồi thoát; Compose mới coi thoát là lỗi của --wait nên tách riêng.
+  "${compose[@]}" up -d minio-init
+  "${compose[@]}" up -d --wait --wait-timeout "$start_timeout" airflow spark-master spark-worker-1 spark-worker-2 minio
   wait_until Airflow airflow_ready
   wait_until Spark spark_ready
   wait_until DAG-v2 dag_ready

@@ -10,7 +10,7 @@ import os
 import sys
 import tempfile
 import unittest
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -47,7 +47,7 @@ class SparkV2SkewChecks(unittest.TestCase):
         try:
             # Epoch day 20460 là biên bucket 10 ngày. Cửa sổ [edge, edge+10d)
             # có query ngay trước/sau mỗi biên, và query tự trừ chính history.
-            edge = datetime(1970, 1, 1, tzinfo=UTC) + timedelta(days=20460)
+            edge = datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(days=20460)
             micro = timedelta(microseconds=1)
             rows, segments = [], []
             for dataset in ("d1", "d2"):

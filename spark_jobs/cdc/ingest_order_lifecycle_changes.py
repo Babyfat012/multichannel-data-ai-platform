@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from spark_jobs.lib.cdc_offsets import (
     capture_kafka_boundary,
@@ -94,7 +94,7 @@ def main(argv=None):
         document.update(status="failed", error=str(exc))
         raise
     finally:
-        document["completed_at"] = datetime.now(UTC).isoformat()
+        document["completed_at"] = datetime.now(timezone.utc).isoformat()
         write_json(args.receipt, document)
         spark.stop()
 

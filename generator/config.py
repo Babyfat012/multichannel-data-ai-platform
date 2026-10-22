@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -184,7 +184,7 @@ class GeneratorConfig:
     def day_start(self, day: int) -> datetime:
         """Trả về 00:00 UTC của ngày mô phỏng `day` (ngày 1 là `start_date`)."""
         d = self.scale.start_date + timedelta(days=day - 1)
-        return datetime.combine(d, time(0, 0), tzinfo=UTC)
+        return datetime.combine(d, time(0, 0), tzinfo=timezone.utc)
 
     @property
     def cutoff(self) -> datetime:

@@ -1,10 +1,10 @@
 """Kiểm quyết định bảo trì Iceberg qua giao diện Python thuần, không cần Spark."""
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from spark_jobs.lib.maintenance_policy import plan_maintenance
 
-NOW = datetime(2026, 10, 18, tzinfo=UTC)
+NOW = datetime(2026, 10, 18, tzinfo=timezone.utc)
 
 
 def test_compact_only_small_crowded_partition():

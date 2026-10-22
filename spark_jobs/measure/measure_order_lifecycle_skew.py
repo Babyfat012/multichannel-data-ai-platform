@@ -15,7 +15,7 @@ import re
 import statistics
 import sys
 import tempfile
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -244,7 +244,9 @@ def run_measurement(
         spark.sparkContext.setJobGroup("silver_gold_build", "Silver và Gold từ module thật")
         bronze = bronze_from_root(spark, str(source), "skew").cache()
         silver = build_silver(bronze=bronze, as_of=cutoff, contracts_dir=str(ROOT / "contracts"))
-        gold = gold_job.build_gold(silver, cutoff, "skew", datetime(2026, 10, 19, tzinfo=UTC))
+        gold = gold_job.build_gold(
+            silver, cutoff, "skew", datetime(2026, 10, 19, tzinfo=timezone.utc)
+        )
         fact = gold["fact_order_lines"].localCheckpoint(eager=True)
         segments = gold["label_segments"].localCheckpoint(eager=True)
         report["fact_rows"], report["segment_rows"] = fact.count(), segments.count()

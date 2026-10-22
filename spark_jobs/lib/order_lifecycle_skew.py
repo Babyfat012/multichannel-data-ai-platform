@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 
 def bucket_width_days(buckets: int) -> int:
@@ -16,7 +16,7 @@ def time_bucket(timestamp: datetime, buckets: int) -> int:
     """Mã khoảng tính từ epoch UTC; không phụ thuộc timezone của máy chạy."""
     if timestamp.tzinfo is None:
         raise ValueError("timestamp must have a timezone")
-    days = (timestamp.astimezone(UTC) - datetime(1970, 1, 1, tzinfo=UTC)).days
+    days = (timestamp.astimezone(timezone.utc) - datetime(1970, 1, 1, tzinfo=timezone.utc)).days
     return days // bucket_width_days(buckets)
 
 

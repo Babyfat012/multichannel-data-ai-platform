@@ -13,7 +13,7 @@ import hashlib
 import json
 import re
 import time
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from spark_jobs.lib.maintenance_policy import (
@@ -334,7 +334,7 @@ def validate_receipt(spark, receipt):
         assert_same(entry["before"], entry["after"])
         assert_same(entry["after"], fingerprint(spark, entry["table"]))
         check_tags(spark, entry["table"], entry["generation_before"])
-    return {"status": "validated", "validated_at": datetime.now(UTC).isoformat()}
+    return {"status": "validated", "validated_at": datetime.now(timezone.utc).isoformat()}
 
 
 def arguments():
@@ -390,7 +390,7 @@ def main():
     args = arguments()
     receipt = {
         "status": "running",
-        "started_at": datetime.now(UTC).isoformat(),
+        "started_at": datetime.now(timezone.utc).isoformat(),
         "mode": "execute" if args.execute else "plan",
         "code_sha256": code_hashes(),
         "tables": [],
@@ -446,7 +446,7 @@ def main():
         raise
     finally:
         if not args.validate_receipt:
-            receipt["finished_at"] = datetime.now(UTC).isoformat()
+            receipt["finished_at"] = datetime.now(timezone.utc).isoformat()
             write_receipt(args.receipt, receipt)
         if spark is not None:
             spark.stop()

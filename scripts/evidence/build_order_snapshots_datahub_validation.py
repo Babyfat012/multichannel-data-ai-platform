@@ -16,7 +16,7 @@ import argparse
 import ast
 import json
 import re
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 RUNS = {
@@ -67,7 +67,7 @@ def success_log(root: Path, dag: str, task: str, run_id: str) -> tuple[str, str,
             return (
                 log,
                 path.relative_to(root).as_posix(),
-                completed.replace(tzinfo=UTC).isoformat(),
+                completed.replace(tzinfo=timezone.utc).isoformat(),
             )
     raise ValueError(f"No successful attempt for {dag}.{task} in {directory}")
 

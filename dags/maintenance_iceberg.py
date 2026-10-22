@@ -1,6 +1,6 @@
 """DE-N2: lịch bảo trì Iceberg hằng ngày, mặc định tạm dừng, bật tay sau khi kiểm tra."""
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from airflow import DAG
 from fsds_spark_operator import FsdsSparkSubmitOperator
@@ -18,7 +18,7 @@ CONF = {
 with DAG(
     dag_id="maintenance_iceberg",
     description="Lập kế hoạch → bảo trì + kiểm dữ liệu → kiểm receipt bằng session mới",
-    start_date=datetime(2026, 1, 1, tzinfo=UTC),
+    start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
     schedule="@daily",
     catchup=False,
     max_active_runs=1,

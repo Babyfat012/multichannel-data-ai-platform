@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
@@ -61,7 +61,7 @@ def _label_row(row, cutoff, generation, computed):
 
 def label_inputs(inputs: DataFrame, cutoff, run_id: str, computed_at=None) -> DataFrame:
     """Evaluate one label per input line at one observation snapshot."""
-    computed = computed_at or datetime.now(UTC)
+    computed = computed_at or datetime.now(timezone.utc)
     return inputs.sparkSession.createDataFrame(
         inputs.rdd.map(lambda row: _label_row(row, cutoff, run_id, computed)), LABEL_DDL
     )
@@ -84,7 +84,7 @@ def build_gold(silver: dict, cutoff, run_id: str, computed_at=None) -> dict:
     from spark_jobs.lib.package_distribution import distribute_python_packages
 
     distribute_python_packages(spark.sparkContext, include_tests=True)
-    computed = computed_at or datetime.now(UTC)
+    computed = computed_at or datetime.now(timezone.utc)
     native = silver["native_order_lines"].select(
         "dataset_version", "channel", "native_order_id", "native_line_id", "seller_sku"
     )

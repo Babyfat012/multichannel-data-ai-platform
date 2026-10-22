@@ -1,6 +1,6 @@
 """DAG chạy tay: validate Gold hiện tại rồi publish warehouse v2, không sửa DAG nguồn."""
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from airflow import DAG
 from airflow.models.param import Param
@@ -14,9 +14,9 @@ class OrderLifecycleSparkSubmitOperator(FsdsSparkSubmitOperator):
         dict.fromkeys(
             (
                 *FsdsSparkSubmitOperator.template_fields,
-                "driver_memory",
-                "executor_memory",
-                "executor_cores",
+                "_driver_memory",
+                "_executor_memory",
+                "_executor_cores",
             )
         )
     )
@@ -35,7 +35,7 @@ with DAG(
     dag_id="dp_order_lifecycle_warehouse",
     schedule=None,
     catchup=False,
-    start_date=datetime(2026, 1, 1, tzinfo=UTC),
+    start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
     max_active_runs=1,
     max_active_tasks=1,
     is_paused_upon_creation=True,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from spark_jobs.lib.cdc_offsets import load_boundary
@@ -57,7 +57,7 @@ def main(argv=None):
         document["error"] = str(exc)
         raise
     finally:
-        document["completed_at"] = datetime.now(UTC).isoformat()
+        document["completed_at"] = datetime.now(timezone.utc).isoformat()
         write_json(args.receipt, document)
         if spark is not None:
             spark.stop()

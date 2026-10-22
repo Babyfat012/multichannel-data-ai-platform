@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from airflow import DAG
 from fsds_spark_operator import FsdsSparkSubmitOperator
@@ -15,9 +15,9 @@ class OrderLifecycleCdcSparkSubmitOperator(FsdsSparkSubmitOperator):
         dict.fromkeys(
             (
                 *FsdsSparkSubmitOperator.template_fields,
-                "driver_memory",
-                "executor_memory",
-                "executor_cores",
+                "_driver_memory",
+                "_executor_memory",
+                "_executor_cores",
             )
         )
     )
@@ -41,7 +41,7 @@ RESOURCES = {
 with DAG(
     dag_id="dp_order_lifecycle_cdc",
     description="Walmart v2 WAL → Kafka → Bronze CDC → oracle",
-    start_date=datetime(2026, 1, 1, tzinfo=UTC),
+    start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
     schedule=None,
     catchup=False,
     max_active_runs=1,

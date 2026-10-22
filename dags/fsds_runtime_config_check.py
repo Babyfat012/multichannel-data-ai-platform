@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from airflow import DAG
 from airflow.hooks.base import BaseHook
@@ -73,7 +73,7 @@ def verify_runtime_configuration() -> None:
 with DAG(
     dag_id="fsds_runtime_config_check",
     description="Verify FSDS Airflow metadata and run a three-row Spark smoke query",
-    start_date=datetime(2026, 1, 1, tzinfo=UTC),
+    start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
     schedule=None,
     catchup=False,
     max_active_runs=1,

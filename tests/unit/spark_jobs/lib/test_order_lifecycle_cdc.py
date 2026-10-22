@@ -175,7 +175,7 @@ def test_dag_ast_and_setup():
         assert variable in source and f"variables set {variable}" in setup
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef))
     assert all(
-        f'"{field}"' in ast.get_source_segment(source, cls)
+        f'"_{field}"' in ast.get_source_segment(source, cls)
         for field in ("driver_memory", "executor_memory", "executor_cores")
     )
 

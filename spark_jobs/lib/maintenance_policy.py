@@ -7,7 +7,7 @@ import math
 import re
 import time
 from collections import defaultdict
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from spark_jobs.lib.return_label import utc
@@ -95,7 +95,7 @@ def plan_maintenance(metadata, config, now=None):
     actions vẫn chứa đúng cuộc kiểm kê orphan dry-run.
     """
     config = validated_config(config)
-    now = utc(now or datetime.now(UTC))
+    now = utc(now or datetime.now(timezone.utc))
     actions = []
     grouped = defaultdict(list)
     for file in metadata.get("files", []):
@@ -270,7 +270,7 @@ def ensure_refs_survive_expiration(metadata, now=None):
     Iceberg có thể tự bỏ ref quá tuổi trong expire_snapshots. Không chỉ dựa
     vào hậu kiểm: kiểm retention tường minh trước khi gọi procedure xoá.
     """
-    now = utc(now or datetime.now(UTC))
+    now = utc(now or datetime.now(timezone.utc))
     snapshots = {int(s["snapshot_id"]): s for s in metadata.get("snapshots", [])}
     default_age = int(
         metadata.get("properties", {}).get("history.expire.max-ref-age-ms", 9223372036854775807)

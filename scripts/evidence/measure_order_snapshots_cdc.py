@@ -12,7 +12,7 @@ import json
 import sys
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import psycopg
@@ -24,7 +24,7 @@ from scripts.setup.setup_order_snapshots_debezium import TOPIC, load_settings
 
 def utc_now() -> str:
     """Return the current UTC timestamp in ISO-8601 form."""
-    return datetime.now(UTC).isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def wait_for_change(consumer: Consumer, probe_id: str, expected_op: str) -> dict:

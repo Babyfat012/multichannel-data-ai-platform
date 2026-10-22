@@ -2,15 +2,14 @@
 
 import importlib.util
 from collections import defaultdict
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
 from spark_jobs.lib.order_lifecycle_skew import bucket_prefix, bucket_width_days, time_bucket
 
-UTC = UTC
-EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
 def test_bucket_utc_and_boundaries():

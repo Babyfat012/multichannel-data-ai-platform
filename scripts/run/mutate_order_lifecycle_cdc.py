@@ -7,7 +7,7 @@ import hashlib
 import json
 import sys
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -135,7 +135,9 @@ def mutate(settings, output, seed):
             if cursor.rowcount != 1:
                 raise RuntimeError("Mutation phải chạm đúng một dòng")
             conn.commit()
-            oracle["events"].append({**event, "committed_at": datetime.now(UTC).isoformat()})
+            oracle["events"].append(
+                {**event, "committed_at": datetime.now(timezone.utc).isoformat()}
+            )
             write_json(output, oracle)
         oracle["complete"] = True
         write_json(output, oracle)

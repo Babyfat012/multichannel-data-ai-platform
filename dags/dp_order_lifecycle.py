@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from airflow import DAG
@@ -25,9 +25,9 @@ class OrderLifecycleSparkSubmitOperator(FsdsSparkSubmitOperator):
         dict.fromkeys(
             (
                 *FsdsSparkSubmitOperator.template_fields,
-                "driver_memory",
-                "executor_memory",
-                "executor_cores",
+                "_driver_memory",
+                "_executor_memory",
+                "_executor_cores",
             )
         )
     )
@@ -49,7 +49,7 @@ def write_receipt(path, document):
     """Lưu receipt có thời gian hoàn tất thật vào thư mục của lần chạy."""
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    document["completed_at"] = datetime.now(UTC).isoformat()
+    document["completed_at"] = datetime.now(timezone.utc).isoformat()
     target.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n")
 
 
@@ -125,7 +125,7 @@ class OrderLifecycleBronzeOperator(OrderLifecycleSparkSubmitOperator):
 with DAG(
     dag_id="dp_order_lifecycle",
     description="Hợp đồng → Bronze v2 → Silver v2 → Gold v2 → Validate",
-    start_date=datetime(2026, 1, 1, tzinfo=UTC),
+    start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
     schedule=None,
     catchup=False,
     max_active_runs=1,

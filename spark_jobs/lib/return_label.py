@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 LABEL_VERSION = "return-or-refund-line-v2"
@@ -45,7 +45,11 @@ def utc(value: str | datetime) -> datetime:
     parsed = (
         datetime.fromisoformat(value.replace("Z", "+00:00")) if isinstance(value, str) else value
     )
-    return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
+    return (
+        parsed.replace(tzinfo=timezone.utc)
+        if parsed.tzinfo is None
+        else parsed.astimezone(timezone.utc)
+    )
 
 
 def scope_matches(scope: Mapping[str, Any], line: Mapping[str, Any]) -> bool:
@@ -319,7 +323,7 @@ def sku_return_feature(target: Mapping[str, Any], history: list[Mapping[str, Any
     )
 
 
-FAR_FUTURE = datetime(9999, 1, 1, tzinfo=UTC)
+FAR_FUTURE = datetime(9999, 1, 1, tzinfo=timezone.utc)
 
 
 def label_segments(line: Mapping[str, Any]) -> list[dict]:
@@ -368,7 +372,7 @@ def feature_window(segment: Mapping[str, Any]) -> tuple[datetime, datetime] | No
     (start, end] == [start+1µs, end+1µs).
     """
     micro = timedelta(microseconds=1)
-    cohort = datetime.combine(segment["cohort_date"], datetime.min.time(), tzinfo=UTC)
+    cohort = datetime.combine(segment["cohort_date"], datetime.min.time(), tzinfo=timezone.utc)
     begin = max(utc(segment["start_exclusive"]) + micro, cohort + timedelta(days=1))
     end = cohort + timedelta(days=91)
     if segment["end_inclusive"] is not None:

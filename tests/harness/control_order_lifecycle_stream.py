@@ -4,7 +4,7 @@ import argparse
 import json
 import subprocess
 import time
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
@@ -61,7 +61,7 @@ def control(base, taskmanager, evidence, oracle, output, timeout=300):
     epoch = expected["epoch"]
     expected_kept = sum(row["kept"] for row in expected["dedup"])
     job_name = f"order-lifecycle-stream-dedup-{epoch}"
-    started_at = datetime.now(UTC).isoformat()
+    started_at = datetime.now(timezone.utc).isoformat()
     started = time.monotonic()
     timings = {}
 
@@ -159,7 +159,7 @@ def control(base, taskmanager, evidence, oracle, output, timeout=300):
                 final_kept_count=final_count,
                 final_state="CANCELED",
                 started_at=started_at,
-                finished_at=datetime.now(UTC).isoformat(),
+                finished_at=datetime.now(timezone.utc).isoformat(),
                 timings=timings,
             ),
             indent=2,

@@ -16,7 +16,7 @@ import shutil
 import sys
 import tempfile
 import unittest
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 os.environ.setdefault("SPARK_LOCAL_IP", "127.0.0.1")
@@ -33,7 +33,7 @@ from generator.generate_order_lifecycle import ScaleConfig, generate_scaled
 from generator.generate_order_lifecycle_fixture import generate_fixture
 from spark_jobs.lib.order_lifecycle_lakehouse import bronze_from_root, build_silver
 
-COMPUTED = datetime(2026, 10, 19, tzinfo=UTC)
+COMPUTED = datetime(2026, 10, 19, tzinfo=timezone.utc)
 
 
 def _cutoff(root):
