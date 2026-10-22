@@ -1,0 +1,16 @@
+# Image cho các bước Kubeflow train model: Feast (đọc kho offline) + LightGBM + MLflow client.
+# Dựng trên fsds-feast để dùng chung lớp, tiết kiệm đĩa.
+FROM fsds-feast:0.66.0
+USER root
+RUN apt-get update && apt-get install --no-install-recommends -y libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir "lightgbm==4.7.0" "scikit-learn==1.9.1" "mlflow-skinny==3.17.0" "kfp==2.17.0"
+COPY ml /opt/ml/ml
+ENV PYTHONPATH=/opt/ml \
+    FEAST_REGISTRY=s3://fsds/feature-store/registry.db \
+    FEAST_SKU_DAILY_PATH=s3://fsds/feature-store/sku_daily \
+    FEAST_SKU_RETURN_24H_PATH=s3://fsds/feature-store/sku_return_24h.parquet \
+    FEAST_S3_ENDPOINT_URL=http://minio:9000 \
+    AWS_ENDPOINT_URL_S3=http://minio:9000 \
+    FEAST_REDIS=redis.feature-store.svc.cluster.local:6379
+USER 65534

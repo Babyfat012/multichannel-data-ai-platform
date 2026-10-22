@@ -19,7 +19,7 @@ import time
 from bisect import bisect_left
 from collections import Counter, OrderedDict, defaultdict
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from generator.generate_order_lifecycle_fixture import (
@@ -52,6 +52,22 @@ SCENARIO_WEIGHTS = {
     "right_censored": 0.04,
 }
 MAX_SOURCE_ROWS = 20_000_000
+# Kịch bản cho nhãn Return-or-Refund = 1 (trả/hoàn trong 30 ngày sau giao).
+POSITIVE_SCENARIOS = (
+    "return_with_refund",
+    "return_only",
+    "product_refund",
+    "refund_retry",
+    "correction",
+)
+# Chỉ dùng khi sku_return_skew > 0: kênh nhãn trả trước/thử đồ dễ trả hơn (cùng chiều v1 returns.py).
+CHANNEL_RETURN_FACTOR = {
+    "amazon": 1.0,
+    "tiktok_shop": 1.6,
+    "shopify": 0.8,
+    "walmart": 0.7,
+    "shopee": 1.2,
+}
 
 
 @dataclass(frozen=True)
@@ -69,6 +85,9 @@ class ScaleConfig:
     followup_days: int = 270
     observation_days: int = 285
     native_schemas: tuple[tuple[str, int], ...] = ()
+    # 0 = nhãn không phụ thuộc gì (mặc định, giữ nguyên dữ liệu cũ). > 0: mỗi SKU có hệ số trả
+    # exp(skew·z), z ~ N(0,1) cố định theo SKU, cộng hệ số theo kênh ⇒ model có tín hiệu để học.
+    sku_return_skew: float = 0.0
 
     @property
     def creation_days(self):
@@ -89,6 +108,8 @@ class ScaleConfig:
             raise ValueError("seed must be int")
         if not math.isfinite(self.sku_zipf_s) or self.sku_zipf_s < 0:
             raise ValueError("sku_zipf_s must be finite and >= 0")
+        if not math.isfinite(self.sku_return_skew) or not 0 <= self.sku_return_skew <= 3:
+            raise ValueError("sku_return_skew must be 0..3")
         for weights, size, name in (
             (self.channel_weights, 5, "channel_weights"),
             (self.lines_per_order, 4, "lines_per_order"),
@@ -174,11 +195,26 @@ def _sku_weights(config):
     return [rank ** (-config.sku_zipf_s) for rank in range(1, config.sku_count + 1)]
 
 
+def _params(config):
+    """Tham số tạo ID dataset; bỏ `sku_return_skew` khi = 0 để dữ liệu cũ giữ nguyên ID/byte."""
+    params = asdict(config)
+    if not params["sku_return_skew"]:
+        del params["sku_return_skew"]
+    return params
+
+
+def _scenario_weights(config, sku, channel):
+    """Trọng số kịch bản của một line: nhân nhóm dương với hệ số SKU × kênh (RNG riêng theo SKU)."""
+    z = random.Random(f"{config.seed}:{sku}").gauss(0.0, 1.0)
+    factor = math.exp(config.sku_return_skew * z) * CHANNEL_RETURN_FACTOR[channel]
+    return tuple(w * factor if k in POSITIVE_SCENARIOS else w for k, w in SCENARIO_WEIGHTS.items())
+
+
 def _orders_by_day(config):
     """Lấy mẫu bằng RNG riêng và chỉ giữ đơn của đúng một ngày."""
     rng = random.Random(config.seed)
     start = datetime.fromisoformat(config.start.replace("Z", "+00:00"))
-    population = stable_id("population", asdict(config) | {"native_schemas": ()})
+    population = stable_id("population", _params(config) | {"native_schemas": ()})
     sku_cdf, acc = [], 0.0
     for weight in _sku_weights(config):
         acc += weight
@@ -191,8 +227,16 @@ def _orders_by_day(config):
             oid = stable_id("native-order", population, day, number, channel)
             lines = []
             for index in range(rng.choices((1, 2, 3, 4), config.lines_per_order)[0]):
-                scenario = rng.choices(tuple(SCENARIO_WEIGHTS), tuple(SCENARIO_WEIGHTS.values()))[0]
-                sku = f"sku-{bisect_left(sku_cdf, rng.random() * acc) + 1:05d}"
+                if config.sku_return_skew:
+                    # Rút SKU TRƯỚC để kịch bản phụ thuộc SKU; nhánh mặc định giữ thứ tự cũ.
+                    sku = f"sku-{bisect_left(sku_cdf, rng.random() * acc) + 1:05d}"
+                    weights = _scenario_weights(config, sku, channel)
+                    scenario = rng.choices(tuple(SCENARIO_WEIGHTS), weights)[0]
+                else:
+                    scenario = rng.choices(
+                        tuple(SCENARIO_WEIGHTS), tuple(SCENARIO_WEIGHTS.values())
+                    )[0]
+                    sku = f"sku-{bisect_left(sku_cdf, rng.random() * acc) + 1:05d}"
                 lid = stable_id("physical-line", population, day, number, index)
                 units = [stable_id("unit", lid, u) for u in range(3)]
                 canceled = int(scenario == "partial_cancel")
@@ -378,7 +422,8 @@ def _prepare_day(e, orders, config, start, first=False, last=False):
         delay = late[row["payload"]["native_order_id"]][row["payload"]["native_line_id"]]
         if delay:
             row["source_observed_at"] = _stamp(
-                datetime.fromisoformat(row["effective_at"]) + timedelta(seconds=delay)
+                datetime.fromisoformat(row["effective_at"].replace("Z", "+00:00"))
+                + timedelta(seconds=delay)
             )
     for _ in range(12):
         changed = False
@@ -528,8 +573,8 @@ def _spool_day(
             max_delay,
             int(
                 (
-                    datetime.fromisoformat(row["source_observed_at"])
-                    - datetime.fromisoformat(row["effective_at"])
+                    datetime.fromisoformat(row["source_observed_at"].replace("Z", "+00:00"))
+                    - datetime.fromisoformat(row["effective_at"].replace("Z", "+00:00"))
                 ).total_seconds()
             ),
         )
@@ -632,9 +677,13 @@ def _week_coverage(
         "SELECT max(observed) FROM events WHERE feed=? AND effective>=? AND effective<?", params
     ).fetchone()[0]
     # Đóng sau cuối tuần ít nhất 1 ngày, hoặc sau dòng trễ cuối cùng 1µs.
-    observed = datetime.fromisoformat(end) + timedelta(days=1)
+    observed = datetime.fromisoformat(end.replace("Z", "+00:00")) + timedelta(days=1)
     if last_observed:
-        observed = max(observed, datetime.fromisoformat(last_observed) + timedelta(microseconds=1))
+        observed = max(
+            observed,
+            datetime.fromisoformat(last_observed.replace("Z", "+00:00"))
+            + timedelta(microseconds=1),
+        )
     ranges = []
     for (seq,) in db.execute(
         "SELECT seq FROM events WHERE feed=? AND effective>=? AND effective<? ORDER BY seq", params
@@ -842,7 +891,7 @@ def generate_scaled(output_root, config: ScaleConfig):
     root = Path(output_root)
     if root.exists():
         raise FileExistsError(root)
-    parameters = asdict(config)
+    parameters = _params(config)
     physical_sha, intent_sha, world_id, identity, dataset = _scale_identity(config, parameters)
     horizons = {
         "clock_domain": CLOCK,
@@ -915,7 +964,7 @@ def generate_scaled(output_root, config: ScaleConfig):
         "native_sources": native_sources,
         "files": files,
         "counts": {"orders": counts["orders"], "skus": config.sku_count, "lines": counts["lines"]},
-        "recorded_at": _stamp(datetime.now(UTC)),
+        "recorded_at": _stamp(datetime.now(timezone.utc)),
         "execution_clock_domain": "execution_utc",
         "source_recorded_at_policy": "frozen export timestamp = source_observation_end, distinct from execution recorded_at",
         "tail_diagnostics": {
@@ -981,6 +1030,7 @@ def main():
     parser.add_argument("--native-schema-for", action="append", default=[])
     parser.add_argument("--followup-days", type=int, default=ScaleConfig.followup_days)
     parser.add_argument("--observation-days", type=int, default=ScaleConfig.observation_days)
+    parser.add_argument("--sku-return-skew", type=float, default=ScaleConfig.sku_return_skew)
     args = parser.parse_args()
     try:
         weights = dict(
@@ -1000,6 +1050,7 @@ def main():
             native_schemas=overrides,
             followup_days=args.followup_days,
             observation_days=args.observation_days,
+            sku_return_skew=args.sku_return_skew,
         )
         print(json.dumps({"estimate": config.estimate()}, ensure_ascii=False), flush=True)
         manifest = generate_scaled(args.output, config)

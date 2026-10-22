@@ -1,0 +1,192 @@
+"""Kubeflow Pipelines: load (Feast offline) → split → train → evaluate → register (MLflow).
+
+Mọi bước chạy trong image `fsds-train` (docker/Dockerfile.train), gọi hàm của `ml/train_lib.py`.
+Biên dịch + submit: `scripts/run/run_training_pipeline.sh`.
+"""
+
+from kfp import dsl, kubernetes
+
+IMAGE = "fsds-train:0.1.0"
+# Credential MinIO cho Feast đọc kho offline; Secret tạo từ .env lúc submit, không nằm trong YAML.
+SECRET = "fsds-minio"
+
+
+@dsl.component(base_image=IMAGE)
+def load_features(entity_path: str, features: dsl.Output[dsl.Dataset]):
+    """Đọc tập line có nhãn rồi PIT join feature SKU từ kho OFFLINE của Feast."""
+    import pandas as pd
+    import s3fs
+    from feast import FeatureStore
+
+    from ml.train_lib import FEAST_FEATURES
+
+    fs = s3fs.S3FileSystem()
+    entity = pd.read_parquet(entity_path.removeprefix("s3://"), filesystem=fs)
+    store = FeatureStore("/opt/feature_repo")
+    frame = store.get_historical_features(entity_df=entity, features=FEAST_FEATURES).to_df()
+    frame.to_parquet(features.path)
+    print(f"{len(frame)} dòng, cột {list(frame.columns)}")
+
+
+@dsl.component(base_image=IMAGE)
+def split(
+    features: dsl.Input[dsl.Dataset],
+    test_days: int,
+    train_set: dsl.Output[dsl.Dataset],
+    test_set: dsl.Output[dsl.Dataset],
+):
+    """Chia theo ngày đặt đơn: `test_days` ngày cuối làm test."""
+    import pandas as pd
+
+    from ml.train_lib import temporal_split
+
+    train, test = temporal_split(pd.read_parquet(features.path), test_days)
+    train.to_parquet(train_set.path)
+    test.to_parquet(test_set.path)
+    print(
+        f"train {len(train)} dòng, test {len(test)} dòng, test prevalence {test['label'].mean():.3f}"
+    )
+
+
+@dsl.component(base_image=IMAGE)
+def train(train_set: dsl.Input[dsl.Dataset], model: dsl.Output[dsl.Model]):
+    """Train LightGBM với seed cố định, lưu model dạng booster text."""
+    import pandas as pd
+
+    from ml.train_lib import add_order_features, train_model
+
+    fitted = train_model(add_order_features(pd.read_parquet(train_set.path)))
+    fitted.booster_.save_model(model.path)
+
+
+@dsl.component(base_image=IMAGE)
+def evaluate(
+    train_set: dsl.Input[dsl.Dataset],
+    test_set: dsl.Input[dsl.Dataset],
+    model: dsl.Input[dsl.Model],
+    metrics: dsl.Output[dsl.Metrics],
+) -> str:
+    """PR-AUC model vs baseline trên cùng test; trả metric dạng JSON cho bước register."""
+    import json
+
+    import lightgbm as lgb
+    import pandas as pd
+
+    from ml.train_lib import FEATURES, add_order_features, baseline_scores
+    from ml.train_lib import evaluate as score
+
+    train, test = (
+        pd.read_parquet(train_set.path),
+        add_order_features(pd.read_parquet(test_set.path)),
+    )
+    booster = lgb.Booster(model_file=model.path)
+    result = score(test, booster.predict(test[FEATURES]), baseline_scores(train, test))
+    for key, value in result.items():
+        metrics.log_metric(key, float(value))
+    print(result)
+    return json.dumps(result)
+
+
+@dsl.component(base_image=IMAGE)
+def register(
+    model: dsl.Input[dsl.Model],
+    train_set: dsl.Input[dsl.Dataset],
+    test_set: dsl.Input[dsl.Dataset],
+    result: str,
+    entity_path: str,
+    tracking_uri: str,
+    model_name: str,
+):
+    """Ghi run MLflow (param, metric, model, dữ liệu), đăng ký version; tag `latest` luôn,
+    alias + tag `production` chỉ khi thắng baseline."""
+    import hashlib
+    import json
+
+    import lightgbm as lgb
+    import mlflow
+    import pandas as pd
+    from mlflow import MlflowClient
+
+    from ml.train_lib import FEATURES
+
+    def sha256(path):
+        with open(path, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+
+    metrics = json.loads(result)
+    mlflow.set_tracking_uri(tracking_uri)
+    mlflow.set_experiment("return-risk")
+    train = pd.read_parquet(train_set.path)
+    with mlflow.start_run() as run:
+        mlflow.log_params({"features": ",".join(FEATURES), "algo": "lightgbm", "seed": 7})
+        mlflow.log_metrics({k: float(v) for k, v in metrics.items()})
+        mlflow.set_tags(
+            {
+                "data.entity_path": entity_path,
+                "data.dataset_version": ",".join(sorted(train["dataset_version"].unique())),
+                "data.generation_id": ",".join(sorted(train["generation_id"].unique())),
+                "data.train_sha256": sha256(train_set.path),
+                "data.test_sha256": sha256(test_set.path),
+            }
+        )
+        mlflow.log_input(
+            mlflow.data.from_pandas(train, source=entity_path, name="train"), context="training"
+        )
+        mlflow.log_artifact(train_set.path, "data/train")
+        mlflow.log_artifact(test_set.path, "data/test")
+        info = mlflow.lightgbm.log_model(
+            lgb.Booster(model_file=model.path), name="model", registered_model_name=model_name
+        )
+    client = MlflowClient()
+    version = info.registered_model_version
+    # Alias "latest" bị MLflow giữ chỗ (models:/<tên>/latest đã trỏ version mới nhất) ⇒ dùng tag.
+    for older in client.search_model_versions(f"name='{model_name}'"):
+        if older.version != version and older.tags.get("latest") == "true":
+            client.set_model_version_tag(model_name, older.version, "latest", "false")
+    client.set_model_version_tag(model_name, version, "latest", "true")
+    client.set_model_version_tag(
+        model_name, version, "production", str(metrics["beats_baseline"]).lower()
+    )
+    if metrics["beats_baseline"]:
+        client.set_registered_model_alias(model_name, "production", version)
+    print(
+        f"run {run.info.run_id} → {model_name} v{version}, production={metrics['beats_baseline']}"
+    )
+
+
+@dsl.pipeline(name="return-risk-training", description="Feast offline → LightGBM → MLflow")
+def return_risk_training(
+    entity_path: str = "s3://fsds/feature-store/training_lines",
+    test_days: int = 10,
+    tracking_uri: str = "http://mlflow:5000",
+    model_name: str = "return-risk",
+):
+    """Năm bước; mỗi bước nhận đúng artifact của bước trước."""
+    loaded = load_features(entity_path=entity_path)
+    parts = split(features=loaded.outputs["features"], test_days=test_days)
+    trained = train(train_set=parts.outputs["train_set"])
+    scored = evaluate(
+        train_set=parts.outputs["train_set"],
+        test_set=parts.outputs["test_set"],
+        model=trained.outputs["model"],
+    )
+    reg = register(
+        model=trained.outputs["model"],
+        train_set=parts.outputs["train_set"],
+        test_set=parts.outputs["test_set"],
+        result=scored.outputs["Output"],
+        entity_path=entity_path,
+        tracking_uri=tracking_uri,
+        model_name=model_name,
+    )
+    for task in (loaded, parts, trained, scored, reg):
+        task.set_caching_options(False)
+        kubernetes.set_image_pull_policy(task, "IfNotPresent")
+        kubernetes.use_secret_as_env(
+            task,
+            secret_name=SECRET,
+            secret_key_to_env={
+                "AWS_ACCESS_KEY_ID": "AWS_ACCESS_KEY_ID",
+                "AWS_SECRET_ACCESS_KEY": "AWS_SECRET_ACCESS_KEY",
+            },
+        )

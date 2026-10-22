@@ -4,7 +4,7 @@ import hashlib
 import json
 from collections import Counter, defaultdict
 from dataclasses import FrozenInstanceError
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -29,7 +29,7 @@ def test_fixture_default_bytes_are_pinned(tmp_path, monkeypatch):
         @classmethod
         def now(cls, tz=None):
             """Trả thời điểm UTC baseline."""
-            return cls(2026, 10, 19, tzinfo=UTC)
+            return cls(2026, 10, 19, tzinfo=timezone.utc)
 
     monkeypatch.setattr(source, "datetime", Fixed)
     expected = json.loads(
@@ -363,3 +363,34 @@ def test_full_180_day_horizon_with_sparse_channels(tmp_path):
     for row in rows_for(root, manifest, "seller_wms.stock_snapshots"):
         p = row["payload"]
         assert [p["on_hand"], p["reserved"], p["non_sellable"]] == balances[p["internal_sku_id"]]
+
+
+def test_sku_return_skew_creates_learnable_signal():
+    """skew > 0: tỷ lệ kịch bản dương khác nhau rõ giữa SKU và theo hệ số kênh; skew = 0 thì không."""
+    from collections import Counter
+
+    from generator.generate_order_lifecycle import (
+        POSITIVE_SCENARIOS,
+        ScaleConfig,
+        _orders_by_day,
+    )
+
+    def rates(skew, key):
+        config = ScaleConfig(
+            days=30, orders_per_day=200, sku_count=5, sku_zipf_s=0.0, sku_return_skew=skew
+        )
+        pos, total = Counter(), Counter()
+        for orders in _orders_by_day(config):
+            for order in orders:
+                for line in order["lines"]:
+                    k = key(order, line)
+                    total[k] += 1
+                    pos[k] += line["scenario"] in POSITIVE_SCENARIOS
+        return {k: pos[k] / total[k] for k in total}
+
+    by_sku = rates(1.5, lambda o, line: line["sku"])
+    flat = rates(0.0, lambda o, line: line["sku"])
+    assert max(by_sku.values()) - min(by_sku.values()) > 0.2
+    assert max(flat.values()) - min(flat.values()) < 0.06
+    by_channel = rates(1.5, lambda o, line: o["channel"])
+    assert by_channel["tiktok_shop"] > by_channel["walmart"]
