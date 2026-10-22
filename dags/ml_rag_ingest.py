@@ -1,0 +1,75 @@
+"""MLE RAG: tài liệu text → chunk → embedding → Feast online store (pgvector) → validate → DataHub.
+
+Mỗi task gọi một bước của `rag/pipeline.py` trong feast-venv; credential lấy từ Airflow Connection lúc chạy.
+"""
+
+from __future__ import annotations
+
+import os
+import subprocess
+from datetime import datetime, timezone
+
+from airflow import DAG
+from airflow.exceptions import AirflowSkipException
+from airflow.hooks.base import BaseHook
+from airflow.models import Variable
+from airflow.operators.python import PythonOperator
+
+PYTHON = "/home/airflow/feast-venv/bin/python"
+RECEIPTS = "/opt/airflow/receipts/rag/{{ run_id }}"
+MODEL_CACHE = "/opt/airflow/rag-models"  # volume airflow-data: tải model 1 lần
+
+
+def run_step(step, receipt_dir=None, run_id=None, **_):
+    """Chạy `python -m rag.pipeline <step>` với env dựng từ Connection/Variable."""
+    minio = BaseHook.get_connection("fsds_minio")
+    pg = BaseHook.get_connection("fsds_rag_pg")
+    root = Variable.get("fsds_rag_root")
+    env = {
+        **os.environ,
+        "PYTHONPATH": "/opt/rag",
+        "AWS_ACCESS_KEY_ID": minio.login,
+        "AWS_SECRET_ACCESS_KEY": minio.password,
+        "FEAST_S3_ENDPOINT_URL": Variable.get("fsds_minio_internal_endpoint"),
+        "RAG_ROOT": root,
+        "FEAST_RAG_REGISTRY": Variable.get("fsds_feast_root") + "/rag-registry.db",
+        "FEAST_RAG_CHUNKS_PATH": f"{root}/chunks.parquet",
+        "RAG_PG_HOST": pg.host,
+        "RAG_PG_PORT": str(pg.port),
+        "RAG_PG_USER": pg.login,
+        "RAG_PG_PASSWORD": pg.password,
+    }
+    args = [PYTHON, "-m", "rag.pipeline", step, "--model-cache", MODEL_CACHE]
+    if receipt_dir:
+        args += ["--receipt-dir", receipt_dir, "--run-id", run_id]
+    if step == "publish":
+        server = Variable.get("fsds_datahub_gms_url", default_var="")
+        if not server:
+            raise AirflowSkipException("chưa đặt Variable fsds_datahub_gms_url (DataHub chưa chạy)")
+        args += ["--datahub", server]
+    result = subprocess.run(args, env=env, capture_output=True, text=True, check=False)
+    print(result.stdout, result.stderr, sep="\n")
+    result.check_returncode()
+
+
+with DAG(
+    dag_id="ml_rag_ingest",
+    description="RAG: text → chunk → embedding → Feast pgvector (rubric mle 9–10)",
+    start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    schedule=None,
+    catchup=False,
+    is_paused_upon_creation=False,
+    max_active_runs=1,
+    tags=["fsds", "mle", "rag"],
+) as dag:
+    tasks = [
+        PythonOperator(task_id=step, python_callable=run_step, op_kwargs={"step": step})
+        for step in ("upload", "chunk", "embed", "load")
+    ]
+    receipt = {"receipt_dir": RECEIPTS, "run_id": "{{ run_id }}"}
+    tasks += [
+        PythonOperator(task_id=step, python_callable=run_step, op_kwargs={"step": step, **receipt})
+        for step in ("validate", "publish")
+    ]
+    for upstream, downstream in zip(tasks, tasks[1:]):
+        upstream >> downstream

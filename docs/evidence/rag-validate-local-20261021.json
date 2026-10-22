@@ -1,0 +1,20 @@
+{
+  "run_id": "test2",
+  "completed_at": "2026-10-21T05:31:22.113484+00:00",
+  "chunks": 29,
+  "online_rows": 29,
+  "probe_top_doc": {
+    "How many days does a buyer have to return an item on Walmart?": "walmart-returns",
+    "Can a TikTok Shop buyer get a refund without sending the item back?": "tiktok-shop-returns",
+    "What should I do when a SKU return rate is above 30 percent?": "seller-return-playbook"
+  },
+  "checks": {
+    "online_chunk_count_mismatch": 0,
+    "duplicate_chunk_ids": 0,
+    "empty_text": 0,
+    "wrong_dimension": 0,
+    "not_unit_norm": 0,
+    "probe_wrong_top_doc": 0
+  },
+  "status": "PASS"
+}

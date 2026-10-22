@@ -1,0 +1,60 @@
+# Postgres + pgvector: online store của Feast RAG (fsds_rag). Airflow trong Compose ghi qua
+# fsds-ml-control-plane:30432; Feature API trong cụm đọc qua pgvector.rag.svc. Mật khẩu: Secret rag-pg (từ .env).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rag
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pgdata
+  namespace: rag
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: {storage: 1Gi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgvector
+  namespace: rag
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: pgvector}
+  template:
+    metadata:
+      labels: {app: pgvector}
+    spec:
+      containers:
+        - name: postgres
+          image: pgvector/pgvector:0.8.1-pg17
+          env:
+            - {name: POSTGRES_DB, value: rag}
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+          envFrom: [{secretRef: {name: rag-pg}}]   # POSTGRES_USER, POSTGRES_PASSWORD
+          ports: [{containerPort: 5432}]
+          volumeMounts: [{name: data, mountPath: /var/lib/postgresql/data}]
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          readinessProbe:
+            exec: {command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d rag"]}
+            periodSeconds: 5
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: pgdata}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgvector
+  namespace: rag
+spec:
+  type: NodePort
+  selector: {app: pgvector}
+  ports:
+    - {port: 5432, targetPort: 5432, nodePort: 30432}

@@ -29,6 +29,16 @@ def main() -> None:
             port=9000,
         ),
         Connection(conn_id="fsds_kafka", conn_type="generic", host="kafka", port=9092),
+        # pgvector của Feast RAG trong kind (NodePort); dùng chung tài khoản Postgres trong .env.
+        Connection(
+            conn_id="fsds_rag_pg",
+            conn_type="postgres",
+            host=os.environ.get("RAG_PG_HOST", "fsds-ml-control-plane"),
+            schema="rag",
+            login=os.environ["POSTGRES_USER"],
+            password=os.environ["POSTGRES_PASSWORD"],
+            port=int(os.environ.get("RAG_PG_PORT", "30432")),
+        ),
     ]
     variables = {
         "fsds_maintenance_tables": '["lakehouse.demo.maintenance_demo"]',
@@ -38,6 +48,7 @@ def main() -> None:
         "fsds_lakekeeper_catalog_uri": os.environ.get(
             "LAKEKEEPER_CATALOG_URI", "http://lakekeeper:8181/catalog"
         ),
+        "fsds_rag_root": "s3://" + os.environ.get("MINIO_BUCKET", "fsds") + "/rag",
         "fsds_dp1_cdc_topic": os.environ.get("KAFKA_TOPIC", "fsds_cdc.walmart.orders"),
     }
     with create_session() as session:
