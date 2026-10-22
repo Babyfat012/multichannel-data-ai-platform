@@ -1,0 +1,87 @@
+flowchart LR
+  seller(["👤 Seller"])
+  dev(["🧑‍💻 Developer"])
+  dbeaver["DBeaver"]
+  subgraph DP["Data platform · Docker Compose (local) / GCE VM (cloud)"]
+    gen["Data Generator"]
+    pg[("PostgreSQL<br/>nguồn Walmart · warehouse")]
+    minio[("MinIO / GCS<br/>Iceberg 3 tầng · Parquet offline")]
+    lk["Lakekeeper<br/>REST catalog"]
+    kafka{{"Kafka"}}
+    spark["Spark"]
+    flink["Flink"]
+    trino["Trino"]
+    airflow["Airflow"]
+    datahub["DataHub"]
+  end
+  subgraph K8S["ML + Agent platform · Kubernetes (kind local / GKE cloud)"]
+    redis[("Redis<br/>Feast online store")]
+    pusher["feast-pusher"]
+    kfp["Kubeflow Pipelines"]
+    mlflow["MLflow"]
+    reg[("Image registry")]
+    kserve["KServe<br/>model return-risk"]
+    ingress["NGINX Ingress"]
+    ui["kagent UI"]
+    coord["Coordinator Agent"]
+    agw["agentgateway<br/>LLM · MCP · A2A"]
+    a1["Data Agent"]
+    a2["Model + RAG Agent"]
+    api["Feature API<br/>REST + MCP tool"]
+    llm["LLM server<br/>llm-d (cloud) / llama.cpp (local)"]
+    areg["Agent registry"]
+    obs["Prometheus · Grafana<br/>Loki · Jaeger"]
+    vault["Vault"]
+    jenkins["Jenkins"]
+    langfuse["Langfuse"]
+  end
+
+  gen -->|"B1 · file export JSONL theo ngày"| minio
+  gen -->|"B2 · đơn Walmart"| pg
+  minio -->|"B3 · file raw"| spark
+  pg -->|"B4 · bảng nguồn (JDBC)"| spark
+  spark -->|"B5 · Bronze → Silver → Gold"| minio
+  spark -->|"B6 · con trỏ snapshot"| lk
+  spark -->|"B7 · Gold → warehouse"| pg
+  spark -->|"B8 · Parquet feature SKU/ngày"| minio
+  minio -->|"B9 · materialize feature mới nhất"| redis
+  minio -->|"B10 · bảng Iceberg"| trino
+  trino -->|"B11 · kết quả SQL"| dbeaver
+  gen -->|"S1 · event vận hành"| kafka
+  kafka -->|"S2 · return events"| flink
+  pg -->|"S3 · line_id → SKU"| flink
+  flink -->|"S4 · Return 24h / SKU"| kafka
+  kafka -->|"S5 · ml.sku_return_24h"| pusher
+  pusher -->|"S6 · push online"| redis
+  pusher -->|"S7 · push offline"| minio
+  minio -->|"T1 · feature + nhãn (PIT)"| kfp
+  kfp -->|"T2 · model · metric · version data"| mlflow
+  mlflow -->|"T3 · model production → image"| reg
+  reg -->|"T4 · image model"| kserve
+  seller -->|"U1 · câu hỏi (HTTPS + auth)"| ingress
+  ingress -->|"U2 · câu hỏi"| ui
+  ui -->|"U3 · câu hỏi"| coord
+  coord -->|"U4 · task (A2A)"| agw
+  agw -->|"U5 · task"| a1
+  agw -->|"U6 · task"| a2
+  a1 -->|"U7 · tool call (MCP)"| agw
+  agw -->|"U8 · tool call"| api
+  redis -->|"U9 · feature online"| api
+  a2 -->|"U10 · feature → score"| kserve
+  agw -->|"U11 · prompt"| llm
+  coord -->|"U12 · câu trả lời"| ui
+  airflow -.->|"điều phối job"| spark
+  airflow -.->|"điều phối"| kfp
+  airflow -.->|"lineage"| datahub
+  jenkins -.->|"CI/CD deploy"| kserve
+  dev -.->|"push code"| jenkins
+  vault -.->|"secret"| agw
+  langfuse -.->|"system prompt"| coord
+  areg -.->|"danh bạ agent"| coord
+  kserve -.->|"metric · log · trace"| obs
+
+  linkStyle 0,1,2,3,4,5,6,7,8,9,10 stroke:#2563eb,stroke-width:2px,color:#2563eb
+  linkStyle 11,12,13,14,15,16,17 stroke:#ea580c,stroke-width:2px,color:#ea580c
+  linkStyle 18,19,20,21 stroke:#16a34a,stroke-width:2px,color:#16a34a
+  linkStyle 22,23,24,25,26,27,28,29,30,31,32,33 stroke:#dc2626,stroke-width:2px,color:#dc2626
+  linkStyle 34,35,36,37,38,39,40,41,42 stroke:#9ca3af,stroke-width:1px,color:#6b7280

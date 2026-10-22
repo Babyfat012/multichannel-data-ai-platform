@@ -14,6 +14,10 @@ củng cố; [bản xử lý](docs/audit-remediation-20261018.md) ghi phạm vi 
 [Publication contract](docs/run-publication-contract.md) cụ thể hóa phần
 còn cần implement/POC. Chưa thao tác Cloud hoặc sinh lại nguồn lớn.
 
+Chuẩn bị AWS mốc 1 (DE batch trên EC2 + S3): xem
+[rà soát sẵn sàng ngày 2026-10-22](docs/aws-readiness-20261022.md).
+Đã kiểm offline; chưa triển khai AWS. Phần MLE/EKS chưa có gói triển khai tương ứng.
+
 ## Mục lục
 
 1. [Giới thiệu business domain](#1-giới-thiệu-business-domain)
@@ -74,6 +78,115 @@ và đường dẫn được ghi trong [Airflow](docs/airflow.md).
 
 Bản vector để phóng to hoặc đưa vào slide: [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg).
 Bản dựng gốc: [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html).
+
+### Sơ đồ toàn hệ thống (DE + MLE)
+
+Cùng luật vẽ với sơ đồ trên, gộp cả hai module. Mỗi luồng một màu, đánh số riêng từ 1:
+
+| Màu | Luồng | Ai dùng |
+|---|---|---|
+| Xanh dương `B1→B11` | Batch: nguồn → lakehouse → warehouse → feature offline → online | Developer |
+| Cam `S1→S7` | Stream: event → Flink → stream feature → Feast (online + offline) | Developer |
+| Xanh lá `T1→T4` | Train và deploy model: Kubeflow → MLflow → image → KServe | Developer |
+| Đỏ `U1→U12` | Seller hỏi qua UI chat → Coordinator → 2 agent → feature, model, LLM | Seller (người dùng cuối) |
+| Xám nét đứt | Điều phối, lineage, CI/CD, secret, prompt, giám sát — không phải luồng chính | — |
+
+Khung trên chạy bằng Docker Compose ở local và trên VM GCE ở cloud; khung dưới là Kubernetes
+(`kind` ở local, GKE ở cloud). Một số unit khung dưới (Vault, Jenkins, Langfuse, quan sát,
+NGINX) là đích của rubric `mle`, chưa dựng xong; trạng thái từng phần ở các tài liệu `mle-*`.
+Ảnh tĩnh: [`docs/diagrams/architecture-overall.png`](docs/diagrams/architecture-overall.png),
+nguồn: [`architecture-overall.mmd`](docs/diagrams/architecture-overall.mmd), bản sửa kéo-thả:
+[`architecture-overall.excalidraw`](docs/diagrams/architecture-overall.excalidraw) (mở bằng excalidraw.com → Open).
+
+```mermaid
+flowchart LR
+  seller(["👤 Seller"])
+  dev(["🧑‍💻 Developer"])
+  dbeaver["DBeaver"]
+  subgraph DP["Data platform · Docker Compose (local) / GCE VM (cloud)"]
+    gen["Data Generator"]
+    pg[("PostgreSQL<br/>nguồn Walmart · warehouse")]
+    minio[("MinIO / GCS<br/>Iceberg 3 tầng · Parquet offline")]
+    lk["Lakekeeper<br/>REST catalog"]
+    kafka{{"Kafka"}}
+    spark["Spark"]
+    flink["Flink"]
+    trino["Trino"]
+    airflow["Airflow"]
+    datahub["DataHub"]
+  end
+  subgraph K8S["ML + Agent platform · Kubernetes (kind local / GKE cloud)"]
+    redis[("Redis<br/>Feast online store")]
+    pusher["feast-pusher"]
+    kfp["Kubeflow Pipelines"]
+    mlflow["MLflow"]
+    reg[("Image registry")]
+    kserve["KServe<br/>model return-risk"]
+    ingress["NGINX Ingress"]
+    ui["kagent UI"]
+    coord["Coordinator Agent"]
+    agw["agentgateway<br/>LLM · MCP · A2A"]
+    a1["Data Agent"]
+    a2["Model + RAG Agent"]
+    api["Feature API<br/>REST + MCP tool"]
+    llm["LLM server<br/>llm-d (cloud) / llama.cpp (local)"]
+    areg["Agent registry"]
+    obs["Prometheus · Grafana<br/>Loki · Jaeger"]
+    vault["Vault"]
+    jenkins["Jenkins"]
+    langfuse["Langfuse"]
+  end
+
+  gen -->|"B1 · file export JSONL theo ngày"| minio
+  gen -->|"B2 · đơn Walmart"| pg
+  minio -->|"B3 · file raw"| spark
+  pg -->|"B4 · bảng nguồn (JDBC)"| spark
+  spark -->|"B5 · Bronze → Silver → Gold"| minio
+  spark -->|"B6 · con trỏ snapshot"| lk
+  spark -->|"B7 · Gold → warehouse"| pg
+  spark -->|"B8 · Parquet feature SKU/ngày"| minio
+  minio -->|"B9 · materialize feature mới nhất"| redis
+  minio -->|"B10 · bảng Iceberg"| trino
+  trino -->|"B11 · kết quả SQL"| dbeaver
+  gen -->|"S1 · event vận hành"| kafka
+  kafka -->|"S2 · return events"| flink
+  pg -->|"S3 · line_id → SKU"| flink
+  flink -->|"S4 · Return 24h / SKU"| kafka
+  kafka -->|"S5 · ml.sku_return_24h"| pusher
+  pusher -->|"S6 · push online"| redis
+  pusher -->|"S7 · push offline"| minio
+  minio -->|"T1 · feature + nhãn (PIT)"| kfp
+  kfp -->|"T2 · model · metric · version data"| mlflow
+  mlflow -->|"T3 · model production → image"| reg
+  reg -->|"T4 · image model"| kserve
+  seller -->|"U1 · câu hỏi (HTTPS + auth)"| ingress
+  ingress -->|"U2 · câu hỏi"| ui
+  ui -->|"U3 · câu hỏi"| coord
+  coord -->|"U4 · task (A2A)"| agw
+  agw -->|"U5 · task"| a1
+  agw -->|"U6 · task"| a2
+  a1 -->|"U7 · tool call (MCP)"| agw
+  agw -->|"U8 · tool call"| api
+  redis -->|"U9 · feature online"| api
+  a2 -->|"U10 · feature → score"| kserve
+  agw -->|"U11 · prompt"| llm
+  coord -->|"U12 · câu trả lời"| ui
+  airflow -.->|"điều phối job"| spark
+  airflow -.->|"điều phối"| kfp
+  airflow -.->|"lineage"| datahub
+  jenkins -.->|"CI/CD deploy"| kserve
+  dev -.->|"push code"| jenkins
+  vault -.->|"secret"| agw
+  langfuse -.->|"system prompt"| coord
+  areg -.->|"danh bạ agent"| coord
+  kserve -.->|"metric · log · trace"| obs
+
+  linkStyle 0,1,2,3,4,5,6,7,8,9,10 stroke:#2563eb,stroke-width:2px,color:#2563eb
+  linkStyle 11,12,13,14,15,16,17 stroke:#ea580c,stroke-width:2px,color:#ea580c
+  linkStyle 18,19,20,21 stroke:#16a34a,stroke-width:2px,color:#16a34a
+  linkStyle 22,23,24,25,26,27,28,29,30,31,32,33 stroke:#dc2626,stroke-width:2px,color:#dc2626
+  linkStyle 34,35,36,37,38,39,40,41,42 stroke:#9ca3af,stroke-width:1px,color:#6b7280
+```
 
 ### Deployable units
 
@@ -260,6 +373,22 @@ Wheel generator giữ riêng `generator`, không thêm PySpark vào unit depende
 | [DE lane 2026-10-18](docs/plan-de-lane-20261018.md) | Phạm vi bàn giao nguồn v2, artifact và kết quả kiểm local |
 | [DE scope mở rộng (v2)](docs/de-order-lifecycle-status.md) | Bảng một trang: từng gói v2 (nguồn, Silver, Gold, warehouse, stream, CDC, DAG), tài liệu, kết quả local và GCP |
 | [Triển khai GCP](docs/gcp-checklist.md) | Các bước người học tự chạy trên GCP; chi tiết ở [gcp-deploy](docs/gcp-deploy.md) và [gcp-runtime](docs/gcp-runtime.md) |
+| [Sẵn sàng DE lên GCP](docs/de-gcp-readiness-20261020.md) | Checklist trước triển khai, đối chiếu 38 tiêu chí DE và thứ tự nghiệm thu batch, scale, streaming |
+| [Ma trận rubric MLE](docs/mle-rubric-matrix.md) | Từng dòng rubric `mle` với artifact, bằng chứng, phần còn chờ GCP/learner |
+| [MLE: kho feature Feast](docs/mle-feature-store.md) | Feature SKU theo ngày: Parquet offline → Redis online trong cụm kind, DAG materialize tăng dần |
+| [MLE: stream feature](docs/mle-stream-feature.md) | Flink đếm Return 24h theo SKU → Kafka → Feast push vào Redis và Parquet offline |
+| [MLE: Web API](docs/mle-web-api.md) | FastAPI + pydantic đọc feature online của SKU từ Feast, healthcheck cho k8s |
+| [MLE: agent platform](docs/mle-agents.md) | LLM llama.cpp (thay llm-d ở local), agentgateway (LLM/MCP/A2A), kagent và Data Agent |
+| [MLE: RAG](docs/mle-rag.md) | Chunk tài liệu chính sách → embedding → Feast (pgvector), truy vấn tài liệu cho agent |
+| [MLE: train model](docs/mle-training.md) | Kubeflow 5 bước (Feast offline → LightGBM → MLflow), gate production theo baseline |
+| [MLE: serve model](docs/mle-serving.md) | KServe RawDeployment, model nằm trong image, tự đọc feature online, abstain khi thiếu lịch sử |
+| [MLE Novel ML-N2: drift](docs/mle-drift.md) | Evidently phát hiện đợt Sale làm lệch cơ cấu SKU; lô ổn định không cảnh báo |
+| [MLE Novel ML-N1: agent eval](docs/mle-agent-eval.md) | Chấm câu trả lời agent bằng số thật từ Feature API, cổng chặn CI; A 100% vs B 91,7% |
+| [MLE: Vault](docs/mle-vault.md) | Secret tập trung ở HashiCorp Vault, token CI chỉ-đọc, script đọc secret từ Vault |
+| [MLE: CI/CD Jenkins](docs/mle-cicd.md) | Jenkins cấu hình bằng code, 4 pipeline, secret lấy từ Vault |
+| [MLE: gateway](docs/mle-gateway.md) | NGINX Ingress: HTTPS cho Web API (sslip.io + cert-manager), basic auth + rate limit cho UI agent |
+| [MLE: A/B test](docs/mle-ab-test.md) | agentgateway chia 50/50 giữa hai bản LLM và hai bản Data Agent, theo dõi trên Grafana |
+| [MLE: Terraform GKE](infra/gcp/terraform-gke/README.md) | Cụm GKE zonal 0..2 × e2-standard-4 + Artifact Registry, state tách khỏi VM DE (đã validate, chưa apply) |
 | [DE-N1: data contracts](docs/novel-de-n1-data-contracts.md) | Registry schema, luật tiến hóa và cổng cách ly đầu Silver v2 |
 | [DE-N2: Iceberg tự bảo trì](docs/novel-de-n2-iceberg-maintenance.md) | Chính sách compact/z-order/expire/orphan dry-run, giữ tag `gen-*`, retry lỗi tạm |
 | [docs/novel-ideas.md](docs/novel-ideas.md) | Kế hoạch đo và kết quả hai ý tưởng Novel |
