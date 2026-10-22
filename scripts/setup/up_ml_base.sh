@@ -5,6 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 docker compose --profile catalog up -d --wait minio postgres lakekeeper >/dev/null
+scripts/setup/setup_kind_registry.sh
 scripts/setup/setup_vault.sh | tail -1
 scripts/setup/setup_jenkins.sh | tail -1
 keys=$(kubectl --context kind-fsds-ml -n feature-store exec deploy/redis -- redis-cli dbsize)

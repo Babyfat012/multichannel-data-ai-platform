@@ -52,3 +52,43 @@ def test_sku_id_digits_are_not_counted_as_answer_numbers():
     """'sku-00010' không được tính là số 10 ⇒ chỉ nhắc lại mã SKU thì không đạt."""
     assert numbers("sku-00010 sku-00030") == set()
     assert score("For sku-00010 and sku-00030: rate 0.33", FEATURES)["pass"] is False
+
+
+@pytest.mark.parametrize(("answer", "exit_code"), [("30 10 33.3%", 0), ("30 11 33.3%", 1)])
+def test_ci_http_truth_and_accuracy_gate(monkeypatch, tmp_path, capsys, answer, exit_code):
+    """Port-forward HTTP không đòi CA; dưới ngưỡng trả 1 và vẫn lưu JSONL/summary."""
+    import json
+
+    from ml import agent_eval
+
+    def fake_post(url, body, headers, context=None, timeout=180):
+        assert context is None
+        if url.endswith("/features"):
+            return {"features": [{"seller_sku": "sku-00001", **FEATURES}]}
+        assert headers["Authorization"] == "Bearer fake-key"
+        return {"result": {"parts": [{"text": answer}]}}
+
+    monkeypatch.setattr(agent_eval, "post", fake_post)
+    monkeypatch.setenv("AGW_AGENT_KEY", "fake-key")
+    output = tmp_path / "eval.jsonl"
+    assert (
+        agent_eval.main(
+            [
+                "--agent",
+                "data-agent",
+                "--skus",
+                "sku-00001",
+                "--feature-api",
+                "http://localhost:18000",
+                "--min-accuracy",
+                "0.95",
+                "--ca",
+                "/does-not-exist",
+                "--out",
+                str(output),
+            ]
+        )
+        == exit_code
+    )
+    assert json.loads(output.read_text())["pass"] is (exit_code == 0)
+    assert json.loads(capsys.readouterr().out)["accuracy"] == (1 if exit_code == 0 else 0)

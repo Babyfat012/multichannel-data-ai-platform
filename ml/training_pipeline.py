@@ -4,9 +4,13 @@ Mọi bước chạy trong image `fsds-train` (docker/Dockerfile.train), gọi h
 Biên dịch + submit: `scripts/run/run_training_pipeline.sh`.
 """
 
+import os
+
 from kfp import dsl, kubernetes
 
-IMAGE = "fsds-train:0.1.0"
+IMAGE = (
+    f"{os.environ.get('REGISTRY', 'localhost:5001')}/fsds-train:{os.environ.get('TAG', '0.1.0')}"
+)
 # Credential MinIO cho Feast đọc kho offline; Secret tạo từ .env lúc submit, không nằm trong YAML.
 SECRET = "fsds-minio"
 

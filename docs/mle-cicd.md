@@ -38,3 +38,51 @@ scripts/setup/setup_jenkins.sh    # UI http://localhost:8090, user admin, mật 
 - **Chưa build**: các Jenkinsfile chưa được commit lên `main`.
 
 <!-- Ảnh Jenkins: danh sách job + Stage View từng pipeline sau lần build đầu: người học chụp. -->
+
+## Phát hành image qua registry local
+
+```text
+Jenkins (network host)
+  Test → Build image:<SHA> → Push localhost:5001/image:<SHA>
+                                      │ host port 5001
+                                registry:2.8.3 + volume registry-data
+                                      │ network Docker kind, registry:5000
+  Deploy Helm / KServe / KFP ───→ kubelet/containerd pull image:<SHA>
+  Deploy Agent → Eval agent (accuracy ≥ 0.95) → artifacts JSONL/JSON
+```
+
+Registry Docker khác với MLflow model registry và agent registry. Chỉ bind `127.0.0.1:5001`,
+không public HTTP registry. Cấu hình theo [kind local registry](https://kind.sigs.k8s.io/docs/user/local-registry/):
+`localhost:5001` trong image được containerd của mỗi node ánh xạ sang `http://registry:5000`.
+Script kiểm `config_path` đã bật, ghi `hosts.toml` và ConfigMap `kube-public/local-registry-hosting`.
+Không tạo lại cụm, không restart node. Khi thiếu `config_path`, script dừng và báo node cần planner xử lý.
+
+```bash
+# Cụm fsds-ml hiện có; setup không xoá dữ liệu. up_ml_base.sh cũng gọi bước này.
+scripts/setup/setup_kind_registry.sh
+curl -fsS http://localhost:5001/v2/_catalog
+
+# Feature API: build → tag/push → helm upgrade --atomic, IfNotPresent.
+REGISTRY=localhost:5001 scripts/setup/deploy_kind_feature_api.sh "$(git rev-parse HEAD)"
+# KFP: script tự build/push train image cùng TAG trước khi compile/submit.
+REGISTRY=localhost:5001 scripts/run/run_training_pipeline.sh
+# KServe: lấy model production, build/push image tag version+git SHA+băm nội dung, rồi apply.
+REGISTRY=localhost:5001 scripts/run/deploy_return_risk.sh
+```
+
+`REGISTRY` mặc định `localhost:5001`; chuyển ECR/Artifact Registry bằng biến này và đăng nhập
+Docker cùng cấu hình credential pull của cụm đích. Script chung `scripts/run/push_images.sh`
+nhận danh sách image có tag nguồn; nếu có `TAG`, retag sang SHA đó. Không phát hành `latest`.
+Tên cũ `push_images_gke.sh` chỉ là wrapper tương thích `REGISTRY_URL`, cũng cần danh sách image.
+
+Mọi Jenkinsfile build image đều có stage **Push** trước deploy. Feature API deploy với
+`SKIP_BUILD_PUSH=1`, không build lại image sau Push. RAG/stream publish dưới git SHA và sinh
+Compose override `out/ci-compose-images.yaml`; deploy bằng `--no-build --pull always` với
+cùng SHA, gồm cả Flink taskmanager. Các stage kiểm tra sau đó dùng cùng override.
+Tag SHA giả định working tree sạch; thay code chưa commit thì đặt `TAG` riêng bất biến khi chạy tay.
+
+Stage **Eval agent** đã nối cho Feature API + coordinator, xem [cổng eval](mle-agent-eval.md#dùng-trong-ci).
+Dưới ngưỡng hoặc không có dữ liệu chấm ⇒ build đỏ; gate này chưa tự rollback agent đã apply.
+Chưa có bằng chứng Jenkins chạy thật cho thay đổi registry/gate mới.
+
+<!-- chụp: curl localhost:5001/v2/_catalog có fsds-feature-api/fsds-train/fsds-return-risk; Jenkins Stage View có stage Push trước Deploy và Eval agent sau Deploy Agent. -->

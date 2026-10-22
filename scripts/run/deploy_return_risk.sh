@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Model đang mang alias `production` trong MLflow → image KServe (model-inside-image) → kind → apply.
+# Model đang mang alias `production` trong MLflow → image KServe (model-inside-image) → registry → kind pull → apply.
 # MODEL_VERSION=N chỉ để smoke test hạ tầng với một version CỤ THỂ (bỏ qua gate production).
 # Cần: MLflow (Compose :5050), image fsds-train, KServe đã cài trong kind.
 set -euo pipefail
@@ -26,10 +26,15 @@ PY
 )
 cp -r ml "$ctx/ml"
 # Tag gồm version model + băm code/model: dùng lại tag cũ thì kind/kubelet giữ bản cũ theo tag.
-digest=$(cat "$ctx/model.lgb" ml/*.py | sha256sum | cut -c1-8)
-image="fsds-return-risk:v$version-$digest"
-docker build -q -f docker/Dockerfile.serve --build-arg MODEL_VERSION="$version" -t "$image" "$ctx"
-kind load docker-image "$image" --name fsds-ml
+digest=$(cat "$ctx/model.lgb" ml/*.py docker/Dockerfile.serve | sha256sum | cut -c1-8)
+code_tag=${TAG:-$(git rev-parse HEAD)}
+[[ "$code_tag" != latest ]] || { echo "Không dùng TAG=latest" >&2; exit 1; }
+REGISTRY="${REGISTRY:-localhost:5001}"
+source_image="fsds-return-risk:v$version-$code_tag-$digest"
+image="$REGISTRY/$source_image"
+docker build -q -f docker/Dockerfile.serve --build-arg MODEL_VERSION="$version" -t "$source_image" "$ctx"
+docker tag "$source_image" "$image"
+docker push "$image"
 K="kubectl --context kind-fsds-ml"
 $K create namespace ml-serving --dry-run=client -o yaml | $K apply -f - >/dev/null
 $K -n ml-serving create secret generic fsds-minio --from-literal=AWS_ACCESS_KEY_ID="$MINIO_ROOT_USER" \

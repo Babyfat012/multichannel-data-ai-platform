@@ -2,7 +2,7 @@
 
 Hỏi agent (qua agentgateway, giao thức A2A) cùng một bộ câu về SKU; đáp án chuẩn lấy từ Feature API
 (chính nguồn agent phải gọi tool). Câu trả lời ĐẠT khi chứa đúng số line có nhãn, số line bị trả và tỷ
-lệ trả 90 ngày. Độ chính xác dưới ngưỡng ⇒ thoát mã 1 ⇒ CI chặn deploy agent/model mới.
+lệ trả 90 ngày. Độ chính xác dưới ngưỡng ⇒ thoát mã 1 ⇒ CI báo build đỏ sau deploy agent.
 Chạy: `python -m ml.agent_eval --agent data-agent --skus sku-00001,sku-00002 --min-accuracy 0.6`.
 """
 
@@ -102,7 +102,11 @@ def main(argv=None) -> int:
         f"{args.feature_api}/features",
         {"seller_skus": skus},
         {},
-        context=ssl.create_default_context(cafile=args.ca),
+        context=(
+            ssl.create_default_context(cafile=args.ca)
+            if args.feature_api.startswith("https://")
+            else None
+        ),
     )["features"]
     key = {"Authorization": f"Bearer {os.environ['AGW_AGENT_KEY']}"}
     rows = []

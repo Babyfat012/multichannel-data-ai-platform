@@ -50,3 +50,38 @@ Giới hạn local: redirect trả cổng 443 thay vì NodePort 30443; IP node �
 chạy lại `setup_ingress.sh`.
 
 <!-- Ảnh trình duyệt: hộp đăng nhập UI agent + ổ khoá HTTPS của API: người học chụp. -->
+
+## Let's Encrypt với DuckDNS (tùy chọn, mặc định tắt)
+
+```bash
+scripts/setup/setup_letsencrypt.sh   # chưa đặt DUCKDNS_DOMAIN: hướng dẫn rồi exit 0, giữ CA nội bộ
+```
+
+DNS-01 dùng webhook cộng đồng [ebrianne/cert-manager-webhook-duckdns](https://github.com/ebrianne/cert-manager-webhook-duckdns).
+Script nhận **thư mục chart local** qua `DUCKDNS_WEBHOOK_CHART`, kiểm pin chart **1.0.0** trước cài.
+**TODO(planner:codex-30): kiểm pin này thực sự tồn tại và schema `groupName`, `apiTokenSecretRef`
+trùng chart nguồn trước khi bật**; phiên Codex không tải/kiểm chart qua mạng theo brief.
+Không coi nhánh tùy chọn này là proof cert Let's Encrypt đã cấp.
+
+Planner chuẩn bị chart đã kiểm, cert-manager đang chạy và Vault `secret/fsds/duckdns` có trường
+`token`. Token chỉ đọc qua `vault_env.sh duckdns`, nạp Secret `cert-manager/duckdns-token` qua
+stdin; không ghi vào repo. Dùng tên gốc `<tên>.duckdns.org`, không thêm `api.` phía trước.
+
+```bash
+export DUCKDNS_DOMAIN=ten-cua-ban.duckdns.org
+export LE_EMAIL=ban@example.com
+export DUCKDNS_WEBHOOK_CHART=/duong-dan/chart-da-kiem
+# VAULT_ADDR/VAULT_TOKEN lấy từ môi trường, không chép secret vào lệnh hay docs.
+LE_ENV=staging scripts/setup/setup_letsencrypt.sh
+kubectl --context kind-fsds-ml -n feature-store get certificate
+# Khi staging đã Ready, mới yêu cầu production:
+LE_ENV=production scripts/setup/setup_letsencrypt.sh
+```
+
+Staging dùng ACME staging (cert chưa được trình duyệt tin), production dùng ACME production,
+account/TLS Secret khác nhau. Script tạo Ingress riêng `feature-api-duckdns` tới Feature API,
+giữ nguyên route sslip.io/CA nội bộ. Cần DNS A trỏ nơi client truy cập được và đường vào
+NodePort 30443 (hoặc NAT 443→30443 nếu muốn URL HTTPS không ghi cổng). DNS-01 chỉ chứng minh
+quyền domain; không tự dựng NAT, không cập nhật bản ghi A của DuckDNS.
+
+<!-- chụp: Certificate feature-api-duckdns-production-tls Ready và trình duyệt HTTPS domain DuckDNS sau khi planner kiểm chart/chạy cấp cert thật. -->

@@ -1,8 +1,8 @@
 # Đổi image.tag mỗi lần deploy để k8s rolling update; `helm upgrade --atomic` tự rollback nếu pod mới không Ready.
 image:
-  repository: fsds-feature-api
-  tag: dev
-  pullPolicy: Never   # kind: image nạp sẵn bằng `kind load`
+  repository: localhost:5001/fsds-feature-api
+  tag: "0.1.0"  # script deploy luôn ghi đè bằng git SHA/TAG
+  pullPolicy: IfNotPresent
 replicas: 2
 # Secret chứa AWS_*, FEAST_*; tạo ngoài chart từ .env (scripts/setup/deploy_kind_feature_api.sh).
 envSecret: feature-api-env

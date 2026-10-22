@@ -52,7 +52,8 @@ từ 7% đến 54%, tổng vẫn ~29%.
 docker compose --profile ml up -d mlflow                     # UI http://localhost:5050
 kubectl --context kind-fsds-ml apply -k "github.com/kubeflow/pipelines/manifests/kustomize/cluster-scoped-resources?ref=2.17.2"
 kubectl --context kind-fsds-ml apply -k "github.com/kubeflow/pipelines/manifests/kustomize/env/platform-agnostic?ref=2.17.2"
-docker build -f docker/Dockerfile.train -t fsds-train:0.1.0 . && kind load docker-image fsds-train:0.1.0 --name fsds-ml
+# Script submit tự build/push fsds-train:<git-SHA> rồi biên dịch KFP với cùng image.
+scripts/setup/setup_kind_registry.sh
 scripts/run/run_training_pipeline.sh train-N                 # UI KFP: kubectl port-forward svc/ml-pipeline-ui 8888:80
 ```
 

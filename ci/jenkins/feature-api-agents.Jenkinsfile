@@ -5,9 +5,10 @@ pipeline {
   agent any
   options { timestamps(); disableConcurrentBuilds() }
   environment {
+    REGISTRY = 'localhost:5001'
     KCTX = 'kind-fsds-ml'
     VAULT_ADDR = 'http://localhost:8200'
-    TAG = "${env.GIT_COMMIT?.take(8) ?: env.BUILD_NUMBER}"
+    TAG = "${env.GIT_COMMIT ?: env.BUILD_NUMBER}"
   }
   stages {
     stage('Test') {
@@ -18,15 +19,20 @@ pipeline {
     stage('Build') {
       steps { sh 'docker build -f docker/Dockerfile.serving -t fsds-feature-api:$TAG .' }
     }
+    stage('Push') {
+      steps { sh 'scripts/run/push_images.sh fsds-feature-api:$TAG' }
+    }
     stage('Deploy MCP server') {
       steps {
         withCredentials([string(credentialsId: 'vault-ci-token', variable: 'VAULT_TOKEN'),
                          file(credentialsId: 'kind-kubeconfig', variable: 'KUBECONFIG')]) {
           // helm upgrade --atomic: pod mới không Ready trong hạn ⇒ tự rollback về revision trước.
           sh '''
+            set +x
             eval "$(scripts/setup/vault_env.sh minio)"
+            set +x
             eval "$(scripts/setup/vault_env.sh postgres)"
-            REPLICAS=2 bash scripts/setup/deploy_kind_feature_api.sh "$TAG"
+            SKIP_BUILD_PUSH=1 REPLICAS=2 bash scripts/setup/deploy_kind_feature_api.sh "$TAG"
           '''
         }
       }
@@ -49,6 +55,14 @@ pipeline {
         }
       }
     }
+    stage('Eval agent') {
+      steps {
+        withCredentials([string(credentialsId: 'vault-ci-token', variable: 'VAULT_TOKEN'),
+                         file(credentialsId: 'kind-kubeconfig', variable: 'KUBECONFIG')]) {
+          sh 'bash scripts/run/eval_agent_ci.sh'
+        }
+      }
+    }
     stage('Smoke') {
       steps {
         withCredentials([file(credentialsId: 'kind-kubeconfig', variable: 'KUBECONFIG')]) {
@@ -63,5 +77,8 @@ pipeline {
         }
       }
     }
+  }
+  post {
+    always { archiveArtifacts artifacts: 'out/agent-eval*.json*', allowEmptyArchive: true }
   }
 }

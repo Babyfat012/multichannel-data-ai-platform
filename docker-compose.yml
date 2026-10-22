@@ -306,6 +306,22 @@ services:
 
   # MLE: MLflow tracking + model registry. Sổ ghi ở DB `mlflow` của PostgreSQL có sẵn, artifact
   # ở MinIO; client (bước KFP trong kind) gửi artifact qua server nên không cần credential S3.
+  registry:
+    image: registry:2.8.3
+    profiles: [ml]
+    ports: ["127.0.0.1:5001:5000"]
+    volumes: [registry-data:/var/lib/registry]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:5000/v2/"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    networks:
+      kind:
+        aliases: [registry]
+    restart: unless-stopped
+    mem_limit: 128m
+
   mlflow-db-init:
     image: postgres:15
     profiles: [ml]
@@ -433,3 +449,9 @@ volumes:
   kafka-data:
   airflow-data:
   vault-data:
+  registry-data:
+
+networks:
+  kind:
+    external: true
+    name: kind

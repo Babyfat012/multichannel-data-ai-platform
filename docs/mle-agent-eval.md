@@ -4,7 +4,7 @@
 Rubric `mle` dòng 56–57 (Novel ideas + proof). Câu hỏi "agent có trả lời **đúng số thật** không?"
 không đo được bằng độ trễ hay số token. Harness hỏi agent một bộ câu cố định qua agentgateway (A2A),
 lấy **đáp án chuẩn từ Feature API** (chính nguồn agent phải gọi tool), chấm từng câu, rồi dùng độ chính
-xác làm cổng chặn trong CI: dưới ngưỡng ⇒ thoát mã 1 ⇒ không deploy bản agent/model mới.
+xác làm cổng chặn trong CI: dưới ngưỡng ⇒ thoát mã 1 ⇒ pipeline đỏ sau bước deploy agent.
 
 | Thành phần | File |
 |---|---|
@@ -37,9 +37,29 @@ Cổng: chạy B với `--min-accuracy 0.95` → `accuracy 0.917` → **exit 1**
 
 ## Dùng trong CI
 
-Sau bước deploy agent (Jenkinsfile `feature-api-agents`), thêm:
+Đã nối stage **Eval agent** sau `Deploy Agent` trong `feature-api-agents.Jenkinsfile`,
+và sau `Deploy` trong `coordinator.Jenkinsfile` (route `/a2a/coordinator/` hỗ trợ cùng câu hỏi SKU).
+Cả hai gọi cùng wrapper; lệnh chạy tại workspace Jenkins:
 
 ```bash
-eval "$(scripts/setup/vault_env.sh agentgateway)"
-uv run python -m ml.agent_eval --agent data-agent --skus sku-00001,…,sku-00012 --min-accuracy 0.95
+# Cần VAULT_ADDR/VAULT_TOKEN + KUBECONFIG; Jenkins bind từ credentials.
+bash scripts/run/eval_agent_ci.sh
+# Coordinator dùng cùng harness qua route A2A riêng:
+EVAL_AGENT=coordinator bash scripts/run/eval_agent_ci.sh
 ```
+
+Wrapper đọc key từ `vault_env.sh agentgateway`, port-forward Feature API `18000:8000` và
+gateway `18300:3000` (đổi bằng `EVAL_FEATURE_PORT`/`EVAL_GATEWAY_PORT` nếu cần), rồi gọi `python3 -m ml.agent_eval` với đủ 12 mã `sku-00001` đến
+`sku-00012`, `--min-accuracy 0.95`, `--out out/agent-eval.jsonl`. HTTP chỉ dùng trên loopback
+qua port-forward nên không phụ thuộc IP node/cert local của máy học. Khi gọi HTTPS trực tiếp,
+harness vẫn kiểm CA như trước.
+
+Jenkins lưu `out/agent-eval.jsonl` và `out/agent-eval-summary.json` bằng `archiveArtifacts`,
+kể cả khi chấm dưới ngưỡng. `set -o pipefail` giữ exit 1 qua `tee` ⇒ build đỏ.
+Stage này chặn pipeline sau khi đã deploy, **chưa tự rollback agent**.
+
+SKU phải có lịch sử để chấm được. Không có câu chấm được ⇒ accuracy 0 ⇒ build đỏ. CI không
+`flushall` hoặc thay dữ liệu Redis đang dùng; planner chuẩn bị fixture có nhãn trước khi chạy.
+Bằng chứng A/B ở trên là lần chạy cũ; stage Jenkins mới vẫn cần planner chạy thật.
+
+<!-- chụp: Jenkins Stage View feature-api-agents có Build → Push → Deploy MCP server → Deploy Agent → Eval agent; artifact JSONL + summary của build đạt và build đỏ dưới ngưỡng. -->

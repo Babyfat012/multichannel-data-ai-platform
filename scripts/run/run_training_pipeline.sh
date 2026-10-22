@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # Biên dịch ml/training_pipeline.py, tạo Secret MinIO từ .env, submit một run lên KFP trong kind.
-# Cần: KFP (infra/k8s/ml), MLflow (`docker compose --profile ml up -d mlflow`), image fsds-train đã kind load.
+# Cần: KFP (infra/k8s/ml), MLflow (`docker compose --profile ml up -d mlflow`), registry đã cấu hình cho kind.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 set -a; . ./.env; set +a
+export REGISTRY="${REGISTRY:-localhost:5001}"
+export TAG="${TAG:-$(git rev-parse HEAD)}"
+[[ "$TAG" != latest ]] || { echo 'TAG phải bất biến, không dùng latest' >&2; exit 1; }
+docker build -f docker/Dockerfile.train -t "fsds-train:$TAG" .
+scripts/run/push_images.sh "fsds-train:$TAG"
 K="kubectl --context kind-fsds-ml -n kubeflow"
 $K create secret generic fsds-minio --from-literal=AWS_ACCESS_KEY_ID="$MINIO_ROOT_USER" \
   --from-literal=AWS_SECRET_ACCESS_KEY="$MINIO_ROOT_PASSWORD" --dry-run=client -o yaml | $K apply -f - >/dev/null

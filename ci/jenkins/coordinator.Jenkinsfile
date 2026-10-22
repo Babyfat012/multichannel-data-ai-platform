@@ -33,11 +33,20 @@ pipeline {
         }
       }
     }
+    stage('Eval agent') {
+      steps {
+        withCredentials([string(credentialsId: 'vault-ci-token', variable: 'VAULT_TOKEN'),
+                         file(credentialsId: 'kind-kubeconfig', variable: 'KUBECONFIG')]) {
+          sh 'EVAL_AGENT=coordinator bash scripts/run/eval_agent_ci.sh'
+        }
+      }
+    }
     stage('Smoke A2A') {
       steps {
         withCredentials([string(credentialsId: 'vault-ci-token', variable: 'VAULT_TOKEN'),
                          file(credentialsId: 'kind-kubeconfig', variable: 'KUBECONFIG')]) {
           sh '''
+            set +x
             eval "$(scripts/setup/vault_env.sh agentgateway)"
             kubectl --context $KCTX -n agentgateway run smoke-$BUILD_NUMBER --rm -i --restart=Never \
               --image=curlimages/curl:8.11.1 --env=KEY="$AGW_AGENT_KEY" -- sh -c \
@@ -47,5 +56,8 @@ pipeline {
         }
       }
     }
+  }
+  post {
+    always { archiveArtifacts artifacts: 'out/agent-eval*.json*', allowEmptyArchive: true }
   }
 }
