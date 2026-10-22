@@ -1,0 +1,11 @@
+# helm history feature-api (kind fsds-ml, 2026-10-21)
+REVISION	UPDATED                 	STATUS    	CHART            	APP VERSION	DESCRIPTION                                            
+8       	Wed Oct 21 11:17:37 2026	superseded	feature-api-0.1.0	0.1.0      	Upgrade complete                                       
+9       	Wed Oct 21 11:18:07 2026	superseded	feature-api-0.1.0	0.1.0      	Upgrade complete                                       
+10      	Wed Oct 21 11:18:33 2026	superseded	feature-api-0.1.0	0.1.0      	Upgrade complete                                       
+11      	Wed Oct 21 11:19:00 2026	superseded	feature-api-0.1.0	0.1.0      	Upgrade complete                                       
+12      	Wed Oct 21 11:19:26 2026	failed    	feature-api-0.1.0	0.1.0      	Upgrade "feature-api" failed: context deadline exceeded
+13      	Wed Oct 21 11:20:12 2026	deployed  	feature-api-0.1.0	0.1.0      	Rollback to 11                                         
+
+# probe: POST /features mỗi 0,2 s trong 3 lần rolling update + 1 lần rollback
+    583 200

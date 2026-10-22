@@ -1,0 +1,13 @@
+# REST /features và MCP /mcp/ chung một cổng. NodePort để gọi từ mạng fsds_default.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  type: NodePort
+  selector: {app: {{ .Release.Name }}}
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      nodePort: {{ .Values.nodePort }}

@@ -1,0 +1,44 @@
+# Deployment Web API feature: rolling update không giảm replica, probe cho k8s, preStop chờ gỡ khỏi Service.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels: {app: {{ .Release.Name }}}
+spec:
+  replicas: {{ .Values.replicas }}
+  strategy:
+    type: RollingUpdate
+    # Thêm 1 pod mới, chỉ bỏ pod cũ khi pod mới Ready: luôn đủ replica phục vụ.
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels: {app: {{ .Release.Name }}}
+  template:
+    metadata:
+      labels: {app: {{ .Release.Name }}}
+      annotations:   # Prometheus lấy số đo Web API ở /metrics
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: /metrics
+    spec:
+      containers:
+        - name: api
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports: [{name: http, containerPort: 8000}]
+          envFrom: [{secretRef: {name: {{ .Values.envSecret }}}}]
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          # Chờ 5 s trước khi tắt: kube-proxy kịp gỡ pod khỏi Service, request đang tới không bị rớt.
+          lifecycle:
+            preStop:
+              sleep: {seconds: 5}
+          # Nạp registry từ MinIO mất vài giây; chưa xong thì chưa bị liveness giết.
+          startupProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 5

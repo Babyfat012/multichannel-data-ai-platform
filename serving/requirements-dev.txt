@@ -1,0 +1,9 @@
+fastapi==0.156.4
+httpx==0.28.1
+pytest==8.3.5
+pytest-cov==6.1.1
+hypothesis==6.131.0
+mcp==2.3.0
+prometheus-client==0.24.1
+mutmut==3.3.1
+locust==2.46.7

@@ -1,0 +1,13 @@
+# pytest serving/tests + coverage, 2026-10-21 (uv, Python 3.12)
+# uv run --no-project --python 3.12 --with-requirements serving/requirements-dev.txt pytest serving/tests -o pythonpath=. --cov=serving --cov-report=term-missing
+================================ tests coverage ================================
+_______________ coverage: platform linux, python 3.12.13-final-0 _______________
+
+Name                        Stmts   Miss  Cover   Missing
+---------------------------------------------------------
+serving/app.py                202      4    98%   124-126, 248-249
+serving/locustfile.py          15     15     0%   7-28
+serving/tests/test_app.py     294      0   100%
+---------------------------------------------------------
+TOTAL                         511     19    96%
+85 passed in 7.62s
