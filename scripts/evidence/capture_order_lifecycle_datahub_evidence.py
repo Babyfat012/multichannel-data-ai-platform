@@ -10,11 +10,7 @@ import argparse
 import asyncio
 import base64
 import json
-import os
 import re
-import signal
-import subprocess
-import tempfile
 from pathlib import Path
 from urllib.parse import quote
 
@@ -67,81 +63,42 @@ async def wait_for_quality(page, seconds: int = 90) -> str:
 
 async def capture(inspect_only: bool = False) -> None:
     """Chụp UI thật, chỉ lưu khi dataset và nội dung tab đã xuất hiện."""
-    import aiohttp
 
-    from scripts.evidence.capture_airflow_evidence import ChromePage, wait_for_chrome
     from scripts.evidence.capture_order_snapshots_datahub_evidence import (
         collapse_sidebar,
         dismiss_onboarding,
         login,
         wait_for_text,
     )
+    from scripts.evidence.chrome import chrome_page
 
     if not inspect_only:
         OUTPUT.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="fsds-datahub-v2-chrome-") as directory:
-        profile = Path(directory)
-        chrome = subprocess.Popen(
-            [
-                "google-chrome",
-                "--headless=new",
-                "--no-sandbox",
-                "--disable-gpu",
-                "--disable-dev-shm-usage",
-                "--hide-scrollbars",
-                "--window-size=1680,1050",
-                "--remote-debugging-port=0",
-                "--remote-allow-origins=*",
-                f"--user-data-dir={profile}",
-                "about:blank",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        try:
-            port = await wait_for_chrome(profile)
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"http://127.0.0.1:{port}/json") as response:
-                    tabs = await response.json()
-                tab = next(t for t in tabs if t["type"] == "page")
-                async with session.ws_connect(
-                    tab["webSocketDebuggerUrl"], max_msg_size=20_000_000
-                ) as websocket:
-                    page = ChromePage(websocket)
-                    await page.call("Page.enable")
-                    await login(page)
-                    for target in capture_targets():
-                        await page.navigate(target["url"])
-                        await wait_for_text(page, target["name"].split(".")[-1], seconds=90)
-                        await dismiss_onboarding(page)
-                        if target["route"] == "Lineage":
-                            body = await wait_for_text(page, "Airflow | Task", seconds=90)
-                            await collapse_sidebar(page)
-                        else:
-                            body = await wait_for_quality(page)
-                        await asyncio.sleep(3)
-                        if inspect_only:
-                            print(f"{target['url']}\n{body[:1500]}\n")
-                            continue
-                        result = await page.call(
-                            "Page.captureScreenshot",
-                            {
-                                "format": "png",
-                                "captureBeyondViewport": False,
-                            },
-                        )
-                        path = Path(target["path"])
-                        path.write_bytes(base64.b64decode(result["data"]))
-                        print(f"Đã chụp {path.relative_to(ROOT)}")
-        finally:
-            if chrome.poll() is None:
-                os.killpg(chrome.pid, signal.SIGTERM)
-                try:
-                    chrome.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    os.killpg(chrome.pid, signal.SIGKILL)
-                    chrome.wait(timeout=5)
+    async with chrome_page(disable_dev_shm_usage=True) as page:
+        await login(page)
+        for target in capture_targets():
+            await page.navigate(target["url"])
+            await wait_for_text(page, target["name"].split(".")[-1], seconds=90)
+            await dismiss_onboarding(page)
+            if target["route"] == "Lineage":
+                body = await wait_for_text(page, "Airflow | Task", seconds=90)
+                await collapse_sidebar(page)
+            else:
+                body = await wait_for_quality(page)
+            await asyncio.sleep(3)
+            if inspect_only:
+                print(f"{target['url']}\n{body[:1500]}\n")
+                continue
+            result = await page.call(
+                "Page.captureScreenshot",
+                {
+                    "format": "png",
+                    "captureBeyondViewport": False,
+                },
+            )
+            path = Path(target["path"])
+            path.write_bytes(base64.b64decode(result["data"]))
+            print(f"Đã chụp {path.relative_to(ROOT)}")
 
 
 def main() -> None:
