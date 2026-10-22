@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.12"
+          python-version: "3.12.13" # khớp máy local: dataset_version băm theo bản Python
       - name: Cài thư viện theo uv.lock
         run: uv sync --frozen
       - name: Ruff (format + lint)
