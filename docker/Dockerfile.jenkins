@@ -1,0 +1,22 @@
+# Jenkins controller cho CI/CD local (rubric mle 33–36): plugin cố định + công cụ mà Jenkinsfile gọi
+# (docker CLI/compose, kubectl, helm, kind, uv). Build chạy trên chính controller (1 executor).
+FROM jenkins/jenkins:2.580.1-lts-jdk21
+USER root
+RUN apt-get update && apt-get install --no-install-recommends -y ca-certificates curl gnupg python3 \
+    && install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc \
+    && echo "deb [signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo $VERSION_CODENAME) stable" \
+       > /etc/apt/sources.list.d/docker.list \
+    && apt-get update && apt-get install --no-install-recommends -y docker-ce-cli docker-compose-plugin \
+    && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSLo /usr/local/bin/kubectl https://dl.k8s.io/release/v1.33.1/bin/linux/amd64/kubectl \
+    && curl -fsSLo /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.33.0/kind-linux-amd64 \
+    && curl -fsSL https://get.helm.sh/helm-v3.18.4-linux-amd64.tar.gz | tar -xz -C /tmp \
+    && mv /tmp/linux-amd64/helm /usr/local/bin/helm \
+    && curl -fsSL https://github.com/astral-sh/uv/releases/download/0.9.5/uv-x86_64-unknown-linux-gnu.tar.gz \
+       | tar -xz --strip-components=1 -C /usr/local/bin uv-x86_64-unknown-linux-gnu/uv \
+    && chmod +x /usr/local/bin/kubectl /usr/local/bin/kind
+USER jenkins
+RUN jenkins-plugin-cli --plugins workflow-aggregator git credentials-binding configuration-as-code \
+    job-dsl timestamper pipeline-stage-view
+ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false -Xmx512m"
