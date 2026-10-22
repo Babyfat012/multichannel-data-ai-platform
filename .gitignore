@@ -31,3 +31,8 @@ assets/
 lessons/
 learning-records/
 reference/
+
+# mutmut / hypothesis / coverage
+mutants/
+.hypothesis/
+.coverage

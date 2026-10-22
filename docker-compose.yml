@@ -245,6 +245,7 @@ services:
               ./dags:/opt/airflow/dags:ro,
               ./scripts:/opt/fsds/scripts:ro,
               ./sql:/opt/sql:ro, ./spark_jobs:/opt/spark_jobs:ro, ./contracts:/opt/contracts:ro, /data/raw:/data/raw:ro,
+              ./feature_repo:/opt/feature_repo:ro, ./rag:/opt/rag/rag:ro,
               /data/raw/ground-truth:/data/ground-truth:ro,
               ./out/ground-truth-bridge:/data/ground-truth-bridge:ro,
               ./out/channels-small/source-exports:/data/channels-small/source-exports:ro,
@@ -283,6 +284,98 @@ services:
         taskmanager.numberOfTaskSlots: 2
     volumes: [./flink_jobs:/opt/flink/jobs:ro, ./out/flink:/opt/flink/output]
     mem_limit: 1280m
+
+  # MLE: đọc stream feature Flink ghi ở Kafka, push vào Feast (Redis trong kind + Parquet MinIO).
+  # Cần chạy scripts/setup/setup_kind_feature_store.sh trước để có Redis.
+  feast-pusher:
+    build: {context: ., dockerfile: docker/Dockerfile.feast}
+    image: fsds-feast:0.66.0
+    profiles: [ml-stream]
+    command: ["python", "push_stream_features.py"]
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      FEAST_S3_ENDPOINT_URL: http://minio:9000
+      FEAST_REGISTRY: s3://${MINIO_BUCKET}/feature-store/registry.db
+      FEAST_SKU_DAILY_PATH: s3://${MINIO_BUCKET}/feature-store/sku_daily
+      FEAST_SKU_RETURN_24H_PATH: s3://${MINIO_BUCKET}/feature-store/sku_return_24h.parquet
+      FEAST_REDIS: fsds-ml-control-plane:30379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    restart: on-failure
+    mem_limit: 768m
+
+  # MLE: MLflow tracking + model registry. Sổ ghi ở DB `mlflow` của PostgreSQL có sẵn, artifact
+  # ở MinIO; client (bước KFP trong kind) gửi artifact qua server nên không cần credential S3.
+  mlflow-db-init:
+    image: postgres:15
+    profiles: [ml]
+    depends_on:
+      postgres: {condition: service_healthy}
+    env_file: .env
+    entrypoint: >
+      sh -c "export PGPASSWORD=$$POSTGRES_PASSWORD
+      && psql -h postgres -U $$POSTGRES_USER -d $$POSTGRES_DB -tAc
+      \"SELECT 1 FROM pg_database WHERE datname='mlflow'\" | grep -q 1
+      || psql -h postgres -U $$POSTGRES_USER -d $$POSTGRES_DB -c 'CREATE DATABASE mlflow'"
+
+  mlflow:
+    build: {context: ., dockerfile: docker/Dockerfile.mlflow}
+    image: fsds-mlflow:3.17.0
+    profiles: [ml]
+    depends_on:
+      mlflow-db-init: {condition: service_completed_successfully}
+      minio: {condition: service_healthy}
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      # Tắt hàng đợi job GenAI (7 tiến trình huey, ~1 GB RAM); ở đây chỉ dùng tracking + registry.
+      MLFLOW_SERVER_ENABLE_JOB_EXECUTION: "false"
+    command: ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000",
+              "--backend-store-uri", "postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/mlflow",
+              "--artifacts-destination", "s3://${MINIO_BUCKET}/mlflow",
+              "--allowed-hosts", "*", "--workers", "1"]
+    ports: ["${MLFLOW_PORT:-5050}:5000"]
+    restart: unless-stopped
+    mem_limit: 512m
+
+  # Quản lý secret tập trung (rubric mle 54). Chế độ server, lưu file trong volume; init/unseal và nạp
+  # secret bằng scripts/setup/setup_vault.sh. UI: http://localhost:8200
+  vault:
+    image: hashicorp/vault:2.1.1
+    profiles: [security]
+    command: ["server"]
+    environment:
+      VAULT_LOCAL_CONFIG: >-
+        {"storage": {"file": {"path": "/vault/file"}},
+         "listener": [{"tcp": {"address": "0.0.0.0:8200", "tls_disable": true}}],
+         "ui": true, "disable_mlock": true, "api_addr": "http://vault:8200"}
+    ports: ["${VAULT_PORT:-8200}:8200"]
+    volumes: [vault-data:/vault/file]
+    mem_limit: 256m
+
+  # Jenkins CI/CD (rubric mle 33–36). network_mode host: build gọi được Vault, Flink REST, API kind
+  # như trên máy host. JENKINS_HOME mount CÙNG đường dẫn host để bind mount của `docker compose` trong
+  # workspace trỏ đúng. Khởi động bằng scripts/setup/setup_jenkins.sh (lấy secret từ Vault). UI :8090
+  jenkins:
+    build: {context: ., dockerfile: docker/Dockerfile.jenkins}
+    image: fsds-jenkins:2.580.1
+    profiles: [ci]
+    network_mode: host
+    group_add: ["${DOCKER_GID:-973}"]
+    environment:
+      JENKINS_HOME: ${PWD}/out/jenkins_home
+      JENKINS_OPTS: --httpPort=8090
+      CASC_JENKINS_CONFIG: /var/jenkins_casc/jenkins.yaml
+      COMPOSE_PROJECT_NAME: fsds
+      JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:-}
+      VAULT_CI_TOKEN: ${VAULT_CI_TOKEN:-}
+    volumes: ["/var/run/docker.sock:/var/run/docker.sock",
+              "${PWD}:/repo:ro",
+              "${PWD}/out/jenkins_home:${PWD}/out/jenkins_home",
+              "./infra/jenkins/jenkins.yaml:/var/jenkins_casc/jenkins.yaml:ro",
+              "./out/jenkins/kubeconfig:/run/secrets/kubeconfig:ro"]
+    mem_limit: 1g
 
   # Trino federation: one SQL endpoint for Iceberg on MinIO and PostgreSQL.
   # Run in the separate `query` profile to limit RAM contention with Spark and Flink.
@@ -339,3 +432,4 @@ volumes:
   postgres-data:
   kafka-data:
   airflow-data:
+  vault-data:
