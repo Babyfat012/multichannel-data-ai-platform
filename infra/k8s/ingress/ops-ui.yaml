@@ -1,0 +1,25 @@
+# UI vận hành sau gateway (rubric mle 37–39, 41): metric/log (Grafana), trace (Jaeger), registry agent.
+# Mỗi route: HTTPS + basic auth (secret `ops-basic-auth` cùng namespace). @@NS@@/@@SVC@@/@@PORT@@/@@HOST@@
+# do scripts/setup/setup_ingress.sh điền, chỉ khi service đã tồn tại.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: @@NAME@@
+  namespace: @@NS@@
+  annotations:
+    cert-manager.io/cluster-issuer: fsds-local-ca
+    nginx.org/redirect-to-https: "true"
+    nginx.org/basic-auth-secret: ops-basic-auth
+    nginx.org/basic-auth-realm: "FSDS ops"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: ["@@HOST@@"]
+      secretName: @@NAME@@-tls
+  rules:
+    - host: @@HOST@@
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: {service: {name: @@SVC@@, port: {number: @@PORT@@}}}

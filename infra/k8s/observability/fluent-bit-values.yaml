@@ -1,0 +1,14 @@
+# Fluent Bit (chart fluent/fluent-bit 0.58.3): đọc log container trên node kind, gắn nhãn k8s, đẩy vào Loki.
+resources:
+  requests: {cpu: 20m, memory: 32Mi}
+  limits: {memory: 96Mi}
+config:
+  outputs: |
+    [OUTPUT]
+        Name        loki
+        Match       kube.*
+        Host        loki.observability.svc.cluster.local
+        Port        3100
+        Labels      job=fluent-bit, namespace=$kubernetes['namespace_name'], pod=$kubernetes['pod_name'], app=$kubernetes['labels']['app']
+        Remove_keys kubernetes,stream
+        Line_format json

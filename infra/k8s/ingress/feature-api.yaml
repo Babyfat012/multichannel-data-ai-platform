@@ -1,0 +1,24 @@
+# Web API kéo feature (rubric mle 43): HTTPS qua NGINX Ingress, cert do cert-manager cấp.
+# Host sslip.io trỏ về IP node kind (@@NODE_IP_DASH@@ do scripts/setup/setup_ingress.sh điền).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: feature-api
+  namespace: feature-store
+  annotations:
+    cert-manager.io/cluster-issuer: fsds-local-ca
+    nginx.org/redirect-to-https: "true"
+    nginx.org/limit-req-rate: "50r/s"
+    nginx.org/limit-req-burst: "100"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: ["api.@@NODE_IP_DASH@@.sslip.io"]
+      secretName: feature-api-tls
+  rules:
+    - host: api.@@NODE_IP_DASH@@.sslip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: {service: {name: feature-api, port: {number: 8000}}}

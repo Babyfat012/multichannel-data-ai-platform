@@ -1,0 +1,30 @@
+# Grafana (chart grafana/grafana 10.5.15): một chỗ xem số đo (Prometheus), log (Loki) và trace (Jaeger).
+# Mật khẩu admin trong Secret grafana-admin (tạo bởi scripts/setup/deploy_kind_observability.sh, không vào Git).
+admin:
+  existingSecret: grafana-admin
+  userKey: admin-user
+  passwordKey: admin-password
+persistence: {enabled: false}
+resources:
+  requests: {cpu: 50m, memory: 96Mi}
+  limits: {memory: 256Mi}
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - {name: Prometheus, uid: prometheus, type: prometheus, access: proxy, isDefault: true,
+         url: http://prometheus-server.observability.svc.cluster.local}
+      - {name: Loki, uid: loki, type: loki, access: proxy, url: http://loki.observability.svc.cluster.local:3100}
+      - {name: Jaeger, uid: jaeger, type: jaeger, access: proxy, url: http://jaeger.observability.svc.cluster.local:16686}
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - {name: fsds, folder: FSDS, type: file, disableDeletion: true, options: {path: /var/lib/grafana/dashboards/fsds}}
+dashboardsConfigMaps:
+  fsds: grafana-dashboards-fsds
+# Ingress đã có basic auth (user ops) ⇒ header Authorization: Basic tới tận Grafana. Tắt basic auth của Grafana
+# để nó không hiểu nhầm đó là tài khoản Grafana (401); đăng nhập Grafana bằng form như thường.
+grafana.ini:
+  auth.basic:
+    enabled: false

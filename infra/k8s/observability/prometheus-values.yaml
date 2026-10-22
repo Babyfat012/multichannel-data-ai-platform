@@ -1,0 +1,16 @@
+# Prometheus tối giản cho kind local (chart prometheus-community/prometheus 29.36.2): chỉ server, giữ 6 giờ.
+# Lấy số liệu từ pod có annotation prometheus.io/scrape (agentgateway, llama.cpp, Feature API) cho KEDA và Grafana.
+alertmanager: {enabled: false}
+prometheus-pushgateway: {enabled: false}
+prometheus-node-exporter: {enabled: false}
+kube-state-metrics: {enabled: false}
+configmapReload:
+  prometheus: {enabled: false}
+server:
+  retention: 6h
+  persistentVolume: {enabled: false}
+  global:
+    scrape_interval: 15s
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 384Mi}

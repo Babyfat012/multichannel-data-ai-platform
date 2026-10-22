@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Dựng bộ quan sát trong kind fsds-ml (ns observability): Prometheus (số đo), Loki + Fluent Bit (log),
+# Jaeger (trace), Grafana (xem cả ba, có dashboard FSDS). Chạy lại nhiều lần vẫn an toàn.
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+KC="kubectl --context kind-fsds-ml -n observability"
+H="helm --kube-context kind-fsds-ml -n observability"
+V=infra/k8s/observability
+
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts >/dev/null
+helm repo add grafana https://grafana.github.io/helm-charts >/dev/null
+helm repo add fluent https://fluent.github.io/helm-charts >/dev/null
+helm repo add jaegertracing https://jaegertracing.github.io/helm-charts >/dev/null
+helm repo update >/dev/null
+
+kubectl --context kind-fsds-ml create namespace observability --dry-run=client -o yaml | kubectl --context kind-fsds-ml apply -f -
+# Mật khẩu admin Grafana sinh 1 lần, giữ trong Secret (đọc: kubectl -n observability get secret grafana-admin).
+if ! $KC get secret grafana-admin >/dev/null 2>&1; then
+  $KC create secret generic grafana-admin --from-literal=admin-user=admin \
+    --from-literal=admin-password="$(openssl rand -hex 12)"
+fi
+$KC create configmap grafana-dashboards-fsds --from-file=$V/dashboards --dry-run=client -o yaml | $KC apply -f -
+
+$H upgrade --install prometheus prometheus-community/prometheus --version 29.36.2 -f $V/prometheus-values.yaml --wait
+$H upgrade --install loki grafana/loki --version 7.3.0 -f $V/loki-values.yaml --wait --timeout 10m
+$H upgrade --install fluent-bit fluent/fluent-bit --version 0.58.3 -f $V/fluent-bit-values.yaml --wait
+$H upgrade --install jaeger jaegertracing/jaeger --version 4.16.1 -f $V/jaeger-values.yaml --wait
+$H upgrade --install grafana grafana/grafana --version 10.5.15 -f $V/grafana-values.yaml --wait
+$KC get pods
