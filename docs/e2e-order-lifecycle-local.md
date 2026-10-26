@@ -5,7 +5,7 @@ PostgreSQL → EXPLAIN trước/sau index. Một Spark session `local[*]`, Icebe
 catalog trong `/tmp`, không cần Lakekeeper/MinIO. Không đọc truth làm input.
 Đây là kiểm chạy được trước GCP, chưa phải bằng chứng GCP hay 100 GB.
 
-Planner chạy từ root repo, image/cache JAR phải có sẵn:
+người vận hành chạy từ root repo, image/cache JAR phải có sẵn:
 
 ```bash
 bash tests/harness/run_order_lifecycle_scale.sh --profile small
@@ -19,8 +19,8 @@ nguồn đã sinh trong repo; đường dẫn này thuộc container. Nguồn đ
 Không truyền lại `--receipt` qua harness: nó đã đặt `/proof/receipt.json`.
 
 Harness tạo Docker network internal, PostgreSQL 15 riêng không publish port,
-chờ DB sẵn sàng, chạy image `fsds-airflow:2.10.5-spark3.5.3`, dùng Iceberg/JDBC JAR
-ở volume `fsds_airflow-data:/ivy:ro`, không tải mạng. Spark chạy bằng user mặc định
+chờ DB sẵn sàng, chạy image `platform-airflow:2.10.5-spark3.5.3`, dùng Iceberg/JDBC JAR
+ở volume `platform_airflow-data:/ivy:ro`, không tải mạng. Spark chạy bằng user mặc định
 image, không đổi HOME hoặc ép uid host; cleanup chown output về host và dọn đúng
 container/network riêng. Log/receipt giữ tại `out/e2e-v2-<profile>.<suffix>/` kể cả
 khi lỗi; catalog và nguồn tự sinh trong `/tmp` container được dọn sau chạy.
@@ -82,4 +82,4 @@ Số đo 2026-10-19, local, `--driver-memory 6g`. **small**: chạy sau khi đ�
 
 Chưa chạy Docker/Spark/PostgreSQL trong sandbox Codex. Local dùng CPU/đĩa/cache
 máy dev, file Walmart bootstrap thay CDC/JDBC nguồn thật, không suy ra hiệu năng,
-chi phí hoặc độ bền trên GCP. Planner giữ JSON/log thực và điền bảng sau khi chạy.
+chi phí hoặc độ bền trên GCP. người vận hành giữ JSON/log thực và điền bảng sau khi chạy.

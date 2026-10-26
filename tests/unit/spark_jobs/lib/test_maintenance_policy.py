@@ -52,9 +52,9 @@ def test_zorder_first_run_then_only_after_threshold():
     metadata = metadata_snapshots()
     config = {"zorder_columns": ["seller_sku"], "zorder_min_new_files": 3}
     assert "zorder" in [a["kind"] for a in plan_maintenance(metadata, config, NOW)["actions"]]
-    metadata["properties"]["fsds.maintenance.last_zorder_snapshot_id"] = "3"
+    metadata["properties"]["platform.maintenance.last_zorder_snapshot_id"] = "3"
     assert "zorder" not in [a["kind"] for a in plan_maintenance(metadata, config, NOW)["actions"]]
-    metadata["properties"]["fsds.maintenance.last_zorder_snapshot_id"] = "1"
+    metadata["properties"]["platform.maintenance.last_zorder_snapshot_id"] = "1"
     assert "zorder" in [a["kind"] for a in plan_maintenance(metadata, config, NOW)["actions"]]
 
 

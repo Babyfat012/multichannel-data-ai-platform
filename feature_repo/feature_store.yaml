@@ -1,6 +1,6 @@
 # Cấu hình Feast. Biến môi trường do DAG/pod truyền vào, nên cùng file chạy được
 # local (MinIO + Redis trong kind) và GCP (gs:// + Redis trên GKE).
-project: fsds
+project: platform
 provider: local
 registry: ${FEAST_REGISTRY}
 offline_store:

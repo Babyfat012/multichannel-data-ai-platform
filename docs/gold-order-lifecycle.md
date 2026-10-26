@@ -69,7 +69,7 @@ rồi gửi tập đã thu gọn cho worker qua closure, tránh join line × key
 vượt ngưỡng thì dừng lỗi vì có thể trích scope sai. Đây là ngưỡng số bản,
 không phải giới hạn byte hoặc tổng số correction liên quan.
 
-Sau codex-27, `source_line` lọc coverage theo cửa sổ delivery+30d trước `input_json`,
+Sau bản sửa coverage theo ADR-0013, `source_line` lọc coverage theo cửa sổ delivery+30d trước `input_json`,
 nên số tuần tail không làm input từng line lớn hơn. Driver và worker vẫn giữ tập
 keyless; cần đo lại khi tăng số envelope/kích thước payload, kể cả dưới ngưỡng.
 Bỏ `source_sequence_ranges` không đổi nhãn: Silver `coverage_validity` đã dùng
@@ -97,10 +97,10 @@ join lại timestamp của từng observation trong input. Không gọi lại h�
 
 ## Vì sao feature có thể bằng 0 — scale đã sửa bằng coverage tuần
 
-Codex-25 đo nguồn scale cũ: coverage chỉ phát tại `D(observation_days−1)`,
+Lần chạy nguồn cũ đo nguồn scale cũ: coverage chỉ phát tại `D(observation_days−1)`,
 sau mọi Order. Scale45 có 1.434 line, 1.373 labeled nhưng mọi segment chỉ
 mở 12/10/2026, khi cohort 90 ngày đã hết hạn; không có target gốc có history.
-Đây là giới hạn nguồn cũ, được **codex-27 thay thế** bằng envelope tuần nối tiếp
+Đây là giới hạn nguồn cũ, được **bản sửa coverage theo ADR-0013 thay thế** bằng envelope tuần nối tiếp
 ([ADR-0013](adr/0013-weekly-contiguous-coverage.md)). Fixture giữ nguyên byte.
 
 Nguồn scale hiện phát từng `[week_start, week_end)`, không cộng dồn, đến hết
@@ -148,14 +148,14 @@ Tái lập Python thuần:
 .venv/bin/pytest -q -s tests/unit/spark_jobs/lib/test_return_feature_generated.py
 ```
 
-Planner chạy regression scale và ca Spark Gold nhỏ riêng (240 Order, mục tiêu
+người vận hành chạy regression scale và ca Spark Gold nhỏ riêng (240 Order, mục tiêu
 ≤10 phút; chưa đo Spark trong sandbox):
 
 ```bash
 bash tests/harness/run_order_lifecycle_scale.sh --profile small --driver-memory 6g
 docker run --rm --network none --read-only --tmpfs /tmp:rw,size=2g \
   --mount type=bind,src="$PWD",dst=/workspace,readonly \
-  --entrypoint spark-submit fsds-airflow:2.10.5-spark3.5.3 \
+  --entrypoint spark-submit platform-airflow:2.10.5-spark3.5.3 \
   --master 'local[1]' --driver-memory 6g \
   /workspace/tests/spark/check_order_lifecycle_weekly_gold.py \
   WeeklyGoldChecks.test_generated_orders_have_positive_pit_history
@@ -199,8 +199,8 @@ một Order quan sát sau follow-up để feature có lịch sử thực sự (1
 chèn nhãn snapshot June vào feature April để buộc PIT check bắt lỗi. Có cả ca fan-out,
 unknown có label và labeled chưa mature.
 
-Kết quả Spark (planner, 2026-10-19): **`Ran 5 tests in 587.128s — OK`** (`tests/spark/check_order_lifecycle_gold.py`, image
-`fsds-airflow:2.10.5-spark3.5.3`, `--network none --read-only`, driver 3 GB). Gồm: số chính thức fixture + lịch sử rỗng;
+Kết quả Spark (người vận hành, 2026-10-19): **`Ran 5 tests in 587.128s — OK`** (`tests/spark/check_order_lifecycle_gold.py`, image
+`platform-airflow:2.10.5-spark3.5.3`, `--network none --read-only`, driver 3 GB). Gồm: số chính thức fixture + lịch sử rỗng;
 PIT có lịch sử dương và bắt nhãn biết muộn được tiêm vào; validate bắt fan-out; validate bắt `unknown` có label và
 `labeled` chưa mature. Driver 1 GB từng `OutOfMemoryError` ở bước Gold → warehouse.
 
@@ -211,7 +211,7 @@ PIT có lịch sử dương và bắt nhãn biết muộn được tiêm vào; v
 
 docker run --rm --network none --read-only --tmpfs /tmp:rw,size=1g \
   --mount type=bind,src=$PWD,dst=/workspace,readonly --entrypoint python \
-  fsds-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_order_lifecycle_gold.py
+  platform-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_order_lifecycle_gold.py
 
 # Trước tiên publish Silver đúng observation snapshot bằng spark_jobs/silver/build_order_lifecycle.py --as-of.
 scripts/run/run_order_lifecycle_spark.sh /opt/spark_jobs/gold/build_order_lifecycle.py \
@@ -225,7 +225,7 @@ scripts/run/run_order_lifecycle_spark.sh /opt/spark_jobs/gold/validate_order_lif
 ## Giới hạn
 
 - Môi trường Codex không có pyspark/pandas, Docker socket từ chối quyền; Spark và
-  Iceberg catalog chưa chạy; số liệu Spark ở trên do planner chạy local 2026-10-19/20.
+  Iceberg catalog chưa chạy; số liệu Spark ở trên do người vận hành chạy local 2026-10-19/20.
 - Coverage keyless vẫn lặp trong `input_json` từng line và tập keyless nằm trên
   driver/worker; xem giới hạn bộ nhớ ở trên. Chưa có bằng chứng e2e cho dữ liệu lớn.
 - Một allocation có các phần giao ở nhiều thời điểm: unknown vì contract chưa

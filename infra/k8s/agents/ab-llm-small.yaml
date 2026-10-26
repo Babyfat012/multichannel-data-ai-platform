@@ -1,5 +1,5 @@
-# A/B (rubric mle 52–53): nhánh B = LLM nhỏ hơn (Qwen2.5-0.5B Q4) cùng image llama.cpp với nhánh A
-# (qwen, 1.5B). agentgateway chia traffic theo trọng số giữa hai bản (virtual model `fsds-chat`).
+# A/B: nhánh B = LLM nhỏ hơn (Qwen2.5-0.5B Q4) cùng image llama.cpp với nhánh A
+# (qwen, 1.5B). agentgateway chia traffic theo trọng số giữa hai bản (virtual model `platform-chat`).
 # PVC riêng: PVC `models` là RWO và đang gắn vào pod qwen. Scale về 0 khi xong để trả RAM.
 apiVersion: v1
 kind: PersistentVolumeClaim

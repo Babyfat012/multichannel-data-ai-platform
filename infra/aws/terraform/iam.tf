@@ -10,7 +10,7 @@ data "aws_iam_policy_document" "assume_ec2" {
 }
 
 resource "aws_iam_role" "vm" {
-  name               = "${var.name_prefix}-de-vm"
+  name               = "${var.name_prefix}-data-platform-vm"
   assume_role_policy = data.aws_iam_policy_document.assume_ec2.json
 }
 
@@ -28,7 +28,7 @@ data "aws_iam_policy_document" "buckets" {
 }
 
 resource "aws_iam_role_policy" "buckets" {
-  name   = "fsds-buckets"
+  name   = "platform-buckets"
   role   = aws_iam_role.vm.id
   policy = data.aws_iam_policy_document.buckets.json
 }
@@ -41,6 +41,6 @@ resource "aws_iam_role_policy_attachment" "ssm" {
 
 # Lớp "vỏ" để gắn role vào EC2; GCP không có lớp này.
 resource "aws_iam_instance_profile" "vm" {
-  name = "${var.name_prefix}-de-vm"
+  name = "${var.name_prefix}-data-platform-vm"
   role = aws_iam_role.vm.name
 }

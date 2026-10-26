@@ -1,5 +1,5 @@
-# Postgres + pgvector: online store của Feast RAG (fsds_rag). Airflow trong Compose ghi qua
-# fsds-ml-control-plane:30432; Feature API trong cụm đọc qua pgvector.rag.svc. Mật khẩu: Secret rag-pg (từ .env).
+# Postgres + pgvector: online store của Feast RAG (platform_rag). Airflow trong Compose ghi qua
+# platform-control-plane:30432; Feature API trong cụm đọc qua pgvector.rag.svc. Mật khẩu: Secret rag-pg (từ .env).
 apiVersion: v1
 kind: Namespace
 metadata:

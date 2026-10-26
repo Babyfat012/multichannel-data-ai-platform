@@ -43,7 +43,7 @@ data:
         params:
           model: qwen2.5-1.5b-instruct
           baseUrl: http://qwen.llm.svc.cluster.local:8080/v1
-        # PII (rubric 50): chặn request chứa email / thẻ tín dụng / SSN (403), che PII trong câu trả lời.
+        # PII: chặn request chứa email / thẻ tín dụng / SSN (403), che PII trong câu trả lời.
         # Không chặn số điện thoại ở request: số lượng, giá, mã SKU dễ bị nhận nhầm. Đếm ở
         # agentgateway_guardrail_checks_total.
         guardrails: &pii
@@ -66,7 +66,7 @@ data:
               - builtin: email
               - builtin: phoneNumber
               - builtin: creditCard
-      # A/B (rubric 52–53, docs/mle-ab-test.md): nhánh B = bản nhỏ hơn cùng họ Qwen.
+      # A/B: nhánh B = bản nhỏ hơn cùng họ Qwen.
       - name: qwen2.5-0.5b-instruct
         provider:
           custom:
@@ -76,10 +76,10 @@ data:
           model: qwen2.5-0.5b-instruct
           baseUrl: http://qwen-small.llm.svc.cluster.local:8080/v1
         guardrails: *pii
-      # Agent/client gọi model ảo `fsds-chat`; gateway chia 50/50 giữa A và B. Metric/trace ghi model
+      # Agent/client gọi model ảo `platform-chat`; gateway chia 50/50 giữa A và B. Metric/trace ghi model
       # thật (gen_ai_response_model) ⇒ so được độ trễ, token, lỗi theo từng nhánh trên Grafana.
       virtualModels:
-      - name: fsds-chat
+      - name: platform-chat
         routing:
           weighted:
             targets:
@@ -127,7 +127,7 @@ data:
           path: {prefix: /}
       backends:
       - host: data-agent-b.kagent.svc.cluster.local:8080
-    # A/B agent (rubric 52): một đường vào, hai bản Data Agent khác ModelConfig, chia theo trọng số.
+    # A/B agent: một đường vào, hai bản Data Agent khác ModelConfig, chia theo trọng số.
     - name: a2a-data-agent-ab
       matches:
       - path: {pathPrefix: /a2a/data-agent-ab/}

@@ -15,7 +15,7 @@ COPY generator ./generator
 # --reinstall-package: cache của uv chỉ nhìn pyproject.toml, không nhìn code. Thiếu cờ này
 # thì sửa code mà không đổi pyproject.toml, image vẫn cài bản generator cũ từ cache.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-editable --reinstall-package fsds-generator
+    uv sync --frozen --no-dev --no-editable --reinstall-package platform-generator
 
 # Stage 2: chỉ Python slim, virtualenv và file cấu hình. Không có uv, cache hay trình biên dịch.
 FROM python:3.12-slim

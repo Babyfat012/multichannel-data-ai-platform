@@ -1,6 +1,6 @@
 # Web API kéo feature + chunk RAG (serving/app.py). Dựng trên image Feast có sẵn để dùng chung layer feast
-# (đỡ ~1 GB đĩa); build fsds-feast:0.66.0 trước (docker/Dockerfile.feast).
-FROM fsds-feast:0.66.0
+# (đỡ ~1 GB đĩa); build platform-feast:0.66.0 trước (docker/Dockerfile.feast).
+FROM platform-feast:0.66.0
 USER root
 RUN pip install --no-cache-dir "fastapi==0.156.4" "uvicorn==0.54.0" "mcp==2.3.0" \
     "feast[postgres]==0.66.0" "fastembed==0.8.1"

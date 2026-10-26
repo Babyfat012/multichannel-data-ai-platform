@@ -6,7 +6,7 @@ spark_jobs/lib/order_lifecycle_lakehouse.py:
 
 docker run --rm --network none --read-only --tmpfs /tmp:rw,size=1g \
   --mount type=bind,src=$PWD,dst=/workspace,readonly --entrypoint python \
-  fsds-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_order_lifecycle_silver.py
+  platform-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_order_lifecycle_silver.py
 """
 
 import json
@@ -28,7 +28,7 @@ from pyspark.sql import functions as F
 
 from generator.generate_order_lifecycle_fixture import generate_fixture
 
-os.environ["FSDS_CONTRACTS_DIR"] = str(ROOT / "contracts")
+os.environ["PLATFORM_CONTRACTS_DIR"] = str(ROOT / "contracts")
 import spark_jobs.lib.order_lifecycle_lakehouse as v2
 
 # Ngày 40 kể từ 2026-01-01: sau khi refund mơ hồ được quan sát, trước correction (ngày 43).
@@ -41,7 +41,7 @@ class SourceV2LakehouseTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Khởi tạo Spark local và fixture v2 dùng chung cho bộ kiểm."""
-        cls.tmp = Path(tempfile.mkdtemp(prefix="fsds-v2-"))
+        cls.tmp = Path(tempfile.mkdtemp(prefix="platform-v2-"))
         cls.root = cls.tmp / "fixture"
         cls.manifest = generate_fixture(cls.root)
         cls.spark = (

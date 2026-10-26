@@ -1,4 +1,4 @@
-// CI/CD RAG Data Pipeline (rubric mle dòng 32): test chunk/lineage → kiểm DAG import → build image Airflow
+// CI/CD RAG Data Pipeline: test chunk/lineage → kiểm DAG import → build image Airflow
 // (feast-venv có feast[postgres] + fastembed) → khởi động lại Airflow → chạy DAG ml_rag_ingest và chờ kết quả.
 // Credential lấy từ Vault bằng token chỉ-đọc `vault-ci-token`.
 pipeline {
@@ -17,12 +17,12 @@ pipeline {
       steps { sh 'docker compose --profile airflow build airflow' }
     }
     stage('Push') {
-      steps { sh 'scripts/run/push_images.sh fsds-airflow:2.10.5-spark3.5.3' }
+      steps { sh 'scripts/run/push_images.sh platform-airflow:2.10.5-spark3.5.3' }
     }
     stage('Release config') {
       steps {
         sh 'mkdir -p out'
-        sh 'scripts/run/compose_release_images.sh airflow=fsds-airflow > out/ci-compose-images.yaml'
+        sh 'scripts/run/compose_release_images.sh airflow=platform-airflow > out/ci-compose-images.yaml'
       }
     }
     stage('Deploy') {

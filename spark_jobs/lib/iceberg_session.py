@@ -42,13 +42,13 @@ def catalog_conf(env) -> dict[str, str]:
         prefix: "org.apache.iceberg.spark.SparkCatalog",
         f"{prefix}.type": "rest",
         f"{prefix}.uri": env.get("LAKEKEEPER_CATALOG_URI", "http://lakekeeper:8181/catalog"),
-        f"{prefix}.warehouse": env.get("WAREHOUSE_NAME", "fsds"),
+        f"{prefix}.warehouse": env.get("WAREHOUSE_NAME", "platform"),
         "spark.sql.iceberg.compression-codec": "zstd",
         "spark.sql.session.timeZone": "UTC",
         "spark.eventLog.enabled": "true",
-        "spark.eventLog.dir": env.get("FSDS_SPARK_EVENT_LOG_DIR", "file:///spark-events"),
+        "spark.eventLog.dir": env.get("PLATFORM_SPARK_EVENT_LOG_DIR", "file:///spark-events"),
     }
-    storage = env.get("FSDS_STORAGE", "minio")
+    storage = env.get("PLATFORM_STORAGE", "minio")
     if storage == "minio":
         conf.update(
             {
@@ -70,5 +70,5 @@ def catalog_conf(env) -> dict[str, str]:
             }
         )
     else:
-        raise ValueError(f"FSDS_STORAGE không hỗ trợ: {storage!r}")
+        raise ValueError(f"PLATFORM_STORAGE không hỗ trợ: {storage!r}")
     return conf

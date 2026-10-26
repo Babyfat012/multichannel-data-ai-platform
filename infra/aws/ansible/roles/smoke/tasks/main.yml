@@ -1,5 +1,5 @@
-# Kiểm runtime thật khi người học gọi --tags smoke; không tạo số đo giả.
-- name: Kiểm health và trạng thái tất cả container DE v2
+# Kiểm runtime thật khi người vận hành gọi --tags smoke; không tạo số đo giả.
+- name: Kiểm health và trạng thái tất cả container Data Platform v2
   ansible.builtin.command: docker compose --profile catalog --profile spark --profile airflow ps --all --format json
   args:
     chdir: '{{ app_dir }}'
@@ -25,7 +25,7 @@
       --master spark://spark-master:7077 --driver-memory 1g \
       --conf spark.driver.host=airflow --conf spark.driver.bindAddress=0.0.0.0 \
       --conf spark.cores.max=2 --conf spark.executor.memory=1g \
-      --conf spark.jars.ivy=/opt/airflow/.ivy2 --packages "$FSDS_SPARK_PACKAGES_AWS" \
+      --conf spark.jars.ivy=/opt/airflow/.ivy2 --packages "$PLATFORM_SPARK_PACKAGES_AWS" \
       /opt/aws-runtime/roles/smoke/files/s3_smoke.py
   args:
     executable: /bin/bash

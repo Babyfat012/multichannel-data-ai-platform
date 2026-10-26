@@ -1,14 +1,14 @@
-"""DE-N2: lịch bảo trì Iceberg hằng ngày, mặc định tạm dừng, bật tay sau khi kiểm tra."""
+"""Iceberg maintenance: lịch bảo trì Iceberg hằng ngày, mặc định tạm dừng, bật tay sau khi kiểm tra."""
 
 from datetime import datetime, timezone
 
 from airflow import DAG
-from fsds_spark_operator import FsdsSparkSubmitOperator
+from platform_spark_operator import PlatformSparkSubmitOperator
 
-TABLES = "{{ var.value.fsds_maintenance_tables }}"
-DIRECTORY = "{{ var.value.fsds_maintenance_receipt_dir }}/{{ ts_nodash }}"
+TABLES = "{{ var.value.platform_maintenance_tables }}"
+DIRECTORY = "{{ var.value.platform_maintenance_receipt_dir }}/{{ ts_nodash }}"
 APPLICATION = "/opt/spark_jobs/maintenance/maintain_iceberg_tables.py"
-CONFIG = "{{ var.value.fsds_maintenance_config }}"
+CONFIG = "{{ var.value.platform_maintenance_config }}"
 CONF = {
     "spark.driver.host": "airflow",
     "spark.driver.bindAddress": "0.0.0.0",
@@ -23,9 +23,9 @@ with DAG(
     catchup=False,
     max_active_runs=1,
     is_paused_upon_creation=True,
-    tags=["fsds", "de-n2", "iceberg"],
+    tags=["platform", "iceberg-maintenance", "iceberg"],
 ) as dag:
-    plan = FsdsSparkSubmitOperator(
+    plan = PlatformSparkSubmitOperator(
         task_id="plan",
         application=APPLICATION,
         application_args=[
@@ -38,11 +38,11 @@ with DAG(
             DIRECTORY + "/plan.json",
         ],
         conn_id="spark_default",
-        packages="{{ var.value.fsds_spark_packages }}",
+        packages="{{ var.value.platform_spark_packages }}",
         driver_memory="600m",
         conf=CONF,
     )
-    execute = FsdsSparkSubmitOperator(
+    execute = PlatformSparkSubmitOperator(
         task_id="execute",
         application=APPLICATION,
         application_args=[
@@ -55,16 +55,16 @@ with DAG(
             DIRECTORY + "/execute.json",
         ],
         conn_id="spark_default",
-        packages="{{ var.value.fsds_spark_packages }}",
+        packages="{{ var.value.platform_spark_packages }}",
         driver_memory="600m",
         conf=CONF,
     )
-    validate = FsdsSparkSubmitOperator(
+    validate = PlatformSparkSubmitOperator(
         task_id="validate",
         application=APPLICATION,
         application_args=["--validate-receipt", DIRECTORY + "/execute.json"],
         conn_id="spark_default",
-        packages="{{ var.value.fsds_spark_packages }}",
+        packages="{{ var.value.platform_spark_packages }}",
         driver_memory="600m",
         conf=CONF,
     )

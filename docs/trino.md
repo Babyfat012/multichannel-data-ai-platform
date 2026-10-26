@@ -1,7 +1,7 @@
 # Trino: truy vấn Iceberg và PostgreSQL trong một phiên SQL
 
 Trino chạy trong profile `query` để tách mức RAM khỏi Spark, Flink và Airflow. JDBC
-endpoint mặc định là `localhost:8083`; DBeaver dùng driver Trino, user `fsds`,
+endpoint mặc định là `localhost:8083`; DBeaver dùng driver Trino, user `platform`,
 không bật authentication cho môi trường học cục bộ.
 
 ## Hai catalog
@@ -75,7 +75,7 @@ Trino CLI lần lượt là **1,66** và **1,01 giây** (tổng 2,67 giây); đ�
 lượt chạy trên cache hiện tại, không suy ra cải thiện hiệu năng tổng quát.
 Điểm khác biệt được chứng minh là một câu SQL/truy vấn thay cho hai câu SQL
 và bước ghép kết quả thủ công. Phép đo Novel #1 ở
-[`novel-ideas.md`](novel-ideas.md).
+[`data-integration.md`](data-integration.md).
 
 Ảnh lần chạy 2026-10-14:
 

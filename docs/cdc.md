@@ -2,7 +2,7 @@
 
 Nguồn `walmart.orders` mô phỏng cơ sở dữ liệu của một phòng ban khác. DP1 hiện
 đọc bảng này theo lô. Debezium đọc WAL của PostgreSQL, ghi từng thay đổi đã
-commit vào Kafka topic `fsds_cdc.walmart.orders` để chặng CDC Bronze xử lý.
+commit vào Kafka topic `platform_cdc.walmart.orders` để chặng CDC Bronze xử lý.
 
 ## Cấu hình
 
@@ -10,7 +10,7 @@ commit vào Kafka topic `fsds_cdc.walmart.orders` để chặng CDC Bronze xử 
   `REPLICA IDENTITY FULL` vì không có khóa chính, để sự kiện cập nhật/xóa chứa
   dữ liệu cũ.
 - Publication chỉ bao gồm `walmart.orders`; connector dùng slot
-  `fsds_walmart_orders` và `pgoutput`.
+  `platform_walmart_orders` và `pgoutput`.
 - Connector dùng `snapshot.mode=no_data`: dữ liệu lịch sử đã đi qua DP1 Batch,
   còn nhánh này chỉ nhận thay đổi phát sinh sau khi đăng ký. Nếu chạy CDC từ
   đầu trên nguồn mới, phải chọn snapshot khác hoặc nạp lịch sử riêng.
@@ -39,7 +39,7 @@ số dòng ban đầu.
 Sau khi topic có sự kiện, `dags/dp1_cdc.py` chạy
 `spark_jobs/cdc/ingest_walmart_order_changes.py` và `spark_jobs/cdc/validate_walmart_order_changes.py`. Job đầu đọc
 Kafka theo phạm vi offset đóng băng một lần cho `run_id`, lưu JSON dưới
-`/opt/airflow/fsds-control/cdc` trong volume driver Airflow. Hai task dùng
+`/opt/airflow/platform-control/cdc` trong volume driver Airflow. Hai task dùng
 cùng boundary, partition set và start-inclusive/end-exclusive offsets;
 retry không chốt lại latest. V2 ghi `(source_epoch, topic, partition, offset)`,
 epoch gồm cluster ID/topic UUID, và dùng `read_committed`. Validator đọc
@@ -77,7 +77,7 @@ Chạy lại bằng code hiện tại (job `spark_jobs/cdc/ingest_walmart_order_
 | 3 | Xóa | `CDC-DEMO-24f0630c0caa` |
 
 Offset 0 là sự kiện xóa của probe cũ. Kafka cũ đã mất, nhưng replication slot
-`fsds_walmart_orders` trong PostgreSQL vẫn giữ thay đổi chưa được xác nhận,
+`platform_walmart_orders` trong PostgreSQL vẫn giữ thay đổi chưa được xác nhận,
 nên Debezium phát lại nó. Không có sự kiện nào bị mất khi mất broker.
 
 Run `manual__2026-10-18T05:14:10+00:00` thành công cả hai task (khoảng 1,5
@@ -89,7 +89,7 @@ Validate CDC Bronze: PASS
 ```
 
 Ingest và Validate dùng chung một boundary JSON trong
-`/opt/airflow/fsds-control/cdc` (volume `fsds_airflow-data`); Validate chỉ đọc
+`/opt/airflow/platform-control/cdc` (volume `platform_airflow-data`); Validate chỉ đọc
 dòng Bronze có đúng `source_epoch` (cluster ID/topic UUID) và nằm trong khoảng
 offset đã đóng băng. Manifest kiểm ở
 [`datahub-validation-v2.json`](evidence/datahub-validation-v2.json), lineage và
@@ -107,7 +107,7 @@ probe; không suy diễn thời gian đó từ phép đo commit → Kafka.
 
 ## Kết quả chạy ngày 2026-10-14
 
-Connector `fsds-walmart-orders` và task 0 ở trạng thái `RUNNING` trên Debezium
+Connector `platform-walmart-orders` và task 0 ở trạng thái `RUNNING` trên Debezium
 3.4.3.Final. Lần probe `CDC-DEMO-783bee6f9cad` tạo đúng ba sự kiện:
 
 | Thay đổi | Offset Kafka | Commit → Kafka |
@@ -145,7 +145,7 @@ trừ thời điểm từng `COMMIT` trả về trong file probe cho giới hạ
 
 Giới hạn trên dùng thời điểm task báo thành công; snapshot Iceberg có thể được
 commit sớm hơn. Phép đo có cả thời gian **kích hoạt DAG bằng tay** (6–19 giây sau
-các commit) và khởi động Spark. Đây là cấu hình Batch trên máy học, không phải
+các commit) và khởi động Spark. Đây là cấu hình Batch trên máy phát triển, không phải
 độ trễ riêng của Debezium hoặc một dịch vụ CDC chạy liên tục.
 
 Sau khi probe kết thúc, `SELECT count(*) FROM walmart.orders` trả **1.293.525**.
@@ -164,15 +164,15 @@ env -u POSTGRES_PASSWORD docker compose --profile cdc up -d postgres debezium-co
 .venv/bin/python scripts/evidence/measure_order_snapshots_cdc.py --env-file .env
 ```
 
-Danh sách topic cho thấy `fsds_cdc.walmart.orders` có 1 partition và **4 message**
+Danh sách topic cho thấy `platform_cdc.walmart.orders` có 1 partition và **4 message**
 (3 KB), bên cạnh hai topic Stream của generator:
 
-![kafka-ui: danh sách topic, fsds_cdc.walmart.orders có 4 message](images/cdc/kafka-ui-cdc-topics.png)
+![kafka-ui: danh sách topic, platform_cdc.walmart.orders có 4 message](images/cdc/kafka-ui-cdc-topics.png)
 
 Tab Messages của topic cho thấy đúng bốn sự kiện ở offset 0–3, mỗi preview là một
 JSON Debezium có `before`/`after` và `purchase_order_id`:
 
-![kafka-ui: bốn sự kiện CDC ở offset 0–3 trong topic fsds_cdc.walmart.orders](images/cdc/kafka-ui-cdc-messages.png)
+![kafka-ui: bốn sự kiện CDC ở offset 0–3 trong topic platform_cdc.walmart.orders](images/cdc/kafka-ui-cdc-messages.png)
 
 Probe mới `CDC-DEMO-8383d4cfe5a7` tạo ba thay đổi ở offset 1–3:
 
@@ -183,7 +183,7 @@ Probe mới `CDC-DEMO-8383d4cfe5a7` tạo ba thay đổi ở offset 1–3:
 | Xóa | 3 | 492,0 ms | |
 
 Offset 0 là sự kiện **xóa** của probe cũ `CDC-DEMO-6647c5e27b8c`, được phát lại:
-slot logic `fsds_walmart_orders` nằm trong PostgreSQL nên khi Debezium khởi động
+slot logic `platform_walmart_orders` nằm trong PostgreSQL nên khi Debezium khởi động
 lại, nó đọc tiếp phần WAL chưa xác nhận. Đây là hành vi đúng của CDC giữ slot, và
 cũng là lý do probe luôn ghi offset thật thay vì giả định bắt đầu từ 0.
 

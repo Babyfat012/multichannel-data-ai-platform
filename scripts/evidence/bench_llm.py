@@ -1,4 +1,4 @@
-"""Benchmark LLM server kiểu OpenAI (llama.cpp) — rubric `mle` dòng 6.
+"""Benchmark LLM server kiểu OpenAI (llama.cpp).
 
 Gửi `--requests` request chat ở mỗi mức đồng thời (`--concurrency 1,2,4`), prompt cỡ prompt Agent thật (system
 + mô tả tool), đo độ trễ p50/p95, request/giây và token sinh ra/giây (từ `usage`). In JSON một dòng mỗi mức.
@@ -14,7 +14,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 SYSTEM = (
-    "You are the FSDS Model Agent for an online seller. You MUST call a tool before answering. "
+    "You are the Model Agent for an online seller. You MUST call a tool before answering. "
     "Case A: new order -> predict_return_risk. Case B: policy questions -> search_policy_chunks. "
 ) * 4  # ~200 token, gần với system prompt + mô tả tool của Agent
 TOOLS = [

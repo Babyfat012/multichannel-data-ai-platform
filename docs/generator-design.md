@@ -30,7 +30,7 @@ thực thi chỉ nhờ có `dataset_version`; logic label hiện tại vẫn là
 11. [Bản đáp án và bằng chứng chất lượng](#11-bản-đáp-án-và-bằng-chứng-chất-lượng)
 12. [Kỹ thuật và đóng gói](#12-kỹ-thuật-và-đóng-gói)
 13. [Giả định và việc còn mở](#13-giả-định-và-việc-còn-mở)
-14. [Đối chiếu với rubric](#14-đối-chiếu-với-rubric)
+14. [Thiết kế và evidence](#14-thiết-kế-và-evidence)
 15. [Triển khai](#15-triển-khai)
 
 ## 1. Mục tiêu và phạm vi
@@ -177,7 +177,7 @@ Các phần sau cần bảng dim có lịch sử (SCD2) và quan hệ dim–fact
 
 ## 8. Bố cục lưu trữ
 
-- **MinIO**, bucket `fsds`, tiền tố `source-exports/`: đường dẫn theo nguồn rồi theo **ngày export**, ví dụ `source-exports/channel=amazon/dataset=orders/export_date=2026-03-14/`. Cùng bucket còn có `pg-load/` (dòng chờ nạp PostgreSQL), `ground-truth/` và `run_manifest.json`. Dùng một bucket vì manifest phải nằm trong một bucket nào đó, xem [Docker.md](Docker.md#1-môi-trường-nguồn-bằng-docker-compose). Chia theo ngày export (không theo ngày đặt hàng) vì export chồng lấn và thay đổi schema đều gắn với ngày export, và pipeline DP1 kéo dữ liệu theo từng ngày. Mỗi ngày vài file cỡ vừa. Một số ngày cố ý sinh rất nhiều file nhỏ để tạo bài toán small-file cho phần Lakehouse.
+- **MinIO**, bucket `platform`, tiền tố `source-exports/`: đường dẫn theo nguồn rồi theo **ngày export**, ví dụ `source-exports/channel=amazon/dataset=orders/export_date=2026-03-14/`. Cùng bucket còn có `pg-load/` (dòng chờ nạp PostgreSQL), `ground-truth/` và `run_manifest.json`. Dùng một bucket vì manifest phải nằm trong một bucket nào đó, xem [Docker.md](Docker.md#1-môi-trường-nguồn-bằng-docker-compose). Chia theo ngày export (không theo ngày đặt hàng) vì export chồng lấn và thay đổi schema đều gắn với ngày export, và pipeline DP1 kéo dữ liệu theo từng ngày. Mỗi ngày vài file cỡ vừa. Một số ngày cố ý sinh rất nhiều file nhỏ để tạo bài toán small-file cho phần Lakehouse.
 - **PostgreSQL** (giả lập hệ thống của phòng ban khác): mỗi nguồn một schema, gồm `walmart.orders`, `walmart.returns`, `shopee.orders`, `shopee.returns`, `seller.skus`. Bảng đơn giữ body API trong một cột `JSONB` cạnh vài cột khóa, như một hệ thống lưu lại response API. Bảng đơn không có khóa chính, vì bản trùng phải còn nguyên để pipeline phía sau dedup. Tiền tố `raw_` để dành cho tầng Bronze, không dùng ở hệ thống nguồn.
 - **Kafka**: mỗi Channel một topic. Key là mã Order để các event của cùng một Order vào cùng partition. Value là payload gốc của Channel (ví dụ body webhook TikTok Shop).
 
@@ -308,7 +308,7 @@ Sau mỗi lần chạy, generator ghi `run_manifest.json`: seed, cấu hình, s�
 
 ### Bảng nhãn (`labels`)
 
-Generator xuất riêng bảng nhãn thật, không chỉ ghi trong manifest, vì rubric final-coursework yêu cầu một bảng "id và label" để join với bảng feature khi train.
+Generator xuất riêng bảng nhãn thật, không chỉ ghi trong manifest, để join theo ID với bảng feature khi train.
 
 | Cột | Nghĩa |
 |---|---|
@@ -324,14 +324,14 @@ Generator xuất riêng bảng nhãn thật, không chỉ ghi trong manifest, v�
 
 ### Báo cáo chất lượng dữ liệu
 
-Rubric yêu cầu ảnh chụp output tóm tắt chất lượng dữ liệu. Phần này chia làm hai:
+Báo cáo chất lượng dữ liệu có hai phần:
 
 - **Module `generator/report.py`** chứa logic đo, có docstring và unit test, dùng DuckDB (nhẹ, có `approx_count_distinct`, đọc được cả MinIO lẫn PostgreSQL). Có `--dsn` thì Walmart và danh mục SKU được đọc từ PostgreSQL, không có thì đọc file `pg-load/`.
 - **Lệnh `python -m generator report`** in các bảng đo ra terminal để chụp, hoặc in dạng Markdown (`--markdown`) để dán vào tài liệu. Notebook vẽ biểu đồ để sau: cần thêm Jupyter và thư viện vẽ, trong khi bảng chữ đã đủ cho ảnh chụp.
 - **Stream** có hai nguồn số: `stream_manifest.json` giữ số tổng của lần phát, còn `scripts/evidence/measure_order_snapshots_stream.py` phát lại Stream trong bộ nhớ và in ví dụ cụ thể cho từng vấn đề (một cặp tin trùng, một tin trễ nặng nhất, bảng Order mỗi giờ của ngày livestream).
 - **Ảnh chụp và báo cáo** tách theo đường thời gian, mỗi bên một tài liệu và một thư mục ảnh: Batch ở [data-quality-report-batch.md](data-quality-report-batch.md) với `docs/images/batch/`, Stream ở [data-quality-report-stream.md](data-quality-report-stream.md) với `docs/images/stream/`. Mỗi ảnh kèm lời giải thích nó chứng minh điều gì.
 
-| Rubric yêu cầu chụp | Báo cáo đo gì |
+| Đặc tính cần đo | Báo cáo đo gì |
 |---|---|
 | Skew distribution (city/category %) | Phần trăm Order theo thành phố, theo danh mục, theo Storefront, theo SKU top, theo ngày |
 | Cardinality | `approx_count_distinct` của `order_id`, `order_line_id`, `tracking_number`, mã buyer |
@@ -349,7 +349,7 @@ Mỗi con số đo được đặt cạnh con số trong `run_manifest.json`.
 - Ghi ra qua `fsspec`/S3 API vào MinIO hoặc bucket cloud, không qua đĩa máy cá nhân.
 - Chia theo ngày để ít tốn RAM. Hơn 1 triệu Order Line chạy được trong một process, chưa cần Spark.
 - Unit test local chỉ chạy cấu hình rất nhỏ (ví dụ 20 SKU, 3 ngày).
-- Mỗi file có đoạn mô tả ở đầu file, mỗi hàm và class có docstring, theo yêu cầu chung của rubric.
+- Mỗi file có đoạn mô tả ở đầu file, mỗi hàm và class có docstring, theo yêu cầu chung của bộ dữ liệu.
 - **Docker**: có Docker Compose (MinIO, PostgreSQL, Kafka) cho môi trường thử. Để có số liệu "giảm từ bao nhiêu xuống bao nhiêu", build trước một image đơn giản (một stage, base image đầy đủ) và ghi dung lượng, sau đó build bản tối ưu (multi-stage, base image slim, không giữ cache cài đặt) và ghi dung lượng. Kết quả ghi vào `docs/Docker.md`.
 - Hạ tầng nặng chạy trên cloud, dựng bằng Terraform và `destroy` khi nghỉ.
 
@@ -372,9 +372,9 @@ Mỗi con số đo được đặt cạnh con số trong `run_manifest.json`.
 - Quy mô Spark đã kiểm bằng `configs/scale-100gb.yaml`; benchmark 20/180 ngày ở [Spark](spark.md), pipeline Airflow dùng cửa sổ nhỏ hơn ghi trong [Airflow](airflow.md). Không dùng kế hoạch `large.yaml` cũ.
 - Bronze/Silver đủ năm Channel, Gold fact, Amazon SCD2 và feature offline đã chạy; schema và phạm vi bằng chứng ở [Schema](schema.md) và [Gold](gold.md).
 
-## 14. Đối chiếu với rubric
+## 14. Thiết kế và evidence
 
-| Hạng mục rubric | Thiết kế đáp ứng ở | Bằng chứng sẽ nộp |
+| Chủ đề | Thiết kế | Evidence / cách kiểm chứng |
 |---|---|---|
 | Docker & Docker Compose | Mục 12 | `docs/Docker.md` |
 | Optimize Dockerfile | Mục 12 | Dung lượng image trước và sau tối ưu |
@@ -546,7 +546,7 @@ Concept drift của livestream (tỷ lệ trả quần áo tăng) thêm ở bư�
 
 ### Kết quả chạy
 
-Số liệu dưới đây lấy từ lần chạy `configs/default.yaml` qua Docker Compose: `generator-batch` ghi vào MinIO (102 giây), `generator-load` nạp PostgreSQL (3 giây). Sau đó `python -m generator report --source s3://fsds --dsn ... --markdown` chạy trên máy host, đọc Amazon từ MinIO, đọc Walmart và `seller.skus` từ PostgreSQL. Các cột `_truth` lấy từ `run_manifest.json`.
+Số liệu dưới đây lấy từ lần chạy `configs/default.yaml` qua Docker Compose: `generator-batch` ghi vào MinIO (102 giây), `generator-load` nạp PostgreSQL (3 giây). Sau đó `python -m generator report --source s3://platform --dsn ... --markdown` chạy trên máy host, đọc Amazon từ MinIO, đọc Walmart và `seller.skus` từ PostgreSQL. Các cột `_truth` lấy từ `run_manifest.json`.
 
 Ảnh chụp màn hình (terminal của lệnh `report`, MinIO console, DBeaver hoặc `psql`) nằm ở `docs/images/batch/` và được nhúng trong [data-quality-report-batch.md](data-quality-report-batch.md).
 

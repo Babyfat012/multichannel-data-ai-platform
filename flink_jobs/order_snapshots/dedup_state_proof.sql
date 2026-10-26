@@ -12,7 +12,7 @@ CREATE TABLE tiktok_webhooks (
   'connector' = 'kafka',
   'topic' = 'tiktok_shop.order-webhooks',
   'properties.bootstrap.servers' = 'kafka:9092',
-  'properties.group.id' = 'fsds-flink-dedup-state-proof',
+  'properties.group.id' = 'platform-flink-dedup-state-proof',
   'scan.startup.mode' = 'earliest-offset',
   'scan.bounded.mode' = 'latest-offset',
   'format' = 'json'

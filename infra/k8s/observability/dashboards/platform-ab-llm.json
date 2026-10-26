@@ -1,0 +1,229 @@
+{
+ "uid": "platform-ab-llm",
+ "title": "A/B LLM + Agent",
+ "schemaVersion": 39,
+ "time": {
+  "from": "now-1h",
+  "to": "now"
+ },
+ "description": "agentgateway chia model ảo platform-chat 50/50 giữa qwen2.5-1.5b (A) và qwen2.5-0.5b (B). docs/llm-platform-ab-test.md",
+ "templating": {
+  "list": [
+   {
+    "name": "model",
+    "type": "query",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "includeAll": true,
+    "multi": true,
+    "current": {
+     "text": "All",
+     "value": "$__all"
+    },
+    "allValue": ".*",
+    "query": {
+     "query": "label_values(agentgateway_gen_ai_server_request_duration_count, gen_ai_response_model)",
+     "refId": "m"
+    }
+   }
+  ]
+ },
+ "panels": [
+  {
+   "type": "stat",
+   "title": "Tỷ lệ chia traffic (request theo nhánh, khoảng chọn)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 24,
+    "h": 5
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "textMode": "value_and_name"
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "refId": "A",
+     "legendFormat": "{{gen_ai_response_model}}",
+     "expr": "sum by (gen_ai_response_model) (increase(agentgateway_gen_ai_server_request_duration_count{gen_ai_response_model=~\"$model\"}[$__range]))"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "Request/giây theo nhánh",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 5,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "reqps"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum by (gen_ai_response_model) (rate(agentgateway_gen_ai_server_request_duration_count{gen_ai_response_model=~\"$model\"}[5m]))",
+     "legendFormat": "{{gen_ai_response_model}}",
+     "refId": "A"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "Độ trễ p95 theo nhánh",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 5,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "histogram_quantile(0.95, sum by (le, gen_ai_response_model) (rate(agentgateway_gen_ai_server_request_duration_bucket{gen_ai_response_model=~\"$model\"}[5m])))",
+     "legendFormat": "{{gen_ai_response_model}}",
+     "refId": "A"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "Token output/giây theo nhánh",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 13,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum by (gen_ai_response_model) (rate(agentgateway_gen_ai_client_token_usage_sum{gen_ai_response_model=~\"$model\", gen_ai_token_type=\"output\"}[5m]))",
+     "legendFormat": "{{gen_ai_response_model}}",
+     "refId": "A"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "Token output trung bình mỗi request",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 13,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum by (gen_ai_response_model) (rate(agentgateway_gen_ai_client_token_usage_sum{gen_ai_response_model=~\"$model\", gen_ai_token_type=\"output\"}[5m])) / sum by (gen_ai_response_model) (rate(agentgateway_gen_ai_client_token_usage_count{gen_ai_response_model=~\"$model\", gen_ai_token_type=\"output\"}[5m]))",
+     "legendFormat": "{{gen_ai_response_model}}",
+     "refId": "A"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "A/B agent: request theo nhánh (backend0 = data-agent 1.5B, backend1 = data-agent-b 0.5B)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 21,
+    "w": 24,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "reqps"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "refId": "A",
+     "legendFormat": "{{backend}} status {{status}}",
+     "expr": "sum by (backend, status) (rate(agentgateway_requests_total{route=\"default/a2a-data-agent-ab\"}[5m]))"
+    }
+   ]
+  }
+ ]
+}

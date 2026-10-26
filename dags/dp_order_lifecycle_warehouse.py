@@ -4,16 +4,16 @@ from datetime import datetime, timezone
 
 from airflow import DAG
 from airflow.models.param import Param
-from fsds_spark_operator import FsdsSparkSubmitOperator
+from platform_spark_operator import PlatformSparkSubmitOperator
 
 
-class OrderLifecycleSparkSubmitOperator(FsdsSparkSubmitOperator):
+class OrderLifecycleSparkSubmitOperator(PlatformSparkSubmitOperator):
     """Render tài nguyên v2 kể cả khi provider không template các trường này."""
 
     template_fields = tuple(
         dict.fromkeys(
             (
-                *FsdsSparkSubmitOperator.template_fields,
+                *PlatformSparkSubmitOperator.template_fields,
                 "_driver_memory",
                 "_executor_memory",
                 "_executor_cores",
@@ -24,7 +24,7 @@ class OrderLifecycleSparkSubmitOperator(FsdsSparkSubmitOperator):
 
 RUN_ID = "{{ params.run_id }}"
 CUTOFF = "{{ params.cutoff }}"
-DIRECTORY = "{{ var.value.fsds_order_lifecycle_receipt_dir }}/warehouse/{{ ts_nodash }}"
+DIRECTORY = "{{ var.value.platform_order_lifecycle_receipt_dir }}/warehouse/{{ ts_nodash }}"
 CONF = {
     "spark.driver.host": "airflow",
     "spark.driver.bindAddress": "0.0.0.0",
@@ -45,7 +45,7 @@ with DAG(
         ),
         "cutoff": Param("2026-06-01T00:00:00.000000Z", type="string", format="date-time"),
     },
-    tags=["fsds", "v2", "warehouse"],
+    tags=["platform", "v2", "warehouse"],
 ) as dag:
     validate_gold = OrderLifecycleSparkSubmitOperator(
         task_id="validate_gold",
@@ -60,11 +60,11 @@ with DAG(
         ],
         conn_id="spark_default",
         deploy_mode="client",
-        driver_memory="{{ var.value.fsds_order_lifecycle_driver_memory }}",
-        executor_memory="{{ var.value.fsds_order_lifecycle_executor_memory }}",
-        executor_cores="{{ var.value.fsds_order_lifecycle_executor_cores }}",
+        driver_memory="{{ var.value.platform_order_lifecycle_driver_memory }}",
+        executor_memory="{{ var.value.platform_order_lifecycle_executor_memory }}",
+        executor_cores="{{ var.value.platform_order_lifecycle_executor_cores }}",
         conf=CONF,
-        packages="{{ var.value.fsds_spark_packages }}",
+        packages="{{ var.value.platform_spark_packages }}",
     )
     export_warehouse = OrderLifecycleSparkSubmitOperator(
         task_id="export_warehouse",
@@ -77,15 +77,15 @@ with DAG(
             "--receipt",
             DIRECTORY + "/export_warehouse.json",
             "--sql-dir",
-            '{{ var.value.get("fsds_order_lifecycle_warehouse_sql_dir", "/opt/sql/warehouse_lifecycle") }}',
+            '{{ var.value.get("platform_order_lifecycle_warehouse_sql_dir", "/opt/sql/warehouse_lifecycle") }}',
         ],
         runtime_groups=("iceberg", "postgres"),
         conn_id="spark_default",
         deploy_mode="client",
-        driver_memory="{{ var.value.fsds_order_lifecycle_driver_memory }}",
-        executor_memory="{{ var.value.fsds_order_lifecycle_executor_memory }}",
-        executor_cores="{{ var.value.fsds_order_lifecycle_executor_cores }}",
+        driver_memory="{{ var.value.platform_order_lifecycle_driver_memory }}",
+        executor_memory="{{ var.value.platform_order_lifecycle_executor_memory }}",
+        executor_cores="{{ var.value.platform_order_lifecycle_executor_cores }}",
         conf=CONF,
-        packages="{{ var.value.fsds_spark_packages }}",
+        packages="{{ var.value.platform_spark_packages }}",
     )
     validate_gold >> export_warehouse

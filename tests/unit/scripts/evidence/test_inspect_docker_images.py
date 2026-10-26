@@ -16,7 +16,7 @@ def test_services_keep_profiles_ports_and_limits():
     config = {
         "services": {
             "spark-master": {
-                "image": "fsds-spark",
+                "image": "platform-spark",
                 "build": {"dockerfile": "docker/Dockerfile.airflow"},
                 "profiles": ["spark"],
                 "ports": [{"host_ip": "127.0.0.1", "published": "8080", "target": 8080}],

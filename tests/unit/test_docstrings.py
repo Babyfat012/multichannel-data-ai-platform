@@ -1,4 +1,4 @@
-"""Kiểm mô tả mã nguồn, liên kết tương đối và độ phủ tài liệu theo rubric A2."""
+"""Kiểm mô tả mã nguồn, liên kết tương đối và độ phủ tài liệu công khai."""
 
 import ast
 import re
@@ -121,7 +121,7 @@ def test_relative_markdown_links(record_property):
     """Link tương đối phải tồn tại; đếm riêng lượt link bị ignore theo yêu cầu brief."""
     links = [
         (source, target)
-        for source in [ROOT / "README.md", *sorted((ROOT / "docs").glob("*.md"))]
+        for source in [ROOT / "README.md", *sorted((ROOT / "docs").rglob("*.md"))]
         for target in markdown_targets(source)
     ]
     ignored = ignored_targets({target for _, target in links})
@@ -135,8 +135,8 @@ def test_relative_markdown_links(record_property):
 
 
 def test_readme_reaches_all_public_docs():
-    """Mọi docs/*.md công khai phải truy cập được từ README qua các link tài liệu."""
-    documents = set((ROOT / "docs").glob("*.md"))
+    """Mọi Markdown công khai trong docs/ phải truy cập được từ README qua các link tài liệu."""
+    documents = set((ROOT / "docs").rglob("*.md"))
     public = documents - ignored_targets(documents)
     visited = set()
     pending = [ROOT / "README.md"]

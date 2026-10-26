@@ -7,18 +7,18 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 out=${1:-out/docker-compare}
 mkdir -p "$out"
-docker build -q -t fsds-generator:naive -f docker/Dockerfile.naive . >/dev/null
-docker build -q -t fsds-generator:opt -f Dockerfile . >/dev/null
+docker build -q -t platform-generator:naive -f docker/Dockerfile.naive . >/dev/null
+docker build -q -t platform-generator:opt -f Dockerfile . >/dev/null
 # Image tối ưu không có pip/uv ở stage cuối; đọc metadata dist-info bằng importlib.metadata của
 # chính Python trong venv. Bỏ project và công cụ cài đặt (pip/setuptools/wheel) vì chúng thuộc base image.
 freeze='import importlib.metadata as m
-skip = {"fsds-generator", "pip", "setuptools", "wheel"}
+skip = {"platform-generator", "pip", "setuptools", "wheel"}
 names = sorted({(d.metadata["Name"].lower().replace("_", "-"), d.version) for d in m.distributions()})
 print("\n".join(f"{n}=={v}" for n, v in names if n not in skip))'
-docker run --rm --entrypoint python fsds-generator:naive -c "$freeze" >"$out/naive.txt"
-docker run --rm --entrypoint python fsds-generator:opt -c "$freeze" >"$out/opt.txt"
+docker run --rm --entrypoint python platform-generator:naive -c "$freeze" >"$out/naive.txt"
+docker run --rm --entrypoint python platform-generator:opt -c "$freeze" >"$out/opt.txt"
 for tag in naive opt; do
-  docker image inspect "fsds-generator:$tag" --format "$tag {{.Id}} {{.Size}}"
+  docker image inspect "platform-generator:$tag" --format "$tag {{.Id}} {{.Size}}"
 done | tee "$out/images.txt"
 if diff -u "$out/naive.txt" "$out/opt.txt" >"$out/deps.diff"; then
   echo "Cùng bộ thư viện: $(wc -l <"$out/opt.txt") package"

@@ -21,14 +21,14 @@ esac
 chart_version=$(helm show chart "$DUCKDNS_WEBHOOK_CHART" | sed -n 's/^version: *["\x27]*\([^"\x27 ]*\).*/\1/p')
 [[ "$chart_version" == 1.0.0 ]] || { echo 'Chart phải đúng pin 1.0.0' >&2; exit 1; }
 eval "$(scripts/setup/vault_env.sh duckdns)"
-: "${DUCKDNS_TOKEN:?thiếu token trong Vault secret/fsds/duckdns}"
-K=(kubectl --context "${KCTX:-kind-fsds-ml}")
+: "${DUCKDNS_TOKEN:?thiếu token trong Vault secret/platform/duckdns}"
+K=(kubectl --context "${KCTX:-kind-platform}")
 # Secret qua stdin, không qua argv/log/file repo.
 printf '%s' "$DUCKDNS_TOKEN" | "${K[@]}" -n cert-manager create secret generic duckdns-token \
   --from-file=token=/dev/stdin --dry-run=client -o yaml | "${K[@]}" apply -f - >/dev/null
 unset DUCKDNS_TOKEN
-helm --kube-context "${KCTX:-kind-fsds-ml}" upgrade --install duckdns-webhook "$DUCKDNS_WEBHOOK_CHART" \
-  -n cert-manager --version 1.0.0 --set groupName=acme.fsds.duckdns.org --wait --timeout 180s
+helm --kube-context "${KCTX:-kind-platform}" upgrade --install duckdns-webhook "$DUCKDNS_WEBHOOK_CHART" \
+  -n cert-manager --version 1.0.0 --set groupName=acme.platform.duckdns.org --wait --timeout 180s
 sed -e "s|@@LE_ENV@@|$LE_ENV|g" -e "s|@@ACME_SERVER@@|$ACME_SERVER|g" \
   -e "s|@@LE_EMAIL@@|$LE_EMAIL|g" -e "s|@@DUCKDNS_DOMAIN@@|$DUCKDNS_DOMAIN|g" \
   infra/k8s/ingress/issuer-letsencrypt.yaml | "${K[@]}" apply -f -
@@ -40,7 +40,7 @@ metadata:
   name: feature-api-duckdns
   namespace: feature-store
   annotations:
-    cert-manager.io/cluster-issuer: fsds-letsencrypt-$LE_ENV
+    cert-manager.io/cluster-issuer: platform-letsencrypt-$LE_ENV
     nginx.org/redirect-to-https: "true"
     nginx.org/limit-req-rate: "50r/s"
     nginx.org/limit-req-burst: "100"

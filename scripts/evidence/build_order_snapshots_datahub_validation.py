@@ -1,6 +1,6 @@
 """Build DataHub validation evidence from successful Airflow task logs.
 
-Mount the FSDS Airflow volume read-only at ``--logs-root``. Every check is
+Mount the PLATFORM Airflow volume read-only at ``--logs-root``. Every check is
 parsed from the successful attempt of a specific documented DAG run.
 
 Log của hai validator có hai dạng. Dạng cũ (run 2026-10-13/14) là bằng chứng
@@ -243,7 +243,7 @@ def main() -> None:
     parser.add_argument(
         "--cdc-table",
         default=LEGACY_CDC_TABLE,
-        help="Bảng CDC mà run dp1_cdc đã ghi (Airflow Variable fsds_dp1_cdc_table)",
+        help="Bảng CDC mà run dp1_cdc đã ghi (Airflow Variable platform_dp1_cdc_table)",
     )
     args = parser.parse_args()
     runs = parse_runs(args.run)

@@ -11,7 +11,7 @@ spec:
   declarative:
     modelConfig: default-model-config
     stream: false
-    # System prompt quản lý trên Langfuse (prompt fsds-coordinator, label production); scripts/setup/sync_agent_prompts.py
+    # System prompt quản lý trên Langfuse (prompt platform-coordinator, label production); scripts/setup/sync_agent_prompts.py
     # đẩy bản production vào ConfigMap agent-prompts. Bản gốc lần đầu: infra/k8s/agents/prompts/coordinator.txt.
     systemMessageFrom: {type: ConfigMap, name: agent-prompts, key: coordinator}
     tools:

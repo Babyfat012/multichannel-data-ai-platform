@@ -1,4 +1,4 @@
-<!-- Simulated internal playbook of the FSDS seller. -->
+<!-- Simulated internal playbook of the Data & AI Platform seller. -->
 # Seller Return Playbook (internal, simulated)
 
 ## What the return label means

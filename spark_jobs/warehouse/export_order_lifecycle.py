@@ -21,7 +21,7 @@ def main(argv=None):
     parser.add_argument(
         "--sql-dir",
         type=Path,
-        default=Path(os.getenv("FSDS_WAREHOUSE_SQL_DIR", "/opt/sql/warehouse_lifecycle")),
+        default=Path(os.getenv("PLATFORM_WAREHOUSE_SQL_DIR", "/opt/sql/warehouse_lifecycle")),
     )
     args = parser.parse_args(argv)
     names = args.tables.split(",")

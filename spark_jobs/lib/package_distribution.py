@@ -20,7 +20,7 @@ def distribute_python_packages(context, *, include_tests=False):
     for path in files:
         digest.update(path.relative_to(root).as_posix().encode())
         digest.update(path.read_bytes())
-    archive = Path(tempfile.gettempdir()) / f"fsds-python-{digest.hexdigest()}.zip"
+    archive = Path(tempfile.gettempdir()) / f"platform-python-{digest.hexdigest()}.zip"
     if not archive.exists():
         with ZipFile(archive, "w", compression=ZIP_DEFLATED) as bundle:
             for path in files:

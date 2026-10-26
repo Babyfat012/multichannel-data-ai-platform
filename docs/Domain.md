@@ -68,7 +68,7 @@ Câu hỏi ML: *"Order Line này có bị Return hoặc Refund trong 30 ngày sa
 
 Vì vậy Online Feature Store tra cứu theo **`sku_id` + `storefront_id`**, ví dụ "tỷ lệ trả hàng 90 ngày của hoodie đen ở Amazon DE".
 
-Nhãn đến sau 30 ngày. Đây chính là tình huống "chưa có đáp án thật mà vẫn phải giám sát drift" mà rubric muốn.
+Nhãn đến sau 30 ngày. Đây chính là tình huống "chưa có đáp án thật mà vẫn phải giám sát drift".
 
 ## 6. Dữ liệu chảy vào thế nào
 
@@ -106,7 +106,7 @@ Amazon được làm sâu hơn các Channel khác:
 - **Fulfillment Method** (ai giao hàng: Seller hay Channel, như FBA/FBM), áp dụng cho cả 5 Channel vì nó ảnh hưởng mạnh tới tỷ lệ trả hàng.
 - **Mã lý do Return** riêng của Amazon.
 
-Phí, settlement, quảng cáo, tồn kho FBA chưa làm ở giai đoạn này, có thể dùng làm Novel idea sau.
+Phí, settlement, quảng cáo, tồn kho FBA chưa làm ở giai đoạn này, có thể mở rộng sau.
 
 ## 10. Giả định và giới hạn
 

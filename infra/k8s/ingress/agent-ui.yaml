@@ -1,4 +1,4 @@
-# UI chat với agent (kagent UI, rubric mle 40) sau gateway: HTTPS + basic auth + rate limit (42).
+# UI chat với agent (kagent UI) sau gateway: HTTPS + basic auth + rate limit.
 # Secret htpasswd `agent-ui-basic-auth` do scripts/setup/setup_ingress.sh tạo từ mật khẩu ở Vault.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -6,10 +6,10 @@ metadata:
   name: agent-ui
   namespace: kagent
   annotations:
-    cert-manager.io/cluster-issuer: fsds-local-ca
+    cert-manager.io/cluster-issuer: platform-local-ca
     nginx.org/redirect-to-https: "true"
     nginx.org/basic-auth-secret: agent-ui-basic-auth
-    nginx.org/basic-auth-realm: "FSDS agent UI"
+    nginx.org/basic-auth-realm: "PLATFORM agent UI"
     # 5 request/giây mỗi IP, vượt burst trả 429.
     nginx.org/limit-req-rate: "5r/s"
     nginx.org/limit-req-burst: "10"

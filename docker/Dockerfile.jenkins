@@ -1,4 +1,4 @@
-# Jenkins controller cho CI/CD local (rubric mle 33–36): plugin cố định + công cụ mà Jenkinsfile gọi
+# Jenkins controller cho CI/CD local: plugin cố định + công cụ mà Jenkinsfile gọi
 # (docker CLI/compose, kubectl, helm, kind, uv). Build chạy trên chính controller (1 executor).
 FROM jenkins/jenkins:2.580.1-lts-jdk21
 USER root

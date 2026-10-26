@@ -117,7 +117,7 @@ def test_no_default_ssh_key_and_outputs_for_ansible():
         block("output", name)
     ports = block("output", "port_forward_command")
     assert "AWS-StartSSHSession" in ports
-    assert "-i ~/.ssh/fsds_aws" in ports
+    assert "-i ~/.ssh/platform_aws" in ports
     for port in (8080, 8081, 8181, 9002, 8089):
         assert f"-L 127.0.0.1:{port}:127.0.0.1:{port}" in ports
 
@@ -153,7 +153,7 @@ def test_overlay_fits_t3_xlarge_without_keys_or_gcs():
     for name in ("minio", "kafka", "flink-jobmanager", "trino"):
         assert services[name]["profiles"] == ["disabled-aws"]
     assert services["airflow"]["environment"][
-        "AIRFLOW_VAR_FSDS_ORDER_LIFECYCLE_SOURCE_ROOT"
+        "AIRFLOW_VAR_PLATFORM_ORDER_LIFECYCLE_SOURCE_ROOT"
     ].startswith("s3a://")
 
 
@@ -173,7 +173,7 @@ def test_ansible_finds_ebs_by_volume_id_and_guards_mkfs():
 
 def test_s3_catalog_has_region_and_no_static_keys():
     """Nhánh s3: S3FileIO + region, không endpoint MinIO, không access key."""
-    conf = catalog_conf({"FSDS_STORAGE": "s3", "AWS_REGION": "ap-southeast-1"})
+    conf = catalog_conf({"PLATFORM_STORAGE": "s3", "AWS_REGION": "ap-southeast-1"})
     p = "spark.sql.catalog.lakehouse"
     assert conf[p + ".io-impl"] == "org.apache.iceberg.aws.s3.S3FileIO"
     assert conf[p + ".client.region"] == "ap-southeast-1"
@@ -181,11 +181,11 @@ def test_s3_catalog_has_region_and_no_static_keys():
     assert p + ".s3.endpoint" not in conf
     assert not any("key" in k.lower() for k in conf)
     with pytest.raises(KeyError):
-        catalog_conf({"FSDS_STORAGE": "s3"})
+        catalog_conf({"PLATFORM_STORAGE": "s3"})
 
 
 def test_datahub_is_prepared_without_starting_and_all_ports_are_loopback():
-    """SDK/Compose cho người học, secret tạo một lần; không chạy pha B lúc provision."""
+    """SDK/Compose cho người vận hành, secret tạo một lần; không chạy pha B lúc provision."""
     site = yaml.safe_load((ANSIBLE / "site.yml").read_text())
     role = next(r for r in site[0]["roles"] if r["role"] == "datahub")
     assert "enable_datahub" in role["when"]

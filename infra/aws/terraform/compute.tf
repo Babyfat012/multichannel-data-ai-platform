@@ -8,18 +8,18 @@ data "aws_ami" "ubuntu" {
   }
 }
 
-resource "aws_key_pair" "learner" {
-  key_name   = "${var.name_prefix}-de"
+resource "aws_key_pair" "operator" {
+  key_name   = "${var.name_prefix}-data-platform"
   public_key = var.ssh_public_key
 }
 
-resource "aws_instance" "de" {
+resource "aws_instance" "data_platform" {
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = var.instance_type
   subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.vm.id]
   iam_instance_profile        = aws_iam_instance_profile.vm.name
-  key_name                    = aws_key_pair.learner.key_name
+  key_name                    = aws_key_pair.operator.key_name
   associate_public_ip_address = true # IP public thay NAT Gateway (~$32/tháng)
 
   # Chỉ dòng t có CPU credit; m6i bỏ qua khối này.
@@ -44,7 +44,7 @@ resource "aws_instance" "de" {
     delete_on_termination = true
   }
 
-  tags = { Name = "${var.name_prefix}-de" }
+  tags = { Name = "${var.name_prefix}-data-platform" }
 
   # AMI mới ra không được tự thay máy đang chạy.
   lifecycle {
@@ -62,12 +62,12 @@ resource "aws_ebs_volume" "data" {
   size              = var.data_disk_gb
   type              = "gp3"
   encrypted         = true
-  tags              = { Name = "${var.name_prefix}-de-data" }
+  tags              = { Name = "${var.name_prefix}-data-platform-data" }
 }
 
 # Máy Nitro thấy /dev/sdf dưới tên nvme; Ansible tìm theo volume ID nên không phụ thuộc tên này.
 resource "aws_volume_attachment" "data" {
   device_name = "/dev/sdf"
   volume_id   = aws_ebs_volume.data.id
-  instance_id = aws_instance.de.id
+  instance_id = aws_instance.data_platform.id
 }

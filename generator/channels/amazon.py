@@ -2,7 +2,7 @@
 
 Đây là chỗ tạo ra **schema evolution**. Ngày export nhỏ hơn
 `amazon_orders_api_switch_day` thì ghi theo v0, còn lại ghi theo 2026-01-01.
-Năm kiểu thay đổi rubric muốn thấy:
+Năm kiểu thay đổi generator mô phỏng:
 
 | Kiểu | v0 | 2026-01-01 |
 |---|---|---|

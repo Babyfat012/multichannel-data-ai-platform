@@ -1,6 +1,6 @@
 # Đổi image.tag mỗi lần deploy để k8s rolling update; `helm upgrade --atomic` tự rollback nếu pod mới không Ready.
 image:
-  repository: localhost:5001/fsds-feature-api
+  repository: localhost:5001/platform-feature-api
   tag: "0.1.0"  # script deploy luôn ghi đè bằng git SHA/TAG
   pullPolicy: IfNotPresent
 replicas: 2

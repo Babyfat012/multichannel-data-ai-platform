@@ -27,13 +27,13 @@ def main() -> None:
     if missing:
         raise ValueError(f"Missing Airflow-resolved environment keys: {', '.join(missing)}")
 
-    spark = SparkSession.builder.appName("fsds-runtime-smoke").getOrCreate()
+    spark = SparkSession.builder.appName("platform-runtime-smoke").getOrCreate()
     try:
         result = spark.range(3, numPartitions=1).selectExpr("sum(id) AS total").first()
         if result.total != 3:
             raise ValueError("Spark runtime smoke query returned an unexpected result")
         print(
-            f"FSDS Spark runtime smoke: PASS; resolved_keys={len(required)}; "
+            f"PLATFORM Spark runtime smoke: PASS; resolved_keys={len(required)}; "
             f"master={spark.sparkContext.master}; rows=3; sum={result.total}; table_writes=0"
         )
     finally:

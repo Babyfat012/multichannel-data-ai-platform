@@ -5,10 +5,10 @@ from common import Diagram
 
 def make():
     """Define local deployable units and numbered data flows."""
-    d = Diagram("architecture-layer3", "Tầng 3 · LLM và nền tảng Agent", width=2740, height=1840)
+    d = Diagram("llm-platform", "LLM Platform", width=2740, height=1840)
     d.frame(30, 90, 250, 260, "OUTSIDE · người dùng")
-    d.frame(320, 90, 1720, 1410, "KIND CLUSTER · fsds-ml · tag = namespace", True)
-    d.frame(2080, 390, 630, 850, "DOCKER COMPOSE · project fsds")
+    d.frame(320, 90, 1720, 1410, "KIND CLUSTER · platform · tag = namespace", True)
+    d.frame(2080, 390, 630, 850, "DOCKER COMPOSE · project platform")
     d.frame(2080, 90, 630, 260, "INTERNET · mã nguồn")
     d.frame(2420, 1280, 290, 220, "COMPOSE · DataHub riêng")
     specs = [
@@ -100,7 +100,7 @@ def make():
             740,
             "ns feature-store",
             "Feature API MCP",
-            "fsds-feature-api · :8000",
+            "platform-feature-api · :8000",
             "/features · /chunks · /predict",
         ),
         (
@@ -109,7 +109,7 @@ def make():
             740,
             "ns ml-serving",
             "KServe return-risk",
-            "fsds-return-risk · :8080",
+            "platform-return-risk · :8080",
             "predictor tự đọc Feast",
         ),
         (
@@ -209,7 +209,7 @@ def make():
             740,
             "airflow",
             "Airflow",
-            "fsds-airflow:2.10.5 · :8080",
+            "platform-airflow:2.10.5 · :8080",
             "ml_rag_ingest · fastembed",
         ),
         (
@@ -227,7 +227,7 @@ def make():
             430,
             "ci",
             "Jenkins",
-            "fsds-jenkins:2.580.1 · :8090",
+            "platform-jenkins:2.580.1 · :8090",
             "test → build → push → deploy",
         ),
         (
@@ -279,7 +279,7 @@ def make():
         ("data", "agw", "A7", "MCP / prompt"),
         ("model", "agw", "A8", "MCP / prompt"),
         ("agw", "api", "A9", "tool call MCP"),
-        ("agw", "llm", "A10", "prompt / fsds-chat"),
+        ("agw", "llm", "A10", "prompt / platform-chat"),
         ("redis", "api", "A11", "feature SKU"),
         ("pgv", "api", "A12", "chunk / vector"),
         ("api", "serve", "A13", "thông tin đơn"),
@@ -316,7 +316,7 @@ def make():
     d.note(
         350,
         1552,
-        "A/B: /a2a/data-agent-ab và fsds-chat (1:1); route chuẩn giữ A. Phản hồi trả về trên cùng lời gọi.",
+        "A/B: /a2a/data-agent-ab và platform-chat (1:1); route chuẩn giữ A. Phản hồi trả về trên cùng lời gọi.",
     )
     d.flows = [
         (

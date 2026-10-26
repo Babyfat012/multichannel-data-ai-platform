@@ -1,4 +1,4 @@
-<!-- Simulated policy for the FSDS coursework. Not Walmart's real policy. -->
+<!-- Simulated policy for this simulated dataset. Not Walmart's real policy. -->
 # Walmart Marketplace — Return Policy (simulated)
 
 ## Return window

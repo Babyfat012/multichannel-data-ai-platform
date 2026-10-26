@@ -156,7 +156,7 @@ def main(argv=None) -> int:
     parser.add_argument("--skus", required=True)
     parser.add_argument("--gateway", default="http://localhost:13000")
     parser.add_argument("--feature-api", default="https://api.172-25-0-2.sslip.io:30443")
-    parser.add_argument("--ca", default="out/ingress/fsds-local-ca.crt")
+    parser.add_argument("--ca", default="out/ingress/platform-local-ca.crt")
     parser.add_argument("--min-accuracy", type=float, default=0.6)
     parser.add_argument("--out", default="out/agent-eval.jsonl")
     args = parser.parse_args(argv)

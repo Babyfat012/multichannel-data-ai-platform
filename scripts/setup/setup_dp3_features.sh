@@ -8,7 +8,7 @@ airflow_cmd() {
   docker compose --profile airflow exec -T airflow airflow "$@"
 }
 
-airflow_cmd variables set fsds_dp3_gold_source_table 'fact_order_lines_dp2'
-airflow_cmd variables set fsds_dp3_feature_table 'feat_order_line_return_dp3'
+airflow_cmd variables set platform_dp3_gold_source_table 'fact_order_lines_dp2'
+airflow_cmd variables set platform_dp3_feature_table 'feat_order_line_return_dp3'
 
 printf 'DP3 feature Variables đã nạp.\n'

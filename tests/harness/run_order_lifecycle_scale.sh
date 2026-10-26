@@ -14,8 +14,8 @@ while (($#)); do
   esac
 done
 case "$PROFILE" in small|medium) ;; *) echo 'Profile phải là small hoặc medium' >&2; exit 2 ;; esac
-IMAGE=fsds-airflow:2.10.5-spark3.5.3
-PREFIX="fsds-e2e-v2-$$"
+IMAGE=platform-airflow:2.10.5-spark3.5.3
+PREFIX="platform-e2e-v2-$$"
 NETWORK="$PREFIX-net"
 mkdir -p out
 WORK="$(mktemp -d "$PWD/out/e2e-v2-${PROFILE}.XXXXXX")"
@@ -31,10 +31,10 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-docker volume inspect fsds_airflow-data >/dev/null
+docker volume inspect platform_airflow-data >/dev/null
 docker image inspect "$IMAGE" >/dev/null
 docker image inspect postgres:15 >/dev/null
-docker run --rm --pull never --network none -v fsds_airflow-data:/ivy:ro \
+docker run --rm --pull never --network none -v platform_airflow-data:/ivy:ro \
   --entrypoint bash "$IMAGE" -c '
     ls /ivy/.ivy2/jars
     for pattern in "org.apache.iceberg_iceberg-spark-runtime-3.5_2.12-*.jar" "org.postgresql_postgresql-*.jar"; do
@@ -54,7 +54,7 @@ if [[ "$READY" != 1 ]]; then echo 'PostgreSQL chưa sẵn sàng' >&2; exit 1; fi
 docker run --rm --pull never --name "$PREFIX-spark" --network "$NETWORK" \
   -e SPARK_LOCAL_HOSTNAME=localhost -e PYTHONPATH=/workspace \
   -e WAREHOUSE_TEST_DSN=postgresql://e2e:e2e@postgres:5432/e2e \
-  -v "$PWD":/workspace:ro -v "$WORK":/proof -v fsds_airflow-data:/ivy:ro \
+  -v "$PWD":/workspace:ro -v "$WORK":/proof -v platform_airflow-data:/ivy:ro \
   --entrypoint bash "$IMAGE" -c '
     jars=$(find /ivy/.ivy2/jars -maxdepth 1 \( -name "*iceberg-spark-runtime-3.5_2.12-*.jar" -o -name "*postgresql-*.jar" \) -printf "%p,")
     "$SPARK_HOME/bin/spark-submit" --master "local[*]" --driver-memory "$1" \

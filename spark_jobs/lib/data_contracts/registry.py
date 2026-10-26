@@ -14,7 +14,7 @@ def resolve_contracts_dir(contracts_dir=None):
     """Ưu tiên cờ, env, Docker nếu tồn tại, rồi contracts cạnh gốc package."""
     if contracts_dir is not None:
         return Path(contracts_dir)
-    environment = os.environ.get("FSDS_CONTRACTS_DIR")
+    environment = os.environ.get("PLATFORM_CONTRACTS_DIR")
     if environment is not None:
         return Path(environment)
     return DOCKER_CONTRACTS_DIR if DOCKER_CONTRACTS_DIR.is_dir() else REPO_CONTRACTS_DIR

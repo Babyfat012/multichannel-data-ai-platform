@@ -1,7 +1,7 @@
 """Đồng bộ system prompt Agent từ Langfuse (label `production`) sang ConfigMap `kagent/agent-prompts`.
 
 Agent đọc prompt qua `systemMessageFrom` ⇒ đổi prompt = sửa trên Langfuse rồi chạy script này (job Jenkins cũng gọi nó).
-`--seed`: tạo prompt `fsds-<agent>` từ infra/k8s/agents/prompts/<agent>.txt nếu Langfuse chưa có (lần đầu).
+`--seed`: tạo prompt `platform-<agent>` từ infra/k8s/agents/prompts/<agent>.txt nếu Langfuse chưa có (lần đầu).
 Khoá API đọc từ Secret `kagent/langfuse-api`; Langfuse gọi qua port-forward tạm.
 
 python scripts/setup/sync_agent_prompts.py [--seed]
@@ -18,7 +18,7 @@ from pathlib import Path
 
 AGENTS = ("data-agent", "model-agent", "coordinator")
 SEEDS = Path(__file__).resolve().parents[2] / "infra/k8s/agents/prompts"
-KC = ["kubectl", "--context", "kind-fsds-ml"]
+KC = ["kubectl", "--context", "kind-platform"]
 URL = "http://localhost:13000"
 
 
@@ -72,7 +72,7 @@ def main():
                 time.sleep(1)
         prompts, versions = {}, {}
         for agent in AGENTS:
-            name = f"fsds-{agent}"
+            name = f"platform-{agent}"
             status, data = call("GET", f"/api/public/v2/prompts/{name}?label=production", auth)
             if status == 404 and args.seed:
                 text = (SEEDS / f"{agent}.txt").read_text()
@@ -107,7 +107,9 @@ def main():
         check=True,
     ).stdout
     doc = json.loads(manifest)
-    doc["metadata"]["annotations"] = {f"langfuse.fsds/{a}-version": v for a, v in versions.items()}
+    doc["metadata"]["annotations"] = {
+        f"langfuse.platform/{a}-version": v for a, v in versions.items()
+    }
     subprocess.run([*KC, "apply", "-f", "-"], input=json.dumps(doc), text=True, check=True)
 
 

@@ -5,15 +5,15 @@ from common import Diagram
 
 def make():
     """Define local deployable units and numbered data flows."""
-    d = Diagram("architecture-layer12", "Tầng 1 + 2 · Dữ liệu và Machine Learning", height=1600)
+    d = Diagram("data-ml-platform", "Data Platform / ML Platform", height=1600)
     d.frame(
         30,
         90,
         1660,
         1160,
-        "DOCKER COMPOSE · project fsds · tag = profile (mặc định: không profile)",
+        "DOCKER COMPOSE · project platform · tag = profile (mặc định: không profile)",
     )
-    d.frame(1730, 450, 640, 800, "KIND CLUSTER · fsds-ml · tag = namespace", True)
+    d.frame(1730, 450, 640, 800, "KIND CLUSTER · platform · tag = namespace", True)
     d.frame(1730, 90, 640, 300, "OUTSIDE · công cụ host / stack DataHub riêng")
     specs = [
         (
@@ -22,7 +22,7 @@ def make():
             150,
             "mặc định",
             "generator-batch",
-            "data-generator:optimize · batch",
+            "platform-generator:optimize",
             "JSONL → MinIO",
         ),
         (
@@ -31,7 +31,7 @@ def make():
             150,
             "mặc định",
             "generator-load",
-            "data-generator:optimize · load-postgres",
+            "platform-generator:optimize",
             "Walmart → PostgreSQL",
         ),
         (
@@ -78,7 +78,7 @@ def make():
             650,
             "airflow",
             "Airflow",
-            "fsds-airflow:2.10.5 · :8080",
+            "platform-airflow:2.10.5 · :8080",
             "host :8081 · Feast materialize",
         ),
         (
@@ -87,7 +87,7 @@ def make():
             650,
             "stream",
             "generator-stream",
-            "data-generator:optimize · stream",
+            "platform-generator:optimize",
             "event trạng thái / trả hàng",
         ),
         (
@@ -105,7 +105,7 @@ def make():
             650,
             "flink",
             "flink-jobmanager",
-            "fsds-flink:1.20.3 · :8081",
+            "platform-flink:1.20.3 · :8081",
             "host :8082 · SQL window",
         ),
         (
@@ -114,7 +114,7 @@ def make():
             650,
             "flink",
             "flink-taskmanager",
-            "fsds-flink:1.20.3",
+            "platform-flink:1.20.3",
             "chạy job Return 24h / SKU",
         ),
         (
@@ -123,7 +123,7 @@ def make():
             920,
             "ml-stream",
             "feast-pusher",
-            "fsds-feast:0.66.0",
+            "platform-feast:0.66.0",
             "Feast push online + offline",
         ),
         (
@@ -141,7 +141,7 @@ def make():
             920,
             "ml",
             "MLflow",
-            "fsds-mlflow:3.17.0 · :5000",
+            "platformflow:3.17.0 · :5000",
             "host :5050 · model production",
         ),
         (
@@ -150,7 +150,7 @@ def make():
             920,
             "ci",
             "Jenkins",
-            "fsds-jenkins:2.580.1 · :8090",
+            "platform-jenkins:2.580.1 · :8090",
             "host network · CI Feature API",
         ),
         (
@@ -204,7 +204,7 @@ def make():
             1140,
             "ns ml-serving",
             "KServe return-risk",
-            "fsds-return-risk · :8080",
+            "platform-return-risk · :8080",
             "model trong image · Feast SDK",
         ),
         ("db", 1790, 150, "host", "DBeaver", "SQL client", "đọc lakehouse + warehouse"),

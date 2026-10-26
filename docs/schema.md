@@ -76,7 +76,7 @@ fact Amazon trỏ tới phiên bản không tồn tại. Xem [Gold](gold.md) và
 
 Đây là quan hệ logic trong Iceberg. Iceberg không khai báo foreign key cưỡng
 chế như PostgreSQL; `validate_amazon_order_dim` kiểm khóa trong mỗi run DP2.
-`feat_order_line_return_dp3` có hai cột thời gian rubric yêu cầu, được xác nhận
+`feat_order_line_return_dp3` có hai cột thời gian thiết kế sử dụng, được xác nhận
 bằng `DESCRIBE` sau lần chạy DP3.
 
 ## Quy ước đặt tên
@@ -90,7 +90,7 @@ bằng `DESCRIBE` sau lần chạy DP3.
 | Gold, feature offline | `feat_` | `feat_order_line_return_dp3` |
 
 `obt_` được dành cho bảng phẳng phục vụ một mục đích; hiện chưa có bảng loại
-này trong các run được nộp. Hậu tố `_dp1`, `_dp2`, `_dp3` phân biệt bảng bằng
+này trong các run được ghi nhận. Hậu tố `_dp1`, `_dp2`, `_dp3` phân biệt bảng bằng
 chứng Airflow với các bảng benchmark/smoke. Catalog là `lakehouse`, namespace
 là `bronze`, `silver`, `gold`; các khái niệm nghiệp vụ nằm ở
 [thuật ngữ](terminology.md).

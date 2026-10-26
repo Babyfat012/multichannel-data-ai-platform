@@ -1,4 +1,4 @@
-<!-- Simulated policy for the FSDS coursework. Not TikTok Shop's real policy. -->
+<!-- Simulated policy for this simulated dataset. Not TikTok Shop's real policy. -->
 # TikTok Shop — Return and Refund Policy (simulated)
 
 ## Return window

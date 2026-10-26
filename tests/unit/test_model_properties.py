@@ -1,6 +1,6 @@
 """Property-based (hypothesis): model và các bước tiền xử lý cho cùng kết quả khi chạy lại (idempotent).
 
-Rubric mle dòng 31. Hypothesis sinh hàng trăm bộ dữ liệu ngẫu nhiên — kể cả giá 0, số lượng 0, NaN,
+Hypothesis sinh hàng trăm bộ dữ liệu ngẫu nhiên — kể cả giá 0, số lượng 0, NaN,
 kênh lạ — để tìm ca làm kết quả đổi giữa hai lần chạy hoặc làm hỏng bất biến.
 """
 

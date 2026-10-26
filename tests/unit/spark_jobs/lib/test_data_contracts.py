@@ -250,13 +250,13 @@ def test_contracts_directory_precedence(tmp_path, monkeypatch, capsys):
     for target in (explicit, environment, docker):
         shutil.copytree(repo, target)
     monkeypatch.setattr(module, "DOCKER_CONTRACTS_DIR", docker)
-    monkeypatch.setenv("FSDS_CONTRACTS_DIR", str(environment))
+    monkeypatch.setenv("PLATFORM_CONTRACTS_DIR", str(environment))
     monkeypatch.chdir(tmp_path)
     assert module.Registry(explicit).root == explicit
     assert module.Registry().root == environment
     assert main(["check-registry", "--contracts-dir", str(explicit)]) == 0
     assert main(["check-registry"]) == 0
-    monkeypatch.delenv("FSDS_CONTRACTS_DIR")
+    monkeypatch.delenv("PLATFORM_CONTRACTS_DIR")
     assert module.Registry().root == docker
     shutil.rmtree(docker)
     assert module.Registry().root == repo
@@ -278,9 +278,9 @@ def test_cli_gate_uses_contracts_directory_precedence(tmp_path, monkeypatch, cap
     generate_fixture(fixture)
     target = tmp_path / "contracts"
     shutil.copytree(Path(module.__file__).resolve().parents[3] / "contracts", target)
-    monkeypatch.setenv("FSDS_CONTRACTS_DIR", str(tmp_path / "missing"))
+    monkeypatch.setenv("PLATFORM_CONTRACTS_DIR", str(tmp_path / "missing"))
     assert main(["gate", str(fixture), "--contracts-dir", str(target)]) == 0
     assert json.loads(capsys.readouterr().out)["quarantine"]["total"] == 0
-    monkeypatch.setenv("FSDS_CONTRACTS_DIR", str(target))
+    monkeypatch.setenv("PLATFORM_CONTRACTS_DIR", str(target))
     assert main(["gate", str(fixture)]) == 0
     assert json.loads(capsys.readouterr().out)["quarantine"]["total"] == 0

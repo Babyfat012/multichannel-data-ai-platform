@@ -1,8 +1,8 @@
 # Spark baseline và skew — workload v2
 
-Rubric 11–12: workload lifecycle v2, độc lập với bằng chứng Bronze v1 tại
+workload lifecycle v2, độc lập với bằng chứng Bronze v1 tại
 [spark.md](spark.md). **Chưa đo Spark trong sandbox Codex**. Các số trong bảng
-chỉ được điền sau khi planner chạy và lưu JSON/event log, không suy từ thời gian.
+chỉ được điền sau khi người vận hành chạy và lưu JSON/event log, không suy từ thời gian.
 
 Job [measure/measure_order_lifecycle_skew.py](../spark_jobs/measure/measure_order_lifecycle_skew.py) gọi trực tiếp
 `bronze_from_root` → `build_silver` → `build_gold` của module thật, gồm tuyến
@@ -27,7 +27,7 @@ history mature, khác mẫu 10 ngày thường chỉ cho feature 0. Test Spark n
 `dataset_version`. Nguồn cụ thể được pin trong JSON bằng `dataset_versions`,
 manifest đầy đủ (seed/cấu hình/digest), SHA-256 manifest và cutoff; muốn replay dùng
 lại `--source` trỏ đúng root bất biến. Dataset ID phụ thuộc code/Python, không đoán
-ID trước khi sinh. Runtime JSON có Spark/Python/app ID; planner ghi thêm image ID
+ID trước khi sinh. Runtime JSON có Spark/Python/app ID; người vận hành ghi thêm image ID
 thực tế cùng bằng chứng. Có thể dùng nguồn 30 ngày đã ghim trong
 [source-order-lifecycle-scale.md](source-order-lifecycle-scale.md), nhưng phải kiểm `nonzero_features` trước
 khi dùng làm proof correctness có history.
@@ -44,10 +44,9 @@ khi dùng làm proof correctness có history.
 | top-5 key theo số sự kiện sweep | chưa đo | chưa đo |
 | exceptAll baseline-only / salted-only | chưa đo | yêu cầu 0 / 0 |
 
-**Chưa đo — Đo trên GCP:** chạy `python tests/spark/check_order_lifecycle_skew.py`
+**Chưa đo:** chạy `python tests/spark/check_order_lifecycle_skew.py`
 trong runtime Spark đã chuẩn bị; lệnh Docker và CLI lưu JSON/event log đầy đủ ở
-cuối tài liệu. Người học chọn bỏ bước lâu ở local theo
-brief codex-26 (ghi chú nội bộ, không nằm trong repo). Chưa có stage/task metrics,
+cuối tài liệu. Chưa có stage/task metrics,
 manifest hash, bag equality hay kết luận giảm skew v2; bảng trên giữ trạng thái
 chưa đo, không dùng bằng chứng v1 thay thế.
 
@@ -75,7 +74,7 @@ Test Spark bắt buộc có stage đo được, feature khác 0 và bag equality
 `exceptAll` **hai chiều**. Test in max/median và bytes trước/sau. Chỉ assert ratio
 giảm khi baseline ratio≥2, ít nhất 8 task, cả hai median>0 và logical key max sau
 chia bucket ≤60% trước. Nếu không đủ, in `SKEW_INCONCLUSIVE`, không coi test pass
-là proof đã giảm skew; planner phải tăng scale/chọn số bucket rồi chạy lại.
+là proof đã giảm skew; người vận hành phải tăng scale/chọn số bucket rồi chạy lại.
 Không dùng thời gian một lần chạy để tuyên bố speedup.
 Script còn có fixture dựng tay đối chiếu hai chiều tại biên microsecond/bucket,
 cửa sổ nửa mở, query-only bucket, tự trừ history, nhiều dataset, SKU null và
@@ -105,16 +104,16 @@ chưa có bằng chứng Spark. Python oracle ở
 [unit/spark_jobs/lib/test_order_lifecycle_skew.py](../tests/unit/spark_jobs/lib/test_order_lifecycle_skew.py) kiểm cơ chế bucket/prefix;
 correctness DataFrame phải qua Spark test.
 
-Lệnh planner bắt buộc (mount repo chỉ đọc, dữ liệu tạm trong container):
+Lệnh người vận hành bắt buộc (mount repo chỉ đọc, dữ liệu tạm trong container):
 
 ```bash
 docker run --rm --network none --read-only --tmpfs /tmp:rw,size=2g -e PYSPARK_SUBMIT_ARGS='--driver-memory 4g pyspark-shell' \
   --mount type=bind,src=$PWD,dst=/workspace,readonly --entrypoint python \
-  fsds-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_order_lifecycle_skew.py
+  platform-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_order_lifecycle_skew.py
 ```
 
 Để lưu stdout JSON trên host, thêm `> /tmp/codex-15-spark-report.log` vào lệnh.
-Run này không xóa `/tmp` riêng trong test để planner có thể điều tra khi chạy ngoài
+Run này không xóa `/tmp` riêng trong test để người vận hành có thể điều tra khi chạy ngoài
 container; `--rm` vẫn dọn container sau khi kết thúc. Muốn giữ cả event log, chạy
 CLI với thư mục bằng chứng host được mount **riêng** cho phép ghi:
 
@@ -124,7 +123,7 @@ docker run --rm --network none --read-only --tmpfs /tmp:rw,size=2g \
   -e PYSPARK_SUBMIT_ARGS='--driver-memory 4g pyspark-shell' \
   --mount type=bind,src=$PWD,dst=/workspace,readonly \
   --mount type=bind,src=/tmp/codex-15-evidence,dst=/evidence \
-  --entrypoint python fsds-airflow:2.10.5-spark3.5.3 \
+  --entrypoint python platform-airflow:2.10.5-spark3.5.3 \
   /workspace/spark_jobs/measure/measure_order_lifecycle_skew.py \
   --workdir /evidence/run-01 --output /evidence/report.json \
   --days 90 --orders-per-day 20 --seed 7 --sku-count 100 --buckets 18 --partitions 16
@@ -132,4 +131,4 @@ docker run --rm --network none --read-only --tmpfs /tmp:rw,size=2g \
 
 Thư mục workdir phải mới cho mỗi run; dữ liệu scale, checkpoint tạm và output
 Parquet tốn đĩa. Với nguồn lớn dùng mount nguồn read-only `--source`, tăng dung
-lượng đĩa tạm do planner quyết định. Không gọi Docker/Cloud trong sandbox Codex.
+lượng đĩa tạm do người vận hành quyết định. Không gọi Docker/Cloud trong sandbox Codex.

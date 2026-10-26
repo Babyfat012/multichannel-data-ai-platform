@@ -9,7 +9,7 @@ import tempfile
 from collections import Counter, defaultdict
 from pathlib import Path
 
-TOPIC = "fsds_cdc_order_lifecycle.walmart_lifecycle.orders"
+TOPIC = "platform_cdc_order_lifecycle.walmart_lifecycle.orders"
 TARGET = "lakehouse.bronze.lifecycle_raw_walmart_cdc_events"
 
 

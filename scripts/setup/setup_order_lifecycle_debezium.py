@@ -9,9 +9,9 @@ from pathlib import Path
 
 from scripts.setup.setup_order_snapshots_debezium import load_settings
 
-CONNECTOR_NAME = "fsds-walmart-order-lifecycle"
-TOPIC = "fsds_cdc_order_lifecycle.walmart_lifecycle.orders"
-PUBLICATION = SLOT = "fsds_walmart_order_lifecycle_orders"
+CONNECTOR_NAME = "platform-walmart-order-lifecycle"
+TOPIC = "platform_cdc_order_lifecycle.walmart_lifecycle.orders"
+PUBLICATION = SLOT = "platform_walmart_order_lifecycle_orders"
 
 
 def connector_config(settings):
@@ -24,7 +24,7 @@ def connector_config(settings):
         "database.user": settings["POSTGRES_USER"],
         "database.password": settings["POSTGRES_PASSWORD"],
         "database.dbname": settings["POSTGRES_DB"],
-        "topic.prefix": "fsds_cdc_order_lifecycle",
+        "topic.prefix": "platform_cdc_order_lifecycle",
         "table.include.list": "walmart_lifecycle.orders",
         "plugin.name": "pgoutput",
         "slot.name": SLOT,

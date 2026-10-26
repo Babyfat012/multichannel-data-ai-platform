@@ -6,8 +6,8 @@ status: accepted
 
 Ngày 2026-10-17, người dùng xác nhận agent phục vụ Seller và muốn trải nghiệm
 chọn SKU để xem insight, tiếp nối bằng gợi ý hành động. Chọn hướng này vì
-domain FSDS đang có đơn hàng đa Channel của Seller; ví dụ agent chăm sóc
-buyer của khóa học đòi hỏi customer/cart/session ngoài hợp đồng dữ liệu hiện
+domain Data & AI Platform đang có đơn hàng đa Channel của Seller; ví dụ agent chăm sóc
+gợi ý sản phẩm cho buyer đòi hỏi customer/cart/session ngoài hợp đồng dữ liệu hiện
 có. Tham chiếu TikTok Shop là định hướng trải nghiệm, chưa chốt metric, nguồn
 mới, quyền thực thi hoặc giao diện. Các quyết định còn mở được theo dõi tại
 bản rà soát mở rộng.

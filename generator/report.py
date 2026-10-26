@@ -1,6 +1,6 @@
 """Báo cáo chất lượng dữ liệu của một lần chạy Batch, đo lại từ chính dữ liệu đã ghi.
 
-Rubric yêu cầu chụp màn hình output tóm tắt chất lượng dữ liệu. Module này đọc
+Báo cáo chất lượng dữ liệu đọc
 dữ liệu y như pipeline phía sau sẽ đọc (file gốc của Channel trên local hoặc MinIO,
 bảng nguồn trong PostgreSQL), đo lại bằng DuckDB, rồi đặt từng con số cạnh đáp án
 trong `run_manifest.json`. Khớp nhau nghĩa là generator chèn đúng lượng lỗi đã cấu hình.

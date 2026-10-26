@@ -267,4 +267,4 @@ hệ nghiệp vụ; code reconcile hiện chỉ kiểm membership. Chưa đo sch
 catalog trong gói này.
 
 Ảnh/schema runtime và số dòng thực tế:
-<!-- RUN: planner điền -->
+<!-- RUN: người vận hành điền -->

@@ -1,4 +1,4 @@
-<!-- Simulated policy for the FSDS coursework. Shopify lets each store set its own policy. -->
+<!-- Simulated policy for this simulated dataset. Shopify lets each store set its own policy. -->
 # Shopify Store — Return Policy of this Seller (simulated)
 
 ## Return window

@@ -1,4 +1,4 @@
-# Langfuse v2 (quản lý prompt, rubric mle dòng 34): system prompt của Agent sống ở đây, có version + label production.
+# Langfuse v2 (quản lý prompt): system prompt của Agent sống ở đây, có version + label production.
 # Bản v2 chỉ cần Postgres (dùng database `langfuse` trên pgvector, ns rag); v3+ cần thêm ClickHouse/Redis/S3.
 # Secret langfuse-env (DATABASE_URL, khoá, tài khoản khởi tạo) do scripts/setup/deploy_kind_langfuse.sh tạo.
 apiVersion: v1
@@ -28,10 +28,10 @@ spec:
             - {name: NEXTAUTH_URL, value: "http://langfuse.langfuse.svc.cluster.local:3000"}
             - {name: HOSTNAME, value: "0.0.0.0"}
             - {name: TELEMETRY_ENABLED, value: "false"}
-            - {name: LANGFUSE_INIT_ORG_ID, value: fsds}
-            - {name: LANGFUSE_INIT_ORG_NAME, value: FSDS}
-            - {name: LANGFUSE_INIT_PROJECT_ID, value: fsds-agents}
-            - {name: LANGFUSE_INIT_PROJECT_NAME, value: FSDS Agents}
+            - {name: LANGFUSE_INIT_ORG_ID, value: platform}
+            - {name: LANGFUSE_INIT_ORG_NAME, value: PLATFORM}
+            - {name: LANGFUSE_INIT_PROJECT_ID, value: platform-agents}
+            - {name: LANGFUSE_INIT_PROJECT_NAME, value: PLATFORM Agents}
             - {name: LANGFUSE_INIT_USER_NAME, value: admin}
           ports: [{name: http, containerPort: 3000}]
           resources:

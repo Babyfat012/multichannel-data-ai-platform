@@ -28,7 +28,7 @@ class SourceV2ScaleChecks(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Sinh scale vào /tmp và dựng Silver bằng tham số tên."""
-        cls.tmp = Path(tempfile.mkdtemp(prefix="fsds-v2-scale-"))
+        cls.tmp = Path(tempfile.mkdtemp(prefix="platform-v2-scale-"))
         cls.root = cls.tmp / "source"
         cls.manifest = generate_scaled(cls.root, ScaleConfig(orders_per_day=200, days=10))
         cls.spark = (

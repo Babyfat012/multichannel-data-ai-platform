@@ -1,10 +1,10 @@
-// CI/CD Coordinator Agent (rubric mle dòng 35): kiểm manifest → prompt từ Langfuse → deploy → chờ Ready → agent card qua A2A gateway.
-// API key gateway lấy từ Vault (secret/fsds/agentgateway) bằng token chỉ-đọc `vault-ci-token`.
+// CI/CD Coordinator Agent: kiểm manifest → prompt từ Langfuse → deploy → chờ Ready → agent card qua A2A gateway.
+// API key gateway lấy từ Vault (secret/platform/agentgateway) bằng token chỉ-đọc `vault-ci-token`.
 pipeline {
   agent any
   options { timestamps(); disableConcurrentBuilds() }
   environment {
-    KCTX = 'kind-fsds-ml'
+    KCTX = 'kind-platform'
     VAULT_ADDR = 'http://localhost:8200'
   }
   stages {

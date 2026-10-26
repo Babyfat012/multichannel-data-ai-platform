@@ -2,7 +2,7 @@
 CONTEXT.md
 docs/domain-overview.md
 
-# Tài liệu rubric của khóa học, không thuộc mã nguồn dự án
+# Workbook và ghi chú nội bộ, không thuộc mã nguồn dự án
 Coursework Tracking (Public).xlsx
 
 # Dữ liệu sinh ra khi chạy generator
@@ -15,10 +15,10 @@ HANDOFF.md
 HANDOFF.*.md
 .env
 
-# Brief giao việc nội bộ giữa các phiên agent, không thuộc tài liệu rubric
+# Brief giao việc nội bộ giữa các phiên agent
 .briefs/
 
-# Việc cá nhân: kế hoạch coursework, ghi chú học tập, cấu hình Claude
+# Ghi chú cá nhân và cấu hình công cụ local
 docs/plan.md
 edai-k11-cw/
 .vibe-wise/
@@ -37,5 +37,5 @@ mutants/
 .hypothesis/
 .coverage
 
-# Tài liệu quá trình và bản GCP cũ: giữ trên máy, không thuộc hồ sơ rubric
+# Tài liệu quá trình và cấu hình lịch sử: chỉ lưu local
 .archive/

@@ -1,4 +1,4 @@
-"""Các bước của pipeline RAG (rubric `mle` dòng 9–10); DAG `ml_rag_ingest` gọi từng bước trong feast-venv.
+"""Các bước của pipeline RAG; DAG `ml_rag_ingest` gọi từng bước trong feast-venv.
 
 upload   : tài liệu text (rag/corpus) → s3://…/rag/raw/*.md               (nguồn "kéo dữ liệu từ text")
 chunk    : raw → s3://…/rag/chunks_text.parquet                            (rag.chunking.chunk_markdown)
@@ -210,11 +210,11 @@ def lineage_mcps(bucket_root, receipt):
         return f"urn:li:dataset:(urn:li:dataPlatform:{platform},{name},PROD)"
 
     flow = f"urn:li:dataFlow:(airflow,{DAG_ID},prod)"
-    corpus = ds("file", "fsds/rag/corpus")
+    corpus = ds("file", "platform/rag/corpus")
     raw = ds("s3", f"{bucket_root}/raw")
     text = ds("s3", f"{bucket_root}/chunks_text.parquet")
     vectors = ds("s3", f"{bucket_root}/chunks.parquet")
-    online = ds("postgres", f"rag.public.fsds_rag_{FEATURE_VIEW}")
+    online = ds("postgres", f"rag.public.platform_rag_{FEATURE_VIEW}")
     jobs = {
         "upload": ([corpus], [raw]),
         "chunk": ([raw], [text]),
@@ -234,7 +234,7 @@ def lineage_mcps(bucket_root, receipt):
         corpus: "Tài liệu chính sách trả hàng (giả lập) trong repo rag/corpus",
         raw: "Tài liệu gốc trên MinIO",
         text: "Chunk text (chưa embedding)",
-        vectors: f"Chunk + embedding {MODEL}; offline source của Feast fsds_rag",
+        vectors: f"Chunk + embedding {MODEL}; offline source của Feast platform_rag",
         online: "Feast online store (pgvector), feature view policy_chunks",
     }
     for urn, description in descriptions.items():
@@ -276,7 +276,9 @@ def lineage_mcps(bucket_root, receipt):
             )
     ts = int(datetime.fromisoformat(receipt["completed_at"]).timestamp() * 1000)
     for check, value in sorted(receipt["checks"].items()):
-        urn = f"urn:li:assertion:fsds-{DAG_ID}-{hashlib.sha256(check.encode()).hexdigest()[:12]}"
+        urn = (
+            f"urn:li:assertion:platform-{DAG_ID}-{hashlib.sha256(check.encode()).hexdigest()[:12]}"
+        )
         out.append(
             _mcp(
                 "assertion",
@@ -286,7 +288,7 @@ def lineage_mcps(bucket_root, receipt):
                     "type": "CUSTOM",
                     "description": f"validate: {check} = 0",
                     "customAssertion": {
-                        "type": "FSDS RAG validate",
+                        "type": "PLATFORM RAG validate",
                         "entity": online,
                         "logic": f"{check} == 0",
                     },

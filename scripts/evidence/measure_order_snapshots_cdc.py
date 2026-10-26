@@ -65,7 +65,7 @@ def main() -> int:
     consumer = Consumer(
         {
             "bootstrap.servers": f"127.0.0.1:{settings.get('KAFKA_PORT', '9094')}",
-            "group.id": "fsds-cdc-probe-" + uuid.uuid4().hex,
+            "group.id": "platform-cdc-probe-" + uuid.uuid4().hex,
             "auto.offset.reset": "latest",
             "enable.auto.commit": False,
         }

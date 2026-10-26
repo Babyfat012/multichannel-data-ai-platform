@@ -200,7 +200,7 @@ def run_measurement(
             source,
             ScaleConfig(seed=seed, days=days, orders_per_day=orders_per_day, sku_count=sku_count),
         )
-    cloud = os.environ.get("FSDS_STORAGE") == "s3"
+    cloud = os.environ.get("PLATFORM_STORAGE") == "s3"
     source = Path(source).resolve() if not cloud else str(source)
     manifest_bytes = None
     if not cloud:
@@ -209,7 +209,7 @@ def run_measurement(
     if not cloud:
         os.environ.setdefault("SPARK_LOCAL_IP", "127.0.0.1")
         os.environ.setdefault("SPARK_LOCAL_HOSTNAME", "localhost")
-    os.environ["FSDS_CONTRACTS_DIR"] = str(ROOT / "contracts")
+    os.environ["PLATFORM_CONTRACTS_DIR"] = str(ROOT / "contracts")
     builder = SparkSession.builder
     if cloud:
         # Nhánh S3 giữ master từ spark-submit; thuật toán đo giữ nguyên.

@@ -1,10 +1,10 @@
-# Danh bạ agentregistry: FSDS Data Agent — chạy trên kagent (infra/k8s/agents/data-agent.yaml), model qua agentgateway.
+# Danh bạ agentregistry: Data Agent — chạy trên kagent (infra/k8s/agents/data-agent.yaml), model qua agentgateway.
 apiVersion: ar.dev/v1alpha1
 kind: Agent
 metadata:
   name: data-agent
 spec:
-  title: FSDS Data Agent
+  title: Data Agent
   description: "Kéo dữ liệu từ Online Feature Store theo ID: feature trả hàng của SKU và chunk chính sách theo chunk_id. Model: ModelConfig default-model-config (qua agentgateway)."
   source:
     image: ghcr.io/kagent-dev/kagent/golang-adk:0.10.3

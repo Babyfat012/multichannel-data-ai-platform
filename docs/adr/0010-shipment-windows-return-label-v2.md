@@ -19,7 +19,7 @@ unknown; chưa giao thì không có label. Phiên bản nhãn mới là
 đo yêu cầu Return được chấp nhận hoặc hoàn tiền hàng thành công, không phải
 tỷ lệ hàng vật lý cuối cùng được nhận lại.
 
-Bổ sung 2026-10-19 (learner nêu, grilling chốt): Return và Refund là hai sự kiện độc lập (ba ca
+Bổ sung 2026-10-19 (operator nêu, grilling chốt): Return và Refund là hai sự kiện độc lập (ba ca
 return_and_refund / refund_only / return_only). Nhãn **giữ gộp có chủ ý** — giá: một mô hình học trên nhãn này
 không tự phân biệt "khách giữ hàng" với "hàng về kho"; bù lại bằng cột `positive_kind` và tên feature
 `return_or_refund_rate_90d`. Ghép Return–Refund theo `return_id` để sau, khi mọi Channel gửi liên kết.

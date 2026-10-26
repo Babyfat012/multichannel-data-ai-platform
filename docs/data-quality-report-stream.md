@@ -1,6 +1,6 @@
 # Báo cáo chất lượng dữ liệu của Data Generator (Stream)
 
-Báo cáo này đối chiếu các dòng rubric về streaming với số đo thật. Phần Batch nằm ở [data-quality-report-batch.md](data-quality-report-batch.md). Thiết kế và bản đồ code xem [generator-design.md, mục Stream](generator-design.md#stream).
+Báo cáo này ghi số đo thực tế của nguồn streaming. Phần Batch nằm ở [data-quality-report-batch.md](data-quality-report-batch.md). Thiết kế và bản đồ code xem [generator-design.md, mục Stream](generator-design.md#stream).
 
 ## Phạm vi
 
@@ -24,16 +24,16 @@ Hai nguồn số trong báo cáo này:
 - **Số tổng** do generator đếm trong lúc phát và ghi vào `stream_manifest.json` trên MinIO. Số tin trong Kafka được đếm lại bằng `kafka-get-offsets.sh` để xác nhận không mất và không thừa tin.
 - **Ví dụ cụ thể** do `scripts/evidence/measure_order_snapshots_stream.py` phát lại Stream trong bộ nhớ (không cần Kafka) và chỉ ra một trường hợp thật cho mỗi vấn đề. Đây là phần đối xứng của lệnh `python -m generator report` bên Batch.
 
-## Tóm tắt theo rubric
+## Kết quả đo
 
-| Dòng rubric | Kết quả | Số đo chính |
+| Đặc tính | Ghi nhận | Số đo chính |
 |---|---|---|
-| Simulate late arrival | Đạt | Amazon trễ trung vị 5,27 phút, 4,98% trễ hơn 1 giờ (mục tiêu 5 phút và 5%) |
-| Simulate out-of-order | Đạt | 19.729 tin Amazon đến sau một tin có `EventTime` muộn hơn quá 1 giờ, bằng 98,8% số tin trễ nặng |
-| Simulate duplicate | Đạt | TikTok Shop trùng 1,49% (mục tiêu 1,5%), bản trùng giữ nguyên `tts_notification_id` |
-| Simulate burst | Đạt | Giờ cao điểm livestream gấp 5,89 lần giờ thường (mục tiêu 5 đến 8 lần, đáp án của lần chạy là 5,45) |
-| Using generator configuration | Đạt | Mọi tham số nằm trong mục `streaming_problems` và `drift.tiktok_live` của `configs/*.yaml` |
-| Publish to a streaming platform | Đạt | 492.964 tin vào hai topic Kafka, số tin trong Kafka khớp số generator đếm |
+| Simulate late arrival | Đã đo | Amazon trễ trung vị 5,27 phút, 4,98% trễ hơn 1 giờ (mục tiêu 5 phút và 5%) |
+| Simulate out-of-order | Đã đo | 19.729 tin Amazon đến sau một tin có `EventTime` muộn hơn quá 1 giờ, bằng 98,8% số tin trễ nặng |
+| Simulate duplicate | Đã đo | TikTok Shop trùng 1,49% (mục tiêu 1,5%), bản trùng giữ nguyên `tts_notification_id` |
+| Simulate burst | Đã đo | Giờ cao điểm livestream gấp 5,89 lần giờ thường (mục tiêu 5 đến 8 lần, đáp án của lần chạy là 5,45) |
+| Using generator configuration | Đã đo | Mọi tham số nằm trong mục `streaming_problems` và `drift.tiktok_live` của `configs/*.yaml` |
+| Publish to a streaming platform | Đã đo | 492.964 tin vào hai topic Kafka, số tin trong Kafka khớp số generator đếm |
 
 ## Số đo của lần chạy
 
@@ -209,7 +209,7 @@ Hai cột cuối bằng nhau, nghĩa là không mất và không thừa tin nào
 Kafka giữ lại tin của mọi lần chạy trước. Muốn số tổng khớp đúng `rows` thì xóa dữ liệu Kafka trước khi phát lại:
 
 ```bash
-docker compose stop kafka && docker compose rm -f kafka && docker volume rm fsds_kafka-data
+docker compose stop kafka && docker compose rm -f kafka && docker volume rm platform_kafka-data
 docker compose up -d kafka
 ```
 

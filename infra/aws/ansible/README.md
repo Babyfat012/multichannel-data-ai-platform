@@ -1,15 +1,15 @@
 <!-- Mục đích: cách chạy Ansible cấu hình EC2 mốc 1 sau khi Terraform AWS đã apply. -->
-# Ansible AWS cho DE (mốc 1)
+# Ansible AWS Data Platform
 
 Cấu hình EC2 do [Terraform](../terraform/README.md) tạo: cài Docker, mount EBS
-vào `/mnt/fsds-data`, đồng bộ repo, chạy Compose (`docker-compose.yml` +
+vào `/mnt/platform-data`, đồng bộ repo, chạy Compose (`docker-compose.yml` +
 `docker-compose.aws.yml`), tạo warehouse Lakekeeper trên S3.
 
 SSH không đi qua Internet: `ProxyCommand` gọi `aws ssm start-session`, nên
 security group không cần mở cổng 22.
 
 Máy điều khiển cần AWS CLI đã đăng nhập, `session-manager-plugin`, Ansible và
-collection bên dưới. Private key `~/.ssh/fsds_aws` phải khớp `ssh_public_key`
+collection bên dưới. Private key `~/.ssh/platform_aws` phải khớp `ssh_public_key`
 của Terraform; đổi cả inventory và lệnh tunnel nếu dùng đường dẫn khác.
 
 ```bash

@@ -7,10 +7,10 @@ set -a; . ./.env; set +a
 export REGISTRY="${REGISTRY:-localhost:5001}"
 export TAG="${TAG:-$(git rev-parse HEAD)}"
 [[ "$TAG" != latest ]] || { echo 'TAG phải bất biến, không dùng latest' >&2; exit 1; }
-docker build -f docker/Dockerfile.train -t "fsds-train:$TAG" .
-scripts/run/push_images.sh "fsds-train:$TAG"
-K="kubectl --context kind-fsds-ml -n kubeflow"
-$K create secret generic fsds-minio --from-literal=AWS_ACCESS_KEY_ID="$MINIO_ROOT_USER" \
+docker build -f docker/Dockerfile.train -t "platform-train:$TAG" .
+scripts/run/push_images.sh "platform-train:$TAG"
+K="kubectl --context kind-platform -n kubeflow"
+$K create secret generic platform-minio --from-literal=AWS_ACCESS_KEY_ID="$MINIO_ROOT_USER" \
   --from-literal=AWS_SECRET_ACCESS_KEY="$MINIO_ROOT_PASSWORD" --dry-run=client -o yaml | $K apply -f - >/dev/null
 mkdir -p out/kfp
 $K port-forward svc/ml-pipeline-ui 8888:80 >/dev/null 2>&1 &

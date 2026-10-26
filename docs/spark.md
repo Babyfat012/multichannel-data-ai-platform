@@ -47,7 +47,7 @@ chọn gì, mà **vì sao**:
 `payload, source_file, export_date, ingested_at, run_id`. Đây là cái giá của Q1: muốn tra
 một đơn thì tra ở Silver. Bronze tồn tại để **chạy lại khi Silver lỗi**, không phải để tra cứu.
 
-**Hệ quả nữa:** mục rubric *schema evolution* nằm ở `02_silver_*.py`, **KHÔNG** ở Bronze.
+**Hệ quả nữa:** bước xử lý *schema evolution* nằm ở `02_silver_*.py`, **KHÔNG** ở Bronze.
 Tài liệu phải trỏ đúng chỗ đó.
 
 ---
@@ -79,8 +79,7 @@ Vì sao nguồn của Walmart là PostgreSQL (không phải file JSONL), và vì
 - giữa 2026-03-22 = **495 MB**
 - lớn nhất 2026-06-29 = **1,64 GB**
 
-Ngày lớn nhất lệch **224 lần** ngày nhỏ nhất theo **dung lượng file nguồn**. Đây chính là dòng
-rubric *skew*.
+Ngày lớn nhất lệch **224 lần** ngày nhỏ nhất theo **dung lượng file nguồn**. Đây là độ lệch theo dung lượng nguồn, không phải độ lệch thời gian xử lý task.
 
 **Đọc con số 224 cho đúng.** Nó đo dung lượng file JSONL nguồn, không đo tải của một task. Đo
 trên chính bảng Iceberg đã ghi (metadata `raw_amazon_orders.partitions`, 180 ngày,
@@ -112,7 +111,7 @@ Baseline **cố tình tắt tối ưu**:
 - `spark.sql.adaptive.enabled=false` (AQE tắt)
 - `spark.sql.shuffle.partitions=200`
 
-**Vì sao tắt AQE:** rubric cho điểm khi **chứng minh tìm ra và sửa được vấn đề hiệu năng**.
+**Vì sao tắt AQE:** cần một cấu hình đối chứng để đo riêng ảnh hưởng của AQE.
 Nếu bật AQE ngay từ đầu thì Spark tự sửa, không còn ảnh "trước" để so. AQE phải là **một
 phương án được đo**, không phải thứ bị giấu.
 
@@ -280,7 +279,7 @@ chưa điều tra.
 | Thời gian | **1.150,7s** (19 phút 11 giây) |
 | Số dòng ghi | **108.248.563** — khớp đúng tổng nguồn, không mất dòng |
 | Task stage ghi | **1.002** (trước khi AQE gộp; AQE gộp còn **69 task**, xem ảnh 06) |
-| Dung lượng bảng trên MinIO | `/data/fsds/lakehouse` = **10 GB** (ước ban đầu 17 GB) |
+| Dung lượng bảng trên MinIO | `/data/platform/lakehouse` = **10 GB** (ước ban đầu 17 GB) |
 | Nén | **zstd ~10 lần** (từ ~80,77 GiB JSONL xuống bảng 10 GB) |
 | Đĩa `/` sau khi chạy | còn **25 GB** (trước 33 GB → bảng ăn ~8 GB) |
 | Event log | `out/spark-events/app-20261011080203-0001` (5,7 MB, đã hoàn tất) |
@@ -355,11 +354,11 @@ thay thế kế hoạch cũ.
 
 **BẮT BUỘC bật MinIO trước.** `spark-master` không `depends_on` MinIO, nên bật mỗi 3 service
 Spark thì MinIO vẫn tắt, job đọc file và tính xong rồi **gãy đúng lúc ghi** với
-`BadRequestException: Malformed request: IO error at s3://fsds/lakehouse/...`. Gặp lỗi này
+`BadRequestException: Malformed request: IO error at s3://platform/lakehouse/...`. Gặp lỗi này
 thì `docker ps` xem MinIO có chạy không, **đừng** đi sửa Lakekeeper hay quyền S3.
 
 ```bash
-cd /home/phattl/eonsr/FSDS
+cd /path/to/checkout
 docker compose up -d minio minio-init                                        # BẮT BUỘC
 docker compose --profile spark up -d spark-master spark-worker-1 spark-worker-2
 bash scripts/setup/setup_lakekeeper.sh                                             # chạy lại được, đã có thì bỏ qua
@@ -391,12 +390,12 @@ thư mục đó phình, xoá được vì chỉ chứa jar tải lại được 
 
 **Xem lại bằng History Server** (Spark UI cổng 4040 chết cùng job):
 ```bash
-docker run -d --rm --name fsds-spark-history -p 18080:18080 --user root \
+docker run -d --rm --name platform-spark-history -p 18080:18080 --user root \
   -v "$PWD/out/spark-events:/spark-events:ro" \
   -e SPARK_HISTORY_OPTS="-Dspark.history.fs.logDirectory=file:///spark-events" \
   apache/spark:3.5.3-java17 /opt/spark/bin/spark-class \
   org.apache.spark.deploy.history.HistoryServer
-# mở http://localhost:18080 ; xong thì: docker stop fsds-spark-history
+# mở http://localhost:18080 ; xong thì: docker stop platform-spark-history
 ```
 
 Ba event log dùng được cho History Server là `app-20261010103931-0000` (lần 1),
@@ -415,7 +414,7 @@ Job `spark_jobs/bronze/ingest_amazon_order_snapshots.py` không chỉ chạy tay
 truyền `--window-days`, `--window-start`, tên bảng và `--run-id` từ Airflow
 Variables / run hiện tại, nên có thể lần từ bảng Bronze về đúng log của lần chạy.
 Các task dùng chung Airflow Connection `spark_default` (Spark standalone) và
-Variable `fsds_spark_packages`, được nạp bởi
+Variable `platform_spark_packages`, được nạp bởi
 [`scripts/setup/setup_airflow.sh`](../scripts/setup/setup_airflow.sh). Các bảng/tham số cho ba
 Channel mới được nạp riêng bởi
 [`scripts/setup/setup_dp1_file_channels.sh`](../scripts/setup/setup_dp1_file_channels.sh).

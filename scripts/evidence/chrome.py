@@ -81,7 +81,7 @@ async def chrome_page(
     await_promises=True,
 ):
     """Yield an enabled CDP page; close the socket and Chrome even if capture fails."""
-    with tempfile.TemporaryDirectory(prefix="fsds-evidence-chrome-") as directory:
+    with tempfile.TemporaryDirectory(prefix="platform-evidence-chrome-") as directory:
         profile = Path(directory)
         chrome = subprocess.Popen(
             [

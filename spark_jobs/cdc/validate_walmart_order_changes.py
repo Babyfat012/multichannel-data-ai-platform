@@ -21,7 +21,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--bootstrap", default=os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
     )
-    parser.add_argument("--topic", default=os.environ.get("KAFKA_TOPIC", "fsds_cdc.walmart.orders"))
+    parser.add_argument(
+        "--topic", default=os.environ.get("KAFKA_TOPIC", "platform_cdc.walmart.orders")
+    )
     parser.add_argument("--table", default="raw_walmart_cdc_v2")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--boundary-dir", required=True)

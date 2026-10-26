@@ -1,4 +1,4 @@
-"""DE-N2: đọc metadata, lập/thi hành kế hoạch, kiểm dữ liệu và lưu receipt JSON.
+"""Iceberg maintenance: đọc metadata, lập/thi hành kế hoạch, kiểm dữ liệu và lưu receipt JSON.
 
 Fingerprint = (count(*), sum(cast(xxhash64(tất cả cột theo schema) AS decimal(38,0)))).
 Tổng không phụ thuộc thứ tự dòng/file, không tràn bigint; đây là checksum xác suất,
@@ -304,7 +304,7 @@ def run_table(
                 current = snapshot_id(spark, table)
                 spark.sql(
                     f"ALTER TABLE {identifier(table)} SET TBLPROPERTIES "
-                    f"('fsds.maintenance.last_zorder_snapshot_id' = '{current}')"
+                    f"('platform.maintenance.last_zorder_snapshot_id' = '{current}')"
                 ).collect()
             if action["kind"] == "expire_snapshots":
                 check_tags(spark, table, receipt["generation_before"])
@@ -349,7 +349,7 @@ def arguments():
         "--config-json", help="Bản JSON từ Airflow Variable, cùng schema với --config"
     )
     parser.add_argument("--tables", help="JSON array hoặc danh sách bảng phân cách bằng dấu phẩy")
-    parser.add_argument("--receipt", default="/tmp/fsds-maintenance-receipt.json")
+    parser.add_argument("--receipt", default="/tmp/platform-maintenance-receipt.json")
     parser.add_argument("--catalog", default="lakehouse")
     parser.add_argument(
         "--local-warehouse", help="Dùng Hadoop local catalog thay vì build_spark REST"
@@ -368,7 +368,7 @@ def build_session(args):
             raise ValueError("Catalog không hợp lệ")
         return (
             SparkSession.builder.master("local[2]")
-            .appName("fsds-maintenance-local")
+            .appName("platform-maintenance-local")
             .config(
                 "spark.sql.extensions",
                 "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
@@ -382,7 +382,7 @@ def build_session(args):
         )
     from spark_jobs.lib.iceberg_session import build_spark
 
-    return build_spark("fsds-iceberg-maintenance", shuffle_partitions=4)
+    return build_spark("platform-iceberg-maintenance", shuffle_partitions=4)
 
 
 def main():

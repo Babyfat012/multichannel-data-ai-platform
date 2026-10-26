@@ -4,7 +4,7 @@ repos:
   - repo: local
     hooks:
       - id: check-registry
-        name: Kiểm registry hợp đồng (DE-N1)
+        name: Kiểm registry hợp đồng
         entry: uv run python -m spark_jobs.lib.data_contracts check-registry --contracts-dir contracts
         language: system
         pass_filenames: false

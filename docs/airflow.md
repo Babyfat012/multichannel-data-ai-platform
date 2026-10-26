@@ -2,7 +2,7 @@
 
 ## Xác minh Connection/Variable và Spark runtime ngày 2026-10-15
 
-DAG `fsds_runtime_config_check`, run `de_runtime_20261015`, hoàn tất **2/2
+DAG `platform_runtime_config_check`, run `de_runtime_20261015`, hoàn tất **2/2
 task success** từ 14:41:51 đến 14:42:02 UTC sau khi nạp lại cấu hình bằng
 `scripts/setup/setup_airflow.sh`. `airflow dags list-import-errors --output json`
 trả `[]`. [Manifest runtime](evidence/airflow-runtime-20261015.json) lưu trạng
@@ -10,8 +10,8 @@ thái, thời gian từng task và hai dòng log xác nhận; không chứa cred
 
 | Task | Kết quả kiểm chứng |
 |---|---|
-| `verify_connections_and_variables` | Lookup ba Connection `fsds_minio`, `fsds_postgres`, `fsds_kafka` và bốn Variable; resolve đủ 12 biến môi trường. Mật khẩu MinIO/PostgreSQL được mã hóa trong metadata DB; Kafka demo không có mật khẩu. |
-| `verify_spark_runtime` | `FsdsSparkSubmitOperator` lấy cấu hình ở runtime rồi submit tới `spark://spark-master:7077`; Spark thực thi `range(3)` và trả tổng bằng 3. `table_writes=0`. |
+| `verify_connections_and_variables` | Lookup ba Connection `platform_minio`, `platform_postgres`, `platform_kafka` và bốn Variable; resolve đủ 12 biến môi trường. Mật khẩu MinIO/PostgreSQL được mã hóa trong metadata DB; Kafka demo không có mật khẩu. |
+| `verify_spark_runtime` | `PlatformSparkSubmitOperator` lấy cấu hình ở runtime rồi submit tới `spark://spark-master:7077`; Spark thực thi `range(3)` và trả tổng bằng 3. `table_writes=0`. |
 
 ![Graph kiểm cấu hình và submit Spark, hai task success](images/airflow/fsds_runtime_config_check-graph-20261015.png)
 
@@ -29,7 +29,7 @@ env -u POSTGRES_PASSWORD docker compose --profile airflow up -d postgres airflow
 env -u POSTGRES_PASSWORD docker compose --profile spark up -d spark-master spark-worker-1
 env -u POSTGRES_PASSWORD bash scripts/setup/setup_airflow.sh
 env -u POSTGRES_PASSWORD docker compose --profile airflow exec -T airflow airflow dags list-import-errors --output json
-env -u POSTGRES_PASSWORD docker compose --profile airflow exec -T airflow airflow dags trigger fsds_runtime_config_check
+env -u POSTGRES_PASSWORD docker compose --profile airflow exec -T airflow airflow dags trigger platform_runtime_config_check
 ```
 
 `scripts/evidence/capture_airflow_runtime_evidence.py` xuất proof của run cố định
@@ -37,7 +37,7 @@ env -u POSTGRES_PASSWORD docker compose --profile airflow exec -T airflow airflo
 
 ## Mục đích
 
-Rubric `de` dòng 22–23 đòi DP1 có **Ingest** và **Validate**. DAG
+DP1 gồm **Ingest** và **Validate**. DAG
 `dags/dp1_bronze.py` có mười task, chạy tuần tự để không dồn hai Spark driver lên
 laptop cùng lúc:
 
@@ -52,7 +52,7 @@ không hỗ trợ `cluster` deploy mode cho ứng dụng Python, nên driver ch�
 container Airflow (`client` mode), executor chạy trên hai Spark worker. Airflow
 dùng PySpark **3.5.3** cùng phiên bản với cụm Spark và Java **17** cho jar Iceberg.
 Airflow 2.10.5 và Spark provider 5.0.1 được ghim trong `docker/Dockerfile.airflow`.
-Đây là cấu hình dev trên Compose; phần `mle` sau này mới chuyển sang Kubernetes.
+Đây là cấu hình dev trên Compose; ML Platform / LLM Platform sau này mới chuyển sang Kubernetes.
 
 ## Validate kiểm gì
 
@@ -93,7 +93,7 @@ env -u POSTGRES_PASSWORD docker compose --profile airflow exec airflow airflow d
 ```
 
 `POSTGRES_PASSWORD` có thể đã được khai báo trong shell (ví dụ trong môi trường làm việc
-khác); `env -u` bảo đảm Compose lấy credential thống nhất từ file `.env` của FSDS.
+khác); `env -u` bảo đảm Compose lấy credential thống nhất từ file `.env` của Data & AI Platform.
 
 Airflow UI: `http://localhost:8081` (cổng cấu hình bằng `AIRFLOW_WEB_PORT`).
 `airflow standalone` ghi mật khẩu admin lần đầu vào
@@ -124,8 +124,8 @@ Grid cho thấy cùng một lần chạy có đủ bốn task xanh; Duration x�
 ## Bảng thử và bước mở rộng
 
 `scripts/setup/setup_airflow.sh` tạo Connection `spark_default`, các Connection dùng
-chung `fsds_postgres`/`fsds_minio`/`fsds_kafka`, và các Variable `fsds_*`.
-`FsdsSparkSubmitOperator` đọc các nhóm cần thiết từ metadata DB tại runtime;
+chung `platform_postgres`/`platform_minio`/`platform_kafka`, và các Variable `platform_*`.
+`PlatformSparkSubmitOperator` đọc các nhóm cần thiết từ metadata DB tại runtime;
 credential không được render vào template fields hay đưa vào application args.
 MinIO credential đi qua biến môi trường AWS của driver/worker, không nằm trong
 SparkConf; worker Compose nhận cùng cặp key từ `.env` để executor truy cập S3.
@@ -134,7 +134,7 @@ hiện có. Hai bảng đích là `raw_amazon_orders_dp1` và
 `raw_walmart_orders_dp1`, nên DAG không thay hai bảng Bronze đang làm bằng chứng.
 Chạy lại setup sẽ đặt lại Connection và các Variable này về giá trị thử nghiệm.
 Sau khi thử thành công, đổi Variables trong Airflow để chạy phạm vi thật. Đổi
-`fsds_dp1_amazon_window_days` thành `0` để chọn cả 180 ngày; chỉ đổi tên bảng đích
+`platform_dp1_amazon_window_days` thành `0` để chọn cả 180 ngày; chỉ đổi tên bảng đích
 sang tên thật khi chủ dự án quyết định thay bảng đó.
 
 Ba Channel mới đọc nguồn nhỏ từ `out/channels-small/source-exports`, được mount vào

@@ -1,4 +1,4 @@
-# Cấu hình đạt ngưỡng 100 GB raw của rubric. Giống `default.yaml` trừ hai chỗ:
+# Cấu hình đạt ngưỡng 100 GB raw của bộ dữ liệu. Giống `default.yaml` trừ hai chỗ:
 # `orders_per_day` và `storage.output_root`.
 #
 # Vì sao 851.506: ngưỡng đo bằng tổng `datasets[*].bytes` trong `run_manifest.json`

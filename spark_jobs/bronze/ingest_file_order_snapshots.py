@@ -2,7 +2,7 @@
 
 Mỗi dòng nguồn là một response API mô phỏng. Bronze giữ nguyên chuỗi JSON,
 không parse hoặc dedup; chỉ thêm đường dẫn file, Export Date, lúc nạp và run_id.
-Amazon giữ job riêng vì nó là bằng chứng baseline/AQE đã đo của rubric.
+Amazon giữ job riêng vì nó là bằng chứng baseline/AQE đã đo của bộ dữ liệu.
 """
 
 from __future__ import annotations

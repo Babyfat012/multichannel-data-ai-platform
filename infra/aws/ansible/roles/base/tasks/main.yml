@@ -37,7 +37,7 @@
     name: docker
     state: started
     enabled: true
-- name: Thêm người học vào nhóm docker
+- name: Thêm người vận hành vào nhóm docker
   ansible.builtin.user:
     name: '{{ ansible_user }}'
     groups: docker

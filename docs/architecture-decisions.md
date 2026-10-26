@@ -1,7 +1,7 @@
-# Kiến trúc DE đã triển khai
+# Kiến trúc Data & AI Platform Data Platform đã triển khai
 
 Nền tảng gom dữ liệu năm Channel của một Seller theo ba tầng Bronze, Silver,
-Gold. [Sơ đồ triển khai](diagrams/architecture-layer12.html) mô tả container và luồng
+Gold. [Sơ đồ triển khai](diagrams/data-ml-platform.html) mô tả container và luồng
 dữ liệu; [thuật ngữ](terminology.md) định nghĩa các tầng và đối tượng nghiệp vụ.
 
 ## Iceberg, MinIO và REST catalog
@@ -23,7 +23,7 @@ Gold Iceberg là đầu ra chính. Job xuất một lát Gold Walmart sang Postg
 warehouse để đo index và so dữ liệu giữa hai hệ thống bằng Trino. Bằng chứng
 hiện có là 1.875.607 Order Line Walmart; không tuyên bố đã nhân bản toàn bộ
 Gold năm Channel. DDL index, EXPLAIN và phép đối chiếu cùng SKU nằm trong
-[Storage](storage.md) và [Novel ideas](novel-ideas.md).
+[Storage](storage.md) và [Các cơ chế mở rộng](data-integration.md).
 
 ## Điều phối và quản trị
 
@@ -46,4 +46,4 @@ nguồn Stream được ghi trong [Flink](flink.md).
 Các service được bật theo từng nhóm để vừa RAM và đĩa máy phát triển. Không
 khởi động Compose toàn bộ khi chỉ cần chạy lại một proof; các lệnh nêu đúng
 service nằm trong tài liệu từng thành phần. Trạng thái và bằng chứng được
-tổng hợp tại [tiến độ DE](de-progress.md) và [ma trận rubric](de-rubric-matrix.md).
+tổng hợp tại [trạng thái Data Platform](data-platform-order-lifecycle-status.md) và [evidence](data-platform-evidence.md).

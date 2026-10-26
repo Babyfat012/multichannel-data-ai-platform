@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Model đang mang alias `production` trong MLflow → image KServe (model-inside-image) → registry → kind pull → apply.
 # MODEL_VERSION=N chỉ để smoke test hạ tầng với một version CỤ THỂ (bỏ qua gate production).
-# Cần: MLflow (Compose :5050), image fsds-train, KServe đã cài trong kind.
+# Cần: MLflow (Compose :5050), image platform-train, KServe đã cài trong kind.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 set -a; . ./.env; set +a
@@ -30,14 +30,14 @@ digest=$(cat "$ctx/model.lgb" ml/*.py docker/Dockerfile.serve | sha256sum | cut 
 code_tag=${TAG:-$(git rev-parse HEAD)}
 [[ "$code_tag" != latest ]] || { echo "Không dùng TAG=latest" >&2; exit 1; }
 REGISTRY="${REGISTRY:-localhost:5001}"
-source_image="fsds-return-risk:v$version-$code_tag-$digest"
+source_image="platform-return-risk:v$version-$code_tag-$digest"
 image="$REGISTRY/$source_image"
 docker build -q -f docker/Dockerfile.serve --build-arg MODEL_VERSION="$version" -t "$source_image" "$ctx"
 docker tag "$source_image" "$image"
 docker push "$image"
-K="kubectl --context kind-fsds-ml"
+K="kubectl --context kind-platform"
 $K create namespace ml-serving --dry-run=client -o yaml | $K apply -f - >/dev/null
-$K -n ml-serving create secret generic fsds-minio --from-literal=AWS_ACCESS_KEY_ID="$MINIO_ROOT_USER" \
+$K -n ml-serving create secret generic platform-minio --from-literal=AWS_ACCESS_KEY_ID="$MINIO_ROOT_USER" \
   --from-literal=AWS_SECRET_ACCESS_KEY="$MINIO_ROOT_PASSWORD" --dry-run=client -o yaml | $K apply -f - >/dev/null
 sed -e "s|@@IMAGE@@|$image|" -e "s|@@VERSION@@|$version|" infra/k8s/ml/return-risk.yaml | $K apply -f -
 $K -n ml-serving wait --for=condition=Ready inferenceservice/return-risk --timeout=300s

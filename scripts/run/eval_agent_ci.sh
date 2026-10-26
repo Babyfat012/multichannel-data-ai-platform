@@ -10,7 +10,7 @@ eval "$(scripts/setup/vault_env.sh agentgateway)"
 EVAL_AGENT=${EVAL_AGENT:-data-agent}
 feature_port=${EVAL_FEATURE_PORT:-18000}
 gateway_port=${EVAL_GATEWAY_PORT:-18300}
-K=(kubectl --context "${KCTX:-kind-fsds-ml}")
+K=(kubectl --context "${KCTX:-kind-platform}")
 "${K[@]}" -n feature-store port-forward svc/feature-api "$feature_port:8000" >out/eval-feature-forward.log 2>&1 &
 feature_pid=$!
 "${K[@]}" -n agentgateway port-forward svc/agentgateway "$gateway_port:3000" >out/eval-gateway-forward.log 2>&1 &

@@ -20,7 +20,7 @@ from airflow.models import DagBag, DagRun
 from airflow.hooks.base import BaseHook
 from airflow.utils.session import create_session
 
-dag_id = "fsds_runtime_config_check"
+dag_id = "platform_runtime_config_check"
 run_id = "de_runtime_20261015"
 bag = DagBag(dag_folder="/opt/airflow/dags", include_examples=False)
 if bag.import_errors:
@@ -39,17 +39,17 @@ with create_session() as session:
                    "started_at": task.start_date.isoformat(),
                    "completed_at": task.end_date.isoformat()} for task in tasks],
     }
-connections = [BaseHook.get_connection(name) for name in ("fsds_minio", "fsds_postgres", "fsds_kafka")]
+connections = [BaseHook.get_connection(name) for name in ("platform_minio", "platform_postgres", "platform_kafka")]
 result["connections"] = [{"connection_id": conn.conn_id, "password_encrypted": conn.is_encrypted}
                          for conn in connections]
 logs = Path("/opt/airflow/logs") / ("dag_id=" + dag_id) / ("run_id=" + run_id)
 result["proof_lines"] = [line for path in sorted(logs.rglob("*.log"))
                          for line in path.read_text().splitlines()
-                         if "FSDS runtime configuration resolved:" in line or "FSDS Spark runtime smoke:" in line]
+                         if "PLATFORM runtime configuration resolved:" in line or "PLATFORM Spark runtime smoke:" in line]
 if len(result["proof_lines"]) != 2:
     raise RuntimeError("Expected one configuration and one Spark success proof line")
 result["scope"] = "Connection/Variable lookup and three-row Spark standalone query; no source or table writes"
-print("FSDS_EVIDENCE_JSON=" + json.dumps(result))
+print("PLATFORM_EVIDENCE_JSON=" + json.dumps(result))
 """
     env = os.environ.copy()
     env.pop("POSTGRES_PASSWORD", None)
@@ -70,7 +70,7 @@ print("FSDS_EVIDENCE_JSON=" + json.dumps(result))
         env=env,
         text=True,
     )
-    marker = "FSDS_EVIDENCE_JSON="
+    marker = "PLATFORM_EVIDENCE_JSON="
     evidence = json.loads(
         next(line[len(marker) :] for line in output.splitlines() if line.startswith(marker))
     )

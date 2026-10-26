@@ -1,19 +1,17 @@
-<!-- Mục đích: mô tả Terraform/Ansible AWS, quyết định bảo mật và vị trí proof IaC cho rubric. -->
+<!-- Mục đích: mô tả Terraform/Ansible AWS, quyết định bảo mật và vị trí proof IaC cho phép đo. -->
 # Infrastructure as Code — AWS mốc 1
 
-Đích: `ap-southeast-1`, một EC2 DE batch + hai bucket S3. **Chưa chạy AWS**;
+Đích: `ap-southeast-1`, một EC2 Data Platform batch + hai bucket S3. **Chưa chạy AWS**;
 kiểm offline tại readiness không thay proof apply.
 Các bước lệnh đầy đủ: [runbook AWS](aws-deploy.md).
 Sơ đồ [hạ tầng AWS](diagrams/aws-infra.html) có cả hướng mở rộng EKS; gói hiện
-tại không tạo cluster. MLE tiếp tục chạy local; dòng 44 là Terraform **cloud
-services** (EC2/VPC/S3/IAM), dòng 45 là Ansible cấu hình EC2, chưa chứng minh MLE
-triển khai lên EKS.
+tại không tạo cluster. Terraform quản lý EC2/VPC/S3/IAM; Ansible cấu hình runtime trên EC2. ML Platform / LLM Platform tiếp tục chạy local, chưa có bằng chứng triển khai lên EKS.
 
 ## Terraform tạo gì và vì sao
 
 | Tài nguyên | Cấu hình / quyết định bảo mật |
 |---|---|
-| VPC, public subnet, Internet Gateway, route và association | VPC riêng `10.42.0.0/16`, subnet `10.42.0.0/24`; egress kéo image, gọi SSM và S3. Dùng public IPv4 thay NAT Gateway ở mốc học tập |
+| VPC, public subnet, Internet Gateway, route và association | VPC riêng `10.42.0.0/16`, subnet `10.42.0.0/24`; egress kéo image, gọi SSM và S3. Dùng public IPv4 thay NAT Gateway ở cấu hình hiện hành |
 | Security group | **Không ingress**, egress IPv4; không mở SSH/UI ra Internet. SSM agent chủ động gọi ra AWS, SSH chạy qua Session Manager |
 | EC2 + key pair | Ubuntu 24.04 Canonical, `t3.xlarge` 4 vCPU/16 GiB; chỉ đưa public key vào Terraform. Key private giữ trên laptop; CPU credit `standard` tránh phí surplus |
 | Metadata EC2 | Bắt buộc **IMDSv2**, hop limit **2** cho container lấy credential qua thêm một hop; không nhúng access key vào Compose |
@@ -49,8 +47,8 @@ infra/aws/
 | Role | Việc làm |
 |---|---|
 | `base` | Kiểm Ubuntu 24.04; cài Docker/Compose, AWS CLI v2, Python venv/rsync; thêm user vào nhóm docker |
-| `data_disk` | Tìm EBS theo volume ID NVMe, kiểm/mount disk vào `/mnt/fsds-data`; không dựa vào tên `/dev/sdf` trên Nitro |
-| `app` | Rsync repo có loại secret/dữ liệu local; render `.env` mode 0600, tạo Fernet, build driver/executor cùng Python; bật PostgreSQL/Lakekeeper/Spark/Airflow, bootstrap warehouse S3 và Variable Airflow; venv `/mnt/fsds-data/venv` |
+| `data_disk` | Tìm EBS theo volume ID NVMe, kiểm/mount disk vào `/mnt/platform-data`; không dựa vào tên `/dev/sdf` trên Nitro |
+| `app` | Rsync repo có loại secret/dữ liệu local; render `.env` mode 0600, tạo Fernet, build driver/executor cùng Python; bật PostgreSQL/Lakekeeper/Spark/Airflow, bootstrap warehouse S3 và Variable Airflow; venv `/mnt/platform-data/venv` |
 | `datahub` (mặc định `enable_datahub: true`) | Chuẩn bị uv, CLI `acryl-datahub==1.7.0.14`, Compose quickstart và secret riêng mode 0600; **không khởi động DataHub**. CLI cài cho user SSH, pha live chạy sau khi dừng Spark/Airflow |
 | `source_data` (tag riêng) | Sinh fixture hoặc scale theo tên dataset; sync S3 không `--delete`, loại `_truth/`; nạp Walmart vào PostgreSQL |
 | `smoke` (tag riêng) | Kiểm runtime và danh tính container, đọc/ghi S3/Iceberg trước pipeline |
@@ -65,8 +63,8 @@ cd infra/aws/terraform
 cp terraform.tfvars.example terraform.tfvars
 # Điền public key, Singapore/AZ, enable_budget=true và email thật.
 terraform init
-terraform plan -out de.tfplan
-terraform apply de.tfplan
+terraform plan -out data-platform.tfplan
+terraform apply data-platform.tfplan
 terraform output
 cd ../ansible
 ansible-galaxy collection install -r requirements.yml
@@ -91,7 +89,7 @@ sơ công khai; chỉ ảnh/receipt đã kiểm mới đặt trong `docs/`.
 <!-- chụp: Ansible PLAY RECAP failed=0 sau site/source_data/smoke; lưu docs/images/aws/ansible-recap.png. -->
 
 Các comment là vị trí cần ảnh, **chưa phải bằng chứng**. Không dùng ảnh
-`terraform validate` thay apply. Quy trình thu pipeline/ảnh theo từng dòng DE
-ở [bảng ảnh rubric](aws-deploy.md#anh). Khi nghỉ
-[dừng EC2](aws-deploy.md#dung-don); EBS/S3 còn tính tiền. Cuối khóa sao lưu rồi
+`terraform validate` thay apply. Quy trình thu pipeline/ảnh theo từng dòng Data Platform
+ở [bảng evidence](aws-deploy.md#anh). Khi nghỉ
+[dừng EC2](aws-deploy.md#dung-don); EBS/S3 còn tính tiền. Khi hủy môi trường sao lưu rồi
 `terraform destroy`, kiểm bucket version và tài nguyên còn lại trong Console.

@@ -53,7 +53,7 @@ def test_registry_and_pull_configuration():
     assert "registry-data:/var/lib/registry" in registry["volumes"]
     assert compose["networks"]["kind"]["external"] is True
     values = yaml.safe_load(read("infra/helm/feature-api/values.yaml"))
-    assert values["image"]["repository"] == "localhost:5001/fsds-feature-api"
+    assert values["image"]["repository"] == "localhost:5001/platform-feature-api"
     assert values["image"]["pullPolicy"] == "IfNotPresent"
     assert "localhost:5001" in read("ml/training_pipeline.py")
     assert 'set_image_pull_policy(task, "IfNotPresent")' in read("ml/training_pipeline.py")
@@ -113,17 +113,19 @@ def test_push_retags_to_immutable_release(tmp_path):
         "REGISTRY": "localhost:5001",
     }
     subprocess.run(
-        ["bash", str(ROOT / "scripts/run/push_images.sh"), "fsds-feast:0.66.0"], env=env, check=True
+        ["bash", str(ROOT / "scripts/run/push_images.sh"), "platform-feast:0.66.0"],
+        env=env,
+        check=True,
     )
     assert log.read_text().splitlines() == [
-        "image inspect fsds-feast:0.66.0",
-        "tag fsds-feast:0.66.0 localhost:5001/fsds-feast:abc123",
-        "push localhost:5001/fsds-feast:abc123",
+        "image inspect platform-feast:0.66.0",
+        "tag platform-feast:0.66.0 localhost:5001/platform-feast:abc123",
+        "push localhost:5001/platform-feast:abc123",
     ]
     log.unlink()
     env["TAG"] = "latest"
     result = subprocess.run(
-        ["bash", str(ROOT / "scripts/run/push_images.sh"), "fsds-feast:0.66.0"],
+        ["bash", str(ROOT / "scripts/run/push_images.sh"), "platform-feast:0.66.0"],
         env=env,
         capture_output=True,
     )
@@ -137,8 +139,8 @@ def test_compose_release_matches_published_tag():
         [
             "bash",
             "scripts/run/compose_release_images.sh",
-            "flink-jobmanager=fsds-flink",
-            "flink-taskmanager=fsds-flink",
+            "flink-jobmanager=platform-flink",
+            "flink-taskmanager=platform-flink",
         ],
         cwd=ROOT,
         env={**os.environ, "REGISTRY": "localhost:5001", "TAG": "abc123"},
@@ -147,7 +149,7 @@ def test_compose_release_matches_published_tag():
         check=True,
     )
     services = yaml.safe_load(result.stdout)["services"]
-    assert {v["image"] for v in services.values()} == {"localhost:5001/fsds-flink:abc123"}
+    assert {v["image"] for v in services.values()} == {"localhost:5001/platform-flink:abc123"}
 
 
 def test_eval_gate_propagates_failure_and_archives_summary_contract():
@@ -172,8 +174,8 @@ def test_registry_setup_repeated_on_existing_nodes(tmp_path):
         "args = sys.argv[1:]\n"
         'body = ""\n'
         'if tool == "kind":\n'
-        '    assert args == ["get", "nodes", "--name", "fsds-ml"]\n'
-        '    print("fsds-ml-control-plane\\nfsds-ml-worker")\n'
+        '    assert args == ["get", "nodes", "--name", "platform"]\n'
+        '    print("platform-control-plane\\nplatform-worker")\n'
         'elif "containerd" in args:\n'
         '    print("config_path = \\"/etc/containerd/certs.d\\"")\n'
         'elif tool == "kubectl" or "cp" in args:\n'
@@ -189,7 +191,7 @@ def test_registry_setup_repeated_on_existing_nodes(tmp_path):
         **os.environ,
         "PATH": f"{tmp_path}:{os.environ['PATH']}",
         "CALL_LOG": str(log),
-        "KIND_CLUSTER": "fsds-ml",
+        "KIND_CLUSTER": "platform",
     }
     for _ in range(2):
         subprocess.run(
@@ -202,7 +204,7 @@ def test_registry_setup_repeated_on_existing_nodes(tmp_path):
     hosts = [call for call in calls if call[0] == "docker" and "cp" in call[1]]
     assert len(hosts) == 4
     assert len({call[2] for call in hosts}) == 1
-    assert {call[1][2] for call in hosts} == {"fsds-ml-control-plane", "fsds-ml-worker"}
+    assert {call[1][2] for call in hosts} == {"platform-control-plane", "platform-worker"}
     assert 'server = "http://registry:5000"' in hosts[0][2]
     configs = [yaml.safe_load(call[2]) for call in calls if call[0] == "kubectl"]
     assert configs[0] == configs[1]

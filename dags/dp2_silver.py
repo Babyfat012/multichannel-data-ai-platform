@@ -8,16 +8,16 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from airflow import DAG
-from fsds_spark_operator import FsdsSparkSubmitOperator as SparkSubmitOperator
+from platform_spark_operator import PlatformSparkSubmitOperator as SparkSubmitOperator
 
-PACKAGES = "{{ var.value.fsds_spark_packages }}"
+PACKAGES = "{{ var.value.platform_spark_packages }}"
 RUN_ID = "{{ run_id }}"
-AMAZON_BRONZE = "{{ var.value.fsds_dp2_amazon_bronze_table }}"
-WALMART_BRONZE = "{{ var.value.fsds_dp2_walmart_bronze_table }}"
-AMAZON_SILVER = "{{ var.value.fsds_dp2_amazon_silver_table }}"
-WALMART_SILVER = "{{ var.value.fsds_dp2_walmart_silver_table }}"
-GOLD_TABLE = "{{ var.value.fsds_dp2_gold_table }}"
-AMAZON_DIM = "{{ var.value.fsds_dp2_amazon_dim_table }}"
+AMAZON_BRONZE = "{{ var.value.platform_dp2_amazon_bronze_table }}"
+WALMART_BRONZE = "{{ var.value.platform_dp2_walmart_bronze_table }}"
+AMAZON_SILVER = "{{ var.value.platform_dp2_amazon_silver_table }}"
+WALMART_SILVER = "{{ var.value.platform_dp2_walmart_silver_table }}"
+GOLD_TABLE = "{{ var.value.platform_dp2_gold_table }}"
+AMAZON_DIM = "{{ var.value.platform_dp2_amazon_dim_table }}"
 SPARK_CONF = {
     "spark.driver.host": "airflow",
     "spark.driver.bindAddress": "0.0.0.0",
@@ -33,7 +33,7 @@ with DAG(
     is_paused_upon_creation=False,
     max_active_runs=1,
     max_active_tasks=1,
-    tags=["fsds", "dp2", "silver"],
+    tags=["platform", "dp2", "silver"],
 ) as dag:
     ingest_amazon = SparkSubmitOperator(
         task_id="ingest_amazon_silver",
@@ -109,8 +109,8 @@ with DAG(
     previous = validate_walmart
     ingest_amazon >> validate_amazon >> ingest_walmart >> validate_walmart
     for channel in ("tiktok_shop", "shopify", "shopee"):
-        bronze_table = "{{ var.value.fsds_dp2_" + channel + "_bronze_table }}"
-        silver_table = "{{ var.value.fsds_dp2_" + channel + "_silver_table }}"
+        bronze_table = "{{ var.value.platform_dp2_" + channel + "_bronze_table }}"
+        silver_table = "{{ var.value.platform_dp2_" + channel + "_silver_table }}"
         ingest = SparkSubmitOperator(
             task_id=f"ingest_{channel}_silver",
             application="/opt/spark_jobs/silver/build_file_order_snapshots.py",
@@ -159,7 +159,7 @@ with DAG(
     for channel in ("tiktok_shop", "shopify", "shopee"):
         gold_sources += [
             f"--{channel.replace('_', '-')}-source",
-            "{{ var.value.fsds_dp2_" + channel + "_silver_table }}",
+            "{{ var.value.platform_dp2_" + channel + "_silver_table }}",
         ]
     gold_args = ["--table", GOLD_TABLE, "--run-id", RUN_ID, *gold_sources]
     build_gold = SparkSubmitOperator(

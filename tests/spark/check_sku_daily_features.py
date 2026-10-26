@@ -5,7 +5,7 @@ nhận cùng số với ảnh chụp ngày đó, tức train và serve cùng m�
 
 docker run --rm --network none --read-only --tmpfs /tmp:rw,exec,size=1g \
   --mount type=bind,src=$PWD,dst=/workspace,readonly --entrypoint python \
-  fsds-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_sku_daily_features.py
+  platform-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_sku_daily_features.py
 """
 
 import os

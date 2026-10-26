@@ -1,8 +1,8 @@
-<!-- Mô tả stream vận hành v2, oracle độc lập và harness do planner chạy. -->
+<!-- Mô tả stream vận hành v2, oracle độc lập và harness do người vận hành chạy. -->
 # Stream nguồn v2 — Kafka → Flink
 
 Gói D triển khai bốn feed nguồn Seller quan sát được. Bản sửa 10b đã kiểm local,
-đang chờ planner chạy lại Kafka/Flink harness. Run 10 trước đó có kiểm late
+đang chờ người vận hành chạy lại Kafka/Flink harness. Run 10 trước đó có kiểm late
 quá rộng nên không được dùng làm proof số late của bản này. Không dùng nguồn truth, không tạo label hoặc
 headline sales. Giữ nguyên job v1 trong `flink_jobs/`.
 
@@ -90,11 +90,11 @@ chu kỳ. Comparator bắt buộc `late == oracle.late` từng topic, bảo toà
 input proof, cùng multiset envelope/retry với bản ba partition, và oracle có
 late > 0 ở ít nhất hai topic. `late_within_periodic_range` đã bị xóa. Nếu runtime
 không áp dụng được on-event hoặc kết quả lệch một record, proof FAIL; không nới
-sang khoảng [0,input]. Planner cần xác minh khả năng pushdown và output thực
+sang khoảng [0,input]. người vận hành cần xác minh khả năng pushdown và output thực
 bằng harness, không suy từ unit test thành runtime pass.
 
 Với nguồn scale 200 đơn/ngày × 10 ngày, seed 7, delay 3600 giây không đổi,
-chạy producer file sink trên nguồn quan sát planner đã sinh cho oracle proof:
+chạy producer file sink trên nguồn quan sát người vận hành đã sinh cho oracle proof:
 delivery 3412, return 706, refund 566, stock 0 (gồm retry). Đây là kỳ vọng một
 partition, không phải số đo Flink. Fixture unit nhỏ chỉ có một topic late ở
 delay 3600; test comparator cần hai topic dùng delay 0, có test riêng delay
@@ -130,9 +130,9 @@ Dùng thư mục đích mới ở mỗi lần chạy:
 Producer/oracle giữ nguồn và ledger trong RAM; đây là harness bounded nhỏ,
 chưa được benchmark bộ scale cực đại 20 triệu record.
 
-## Harness Kafka/Flink — planner chạy
+## Harness Kafka/Flink — người vận hành chạy
 
-Chuẩn bị image `apache/kafka:3.9.1` và `fsds-flink:1.20.3-kafka3.4.0` (build từ
+Chuẩn bị image `apache/kafka:3.9.1` và `platform-flink:1.20.3-kafka3.4.0` (build từ
 `docker/Dockerfile.flink`) trước. Harness dùng `--pull never`, không đổi Compose,
 không đụng service sẵn có, tạo network/container riêng theo PID. Broker KRaft
 có ba partition/topic; cổng host localhost ngẫu nhiên. Source scale
@@ -169,12 +169,12 @@ recovery, chưa chứng minh JobManager HA hoặc thảm họa mất disk.
   --output /tmp/v2-compare-1.json
 ```
 
-GCP: planner bổ sung checklist triển khai sau; lượt này không gọi Cloud hoặc
+GCP: người vận hành bổ sung checklist triển khai sau; lượt này không gọi Cloud hoặc
 thay `docs/gcp-checklist.md`.
 
 ## Số đo
 
-Planner chạy `bash tests/harness/run_order_lifecycle_stream.sh` ngày 2026-10-19 (Kafka 3.9.1 + Flink 1.20.3 trong container tạm,
+người vận hành chạy `bash tests/harness/run_order_lifecycle_stream.sh` ngày 2026-10-19 (Kafka 3.9.1 + Flink 1.20.3 trong container tạm,
 nguồn `generator.generate_order_lifecycle` 200 đơn/ngày × 10 ngày, seed 7): **exit 0, cả 2 epoch `passed`, 190 s**. Receipt:
 [`evidence/stream-v2-local-20261019.json`](evidence/stream-v2-local-20261019.json).
 
@@ -187,7 +187,7 @@ nguồn `generator.generate_order_lifecycle` 200 đơn/ngày × 10 ngày, seed 7
 | Daily windows | `daily_event_windows` pass | oracle nguồn, retry chỉ đếm một lần |
 | TaskManager restart | checkpoint có state sau 11,0 s → stop/start TM → restore checkpoint **28** sau 3,1 s → kept commit **15.261 = oracle** → REST cancel `CANCELED` | checkpoint state/restore REST + output exact |
 
-Planner sửa harness/SQL trong lúc chạy (đều có comment tại chỗ): cổng Kafka chọn trước khi start (KRaft cấm đổi
+người vận hành sửa harness/SQL trong lúc chạy (đều có comment tại chỗ): cổng Kafka chọn trước khi start (KRaft cấm đổi
 advertised listener), `kafka_partition`, watermark `INTERVAL 'H:MM:SS' HOUR TO SECOND`, batch mode đặt trước `CREATE TABLE`,
 quote `` `day` ``, `sql-client` chạy user `flink`. Ca restart bản bounded từng fail 2/2 vì job xong trước checkpoint đầu ⇒ đổi
 sang unbounded + cancel qua REST (không còn phụ thuộc tốc độ máy).

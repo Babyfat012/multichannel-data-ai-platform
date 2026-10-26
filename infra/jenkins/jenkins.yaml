@@ -1,7 +1,7 @@
 # Cấu hình Jenkins bằng code (JCasC). Secret KHÔNG nằm ở đây: lấy từ biến môi trường do
 # scripts/setup/setup_jenkins.sh đọc từ Vault lúc khởi động.
 jenkins:
-  systemMessage: "FSDS CI/CD (local). Secret ứng dụng nằm ở Vault; Jenkins chỉ giữ token chỉ-đọc."
+  systemMessage: "Platform CI/CD (local). Secret ứng dụng nằm ở Vault; Jenkins chỉ giữ token chỉ-đọc."
   numExecutors: 1
   securityRealm:
     local:
@@ -19,7 +19,7 @@ credentials:
           - string:
               scope: GLOBAL
               id: vault-ci-token
-              description: Token Vault chỉ-đọc (policy fsds-read)
+              description: Token Vault chỉ-đọc (policy platform-read)
               secret: "${VAULT_CI_TOKEN}"
           - file:
               scope: GLOBAL

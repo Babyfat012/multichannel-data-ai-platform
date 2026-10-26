@@ -18,15 +18,15 @@ done
 case "$what" in skew|maintenance|warehouse) ;; *) usage >&2; exit 2 ;; esac
 # Chỉ export cấu hình runtime; Docker Compose tự đọc secret từ .env.
 if [[ -f .env ]]; then
-  for key in FSDS_STORAGE AWS_REGION RAW_BUCKET FSDS_DATASET_NAME FSDS_SPARK_PACKAGES_AWS COMPOSE_FILE FSDS_ORDER_LIFECYCLE_CUTOFF; do
+  for key in PLATFORM_STORAGE AWS_REGION RAW_BUCKET PLATFORM_DATASET_NAME PLATFORM_SPARK_PACKAGES_AWS COMPOSE_FILE PLATFORM_ORDER_LIFECYCLE_CUTOFF; do
     if [[ ! -v "$key" ]]; then
       value=$( (set -a; source .env; printf '%s' "${!key:-}") )
       export "$key=$value"
     fi
   done
 fi
-[[ "${FSDS_STORAGE:-}" = s3 ]] || { echo 'Chỉ chạy với FSDS_STORAGE=s3' >&2; exit 2; }
-: "${RAW_BUCKET:?}" "${AWS_REGION:?}" "${FSDS_SPARK_PACKAGES_AWS:?}"
+[[ "${PLATFORM_STORAGE:-}" = s3 ]] || { echo 'Chỉ chạy với PLATFORM_STORAGE=s3' >&2; exit 2; }
+: "${RAW_BUCKET:?}" "${AWS_REGION:?}" "${PLATFORM_SPARK_PACKAGES_AWS:?}"
 compose=(docker compose --profile airflow --profile spark)
 if [[ -n "$(docker ps -q --filter label=com.docker.compose.project=datahub)" ]]; then
   echo 'Dừng pha DataHub trước khi đo để đủ RAM.' >&2; exit 1
@@ -49,17 +49,17 @@ collect() {
 }
 trap collect EXIT
 submit() {
-  "${compose[@]}" exec -T -e "FSDS_SPARK_EVENT_LOG_DIR=file://$work/events" airflow spark-submit \
+  "${compose[@]}" exec -T -e "PLATFORM_SPARK_EVENT_LOG_DIR=file://$work/events" airflow spark-submit \
     --master spark://spark-master:7077 --driver-memory 2g \
     --conf spark.driver.host=airflow --conf spark.driver.bindAddress=0.0.0.0 \
     --conf spark.cores.max=2 --conf spark.executor.cores=1 --executor-memory 2g \
-    --conf spark.jars.ivy=/opt/airflow/.ivy2 --packages "$FSDS_SPARK_PACKAGES_AWS" "$@"
+    --conf spark.jars.ivy=/opt/airflow/.ivy2 --packages "$PLATFORM_SPARK_PACKAGES_AWS" "$@"
 }
-cutoff="${FSDS_ORDER_LIFECYCLE_CUTOFF:-2026-06-01T00:00:00.000000Z}"
+cutoff="${PLATFORM_ORDER_LIFECYCLE_CUTOFF:-2026-06-01T00:00:00.000000Z}"
 case "$what" in
   skew)
     submit /opt/spark_jobs/measure/measure_order_lifecycle_skew.py \
-      --source "s3a://$RAW_BUCKET/order_lifecycle/${FSDS_DATASET_NAME:-fixture}" \
+      --source "s3a://$RAW_BUCKET/order_lifecycle/${PLATFORM_DATASET_NAME:-fixture}" \
       --workdir "$work/skew" --output "$work/skew.json" \
       --buckets 18 --partitions 16 2>&1 | tee "$output/run.log"
     ;;
@@ -79,7 +79,7 @@ PY
       --validate-receipt "$work/maintenance.json" 2>&1 | tee "$output/validate.log"
     ;;
   warehouse)
-    run_id="${FSDS_V2_RUN_ID:-$(cat out/receipts-v2-run/latest-run-id)}"
+    run_id="${PLATFORM_V2_RUN_ID:-$(cat out/receipts-v2-run/latest-run-id)}"
     submit /opt/spark_jobs/warehouse/export_order_lifecycle.py \
       --run-id "$run_id" --cutoff "$cutoff" --sql-dir /opt/sql/warehouse_lifecycle \
       --receipt "$work/warehouse-export.json" 2>&1 | tee "$output/run.log"
@@ -89,7 +89,7 @@ import importlib.util
 import sys
 from spark_jobs.lib.order_lifecycle_warehouse import connect
 spec = importlib.util.spec_from_file_location(
-    'warehouse_measure', '/opt/fsds/scripts/evidence/measure_order_lifecycle_warehouse.py')
+    'warehouse_measure', '/opt/platform/scripts/evidence/measure_order_lifecycle_warehouse.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 conn = connect()

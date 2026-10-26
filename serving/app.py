@@ -1,4 +1,4 @@
-"""Web API kéo feature SKU (Feast/Redis) và chunk chính sách (Feast RAG/pgvector) — rubric `mle` dòng 79–81.
+"""Web API kéo feature SKU (Feast/Redis) và chunk chính sách (Feast RAG/pgvector).
 
 Chạy: `uvicorn serving.app:app` từ gốc repo, cần `FEAST_REPO_PATH` trỏ tới `feature_repo/`
 cùng biến môi trường mà `feature_store.yaml` đọc (FEAST_REGISTRY, FEAST_REDIS). Tìm chunk chỉ bật khi
@@ -27,10 +27,10 @@ VIEWS = {
 }
 MAX_SKUS = 100
 
-# Số đo Web API (rubric `mle` dòng 46): Prometheus lấy ở /metrics; `handler` là mẫu đường dẫn để không nổ nhãn.
+# Số đo Web API: Prometheus lấy ở /metrics; `handler` là mẫu đường dẫn để không nổ nhãn.
 REQUESTS = Counter("http_requests_total", "Số request", ["method", "handler", "status"])
 LATENCY = Histogram("http_request_duration_seconds", "Thời gian xử lý", ["handler"])
-# Agent telemetry (rubric `mle` dòng 51): mỗi lượt gọi MCP tool, tách thành công / lỗi. Lỗi MCP vẫn là HTTP 200
+# Agent telemetry: mỗi lượt gọi MCP tool, tách thành công / lỗi. Lỗi MCP vẫn là HTTP 200
 # (isError trong JSON-RPC) nên không đếm được bằng http_requests_total.
 TOOL_CALLS = Counter("mcp_tool_calls_total", "Số lượt gọi MCP tool", ["tool", "outcome"])
 
@@ -198,10 +198,10 @@ async def fetch_features(store, requested_skus):
 
 def create_app(store_factory=load_store, rag_factory=load_rag, http_factory=httpx.AsyncClient):
     """`store_factory`, `rag_factory`, `http_factory` để test thay bằng bản giả."""
-    # Cùng hàm tra feature, phơi ra thêm dạng MCP tool cho Agent (rubric `mle` dòng 81).
+    # Cùng hàm tra feature, phơi ra thêm dạng MCP tool cho Agent.
     # stateless: request MCP nào cũng tới được replica nào, không cần sticky session.
     mcp = MCPServer(
-        "fsds-features",
+        "platform-features",
         instructions=(
             "Tra feature tỷ lệ trả hàng theo SKU, chấm điểm rủi ro Return cho đơn mới"
             " và tìm đoạn chính sách trả hàng."
@@ -285,7 +285,7 @@ def create_app(store_factory=load_store, rag_factory=load_rag, http_factory=http
         async with app.state.http, mcp.session_manager.run():
             yield
 
-    app = FastAPI(title="FSDS feature API", lifespan=lifespan)
+    app = FastAPI(title="Feature API", lifespan=lifespan)
     app.mount("/mcp", mcp_app)
 
     @app.middleware("http")

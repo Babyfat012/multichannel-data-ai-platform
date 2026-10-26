@@ -1,4 +1,4 @@
-<!-- Simulated policy for the FSDS coursework. Not Shopee's real policy. -->
+<!-- Simulated policy for this simulated dataset. Not Shopee's real policy. -->
 # Shopee — Return and Refund Policy (simulated)
 
 ## Return window

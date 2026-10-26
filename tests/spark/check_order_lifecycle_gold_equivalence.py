@@ -8,7 +8,7 @@ bằng `exceptAll` hai chiều + fingerprint. Chạy (Docker):
     docker run --rm --network none --read-only --tmpfs /tmp:rw,size=2g \\
       -e PYSPARK_SUBMIT_ARGS='--driver-memory 3g pyspark-shell' \\
       --mount type=bind,src=$PWD,dst=/workspace,readonly --entrypoint python \\
-      fsds-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_order_lifecycle_gold_equivalence.py
+      platform-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_order_lifecycle_gold_equivalence.py
 """
 
 import os
@@ -23,7 +23,7 @@ os.environ.setdefault("SPARK_LOCAL_IP", "127.0.0.1")
 os.environ.setdefault("SPARK_LOCAL_HOSTNAME", "localhost")
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-os.environ["FSDS_CONTRACTS_DIR"] = str(ROOT / "contracts")
+os.environ["PLATFORM_CONTRACTS_DIR"] = str(ROOT / "contracts")
 
 from pyspark.sql import SparkSession
 

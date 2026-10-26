@@ -12,7 +12,7 @@ hơn số lớn nhất hiện có (hiện là 0013).
 | [0002-seller-advice-cloud-scope.md](0002-seller-advice-cloud-scope.md) | Quyền tư vấn và phạm vi Cloud |
 | [0003-iceberg-va-rest-catalog-cho-lakehouse.md](0003-iceberg-va-rest-catalog-cho-lakehouse.md) | Nền lakehouse hiện tại |
 | [0003-gcp-on-demand.md](0003-gcp-on-demand.md) | GCP on-demand |
-| [0004-local-learning-cloud-delivery.md](0004-local-learning-cloud-delivery.md) | Local để học, Cloud là đích |
+| [0004-local-development-cloud-delivery.md](0004-local-development-cloud-delivery.md) | Local để học, Cloud là đích |
 | [0005-five-channel-data-contract.md](0005-five-channel-data-contract.md) | Warehouse/năm Channel/tiền tệ; phần 180 ngày nguồn được 0008 thay thế |
 | [0006-gcs-feast-integration.md](0006-gcs-feast-integration.md) | GCS + Feast Spark/Redis; cần POC |
 | [0007-versioned-publication.md](0007-versioned-publication.md) | Generation/manifest/request pin; cần POC |
@@ -24,6 +24,4 @@ hơn số lớn nhất hiện có (hiện là 0013).
 | [0013-weekly-contiguous-coverage.md](0013-weekly-contiguous-coverage.md) | Coverage scale theo tuần nối tiếp, union interval cho nhãn và giới hạn evidence từng line |
 
 Quyết định Q mới đã được xác nhận thay phần cũ tương ứng; ghi rõ quan hệ
-thay thế thay vì diễn giải đoạn lịch sử là policy hiện hành. Ledger quy định
-nghiệm thu, ADR ghi trade-off, readiness
-ghi gate còn mở; không tài liệu nào tự chứng minh runtime đạt.
+thay thế thay vì diễn giải đoạn lịch sử là policy hiện hành. ADR ghi trade-off, contract ghi hành vi mong đợi, evidence ghi kết quả đã chạy. Thiết kế không tự chứng minh runtime hoạt động.

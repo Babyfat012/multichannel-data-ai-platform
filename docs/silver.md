@@ -276,7 +276,7 @@ Ba khoản này từng nằm ở mục "chưa quyết". Đã chốt, kèm lý do
   không đọc `buyer` (grep: không một dòng). Đưa nó lên bảng feature thì model vẫn có thể bắt được
   tương quan ngẫu nhiên — một cột *trông như* có ích mà thật ra là nhiễu. Phải ghi rõ ở tầng
   feature, không để người sau tưởng nó là feature đã kiểm.
-- `buyer_id` giữ làm **khoá nối**, **không** làm feature (đề xuất của planner, chưa có code để
+- `buyer_id` giữ làm **khoá nối**, **không** làm feature (đề xuất của người vận hành, chưa có code để
   cưỡng chế). Nó là mã 12 chữ số băm (`native_code(..., 12)`, không gian 10^12) — độ hạt gần như
   một-dòng-một-giá-trị. Dùng trực tiếp làm feature là rò rỉ danh tính chứ không phải học quy luật.
 
@@ -379,7 +379,7 @@ Ba chỗ dữ liệu **tự khớp nhau**, dùng làm kiểm tra chéo:
 | `number_of_items_unshipped` | null **0%** | null **100%** |
 | `quantity_shipped` | null **0%** | null **100%** |
 
-Đây chính là bằng chứng cho dòng rubric *handle schema evolution*: hai bộ chữ khác nhau của
+Đây là bằng chứng xử lý schema evolution: hai bộ chữ khác nhau của
 cùng bốn nghĩa đã về một bộ, và ba cột dạng 2026 không có thì null **tường minh** chứ không bị
 tính bù (mục 5).
 
@@ -419,7 +419,7 @@ Hệ quả cho công cụ: `spark_jobs/lib/day_selection.py` nay có **hai** cá
 ### 10.4 ĐÃ CHỐT (2026-10-13): cột partition của hai bảng Silver = `days(created_at)`
 
 Hai job ghi `partitionedBy(days(created_at))` — chia theo **ngày đặt hàng**. Đây từng là
-"khoản mở số 2"; **learner đã chốt 2026-10-13**, giữ đúng cột code đang dùng nên không phải
+"khoản mở số 2"; **operator đã chốt 2026-10-13**, giữ đúng cột code đang dùng nên không phải
 sửa job.
 
 Lý do đề xuất: sau dedup thì `export_date` (Amazon) và `fetched_at` (Walmart) chỉ còn nghĩa

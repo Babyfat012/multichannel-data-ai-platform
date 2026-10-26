@@ -42,7 +42,7 @@ def test_cli_flags_without_docker(args, code, token):
 def test_compose_mounts_v2_only_expected_services():
     """Kiểm mount nguồn v2 chỉ xuất hiện ở các service dự kiến."""
     services = yaml.safe_load((ROOT / "docker-compose.yml").read_text())["services"]
-    fixture = "${FSDS_ORDER_LIFECYCLE_DIR:-./out/order_lifecycle_live}:/data/order_lifecycle:ro"
+    fixture = "${PLATFORM_ORDER_LIFECYCLE_DIR:-./out/order_lifecycle_live}:/data/order_lifecycle:ro"
     mounted = {name for name, service in services.items() if fixture in service.get("volumes", [])}
     assert mounted == {"airflow", "spark-master", "spark-worker-1", "spark-worker-2"}
     assert "./out/receipts:/opt/airflow/receipts" in services["airflow"]["volumes"]
@@ -127,7 +127,7 @@ elif "cp" in args:
     dest = pathlib.Path(args[-1])
     dest.mkdir(parents=True, exist_ok=True)
     for task in ("check_contracts", "ingest_bronze", "build_silver", "build_gold", "validate_gold"):
-        (dest / (task + ".json")).write_text(json.dumps({"run_id": os.environ["FSDS_V2_RUN_ID"], "status": "passed"}))
+        (dest / (task + ".json")).write_text(json.dumps({"run_id": os.environ["PLATFORM_V2_RUN_ID"], "status": "passed"}))
 """)
     executable.chmod(0o755)
     log = tmp_path / "docker.jsonl"
@@ -139,9 +139,9 @@ elif "cp" in args:
         **os.environ,
         "PATH": f"{tmp_path}:{os.environ['PATH']}",
         "FAKE_DOCKER_LOG": str(log),
-        "FSDS_ORDER_LIFECYCLE_DIR": str(source),
-        "FSDS_V2_RUN_ID": run_id,
-        "FSDS_PYTHON": sys.executable,
+        "PLATFORM_ORDER_LIFECYCLE_DIR": str(source),
+        "PLATFORM_V2_RUN_ID": run_id,
+        "PLATFORM_PYTHON": sys.executable,
     }
     project = tmp_path / "project"
     (project / "scripts").mkdir(parents=True)
@@ -164,7 +164,7 @@ def test_all_phase_flags_parse(fake_runtime, phase):
     """Kiểm mọi tên pha được CLI nhận diện."""
     env, _, _ = fake_runtime
     if phase != "source":
-        env["FSDS_V2_TIMEOUT"] = "invalid"
+        env["PLATFORM_V2_TIMEOUT"] = "invalid"
     result = subprocess.run(
         [
             "bash",
@@ -218,7 +218,7 @@ def test_airflow_copies_run_receipts_before_stop(fake_runtime, state):
 def test_source_refuses_partial_directory(fake_runtime):
     """Kiểm từ chối thư mục nguồn dở dang để tránh ghi đè dữ liệu."""
     env, _, _ = fake_runtime
-    source = Path(env["FSDS_ORDER_LIFECYCLE_DIR"])
+    source = Path(env["PLATFORM_ORDER_LIFECYCLE_DIR"])
     (source / "manifest.json").unlink()
     (source / "partial.jsonl").write_text("keep")
     result = subprocess.run(
@@ -252,7 +252,7 @@ print("[]")
     curl.write_text("#!/bin/sh\nexit 0\n")
     curl.chmod(0o755)
     env["DATAHUB_PYTHON"] = str(publisher)
-    env.update(FSDS_STORAGE=storage, RAW_BUCKET="test-raw", AWS_REGION="ap-southeast-1")
+    env.update(PLATFORM_STORAGE=storage, RAW_BUCKET="test-raw", AWS_REGION="ap-southeast-1")
     result = subprocess.run(
         ["bash", str(project / "scripts/run/run_order_lifecycle_live.sh"), "--phase", "datahub"],
         env=env,
@@ -289,11 +289,11 @@ def test_s3_airflow_uses_remote_source_without_minio(fake_runtime, from_dotenv):
     aws.chmod(0o755)
     env["FAKE_AWS_LOG"] = str(project.parent / "aws.log")
     settings = dict(
-        FSDS_STORAGE="s3",
+        PLATFORM_STORAGE="s3",
         RAW_BUCKET="test-raw",
         AWS_REGION="ap-southeast-1",
-        FSDS_DATASET_NAME="scale90",
-        FSDS_SPARK_PACKAGES_AWS="test:aws:1",
+        PLATFORM_DATASET_NAME="scale90",
+        PLATFORM_SPARK_PACKAGES_AWS="test:aws:1",
     )
     if from_dotenv:
         for key in settings:
@@ -301,9 +301,9 @@ def test_s3_airflow_uses_remote_source_without_minio(fake_runtime, from_dotenv):
         (project / ".env").write_text("\n".join(f"{k}={v}" for k, v in settings.items()) + "\n")
     else:
         env.update(settings)
-        (project / ".env").write_text("FSDS_STORAGE=minio\nRAW_BUCKET=wrong\n")
+        (project / ".env").write_text("PLATFORM_STORAGE=minio\nRAW_BUCKET=wrong\n")
     # Không có fixture host: nhánh AWS phải kiểm manifest S3, không sinh local.
-    shutil.rmtree(env["FSDS_ORDER_LIFECYCLE_DIR"])
+    shutil.rmtree(env["PLATFORM_ORDER_LIFECYCLE_DIR"])
     result = subprocess.run(
         ["bash", str(project / "scripts/run/run_order_lifecycle_live.sh"), "--phase", "airflow"],
         env=env,
@@ -329,11 +329,11 @@ def test_aws_measurement_invocations_use_cluster_and_collect_evidence(fake_runti
     """Kiểm lệnh wrapper trên Docker giả: packages AWS, resource, JSON và sao chép log."""
     env, log, _ = fake_runtime
     env.update(
-        FSDS_STORAGE="s3",
+        PLATFORM_STORAGE="s3",
         RAW_BUCKET="test-raw",
         AWS_REGION="ap-southeast-1",
-        FSDS_SPARK_PACKAGES_AWS="test:aws:1",
-        FSDS_DATASET_NAME="scale90",
+        PLATFORM_SPARK_PACKAGES_AWS="test:aws:1",
+        PLATFORM_DATASET_NAME="scale90",
     )
     project = Path(env["FAKE_PROJECT"])
     result = subprocess.run(

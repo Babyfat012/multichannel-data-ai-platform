@@ -1,6 +1,6 @@
 # Báo cáo chất lượng dữ liệu của Data Generator (Batch)
 
-Báo cáo này đối chiếu từng dòng rubric "Implement Data Generator, Simulate offline data problems" với số đo thật. Phần Stream nằm ở [data-quality-report-stream.md](data-quality-report-stream.md).
+Báo cáo này ghi số đo thực tế của nguồn batch và các vấn đề dữ liệu được mô phỏng. Phần Stream nằm ở [data-quality-report-stream.md](data-quality-report-stream.md).
 
 ## Phạm vi 100 GB
 
@@ -24,29 +24,29 @@ Tổng **100.012.790.412 byte = 100,01 GB** thập phân (93,14 GiB). Đây là 
 Các bảng phân tích sâu (skew theo thành phố/danh mục, cardinality, schema evolution theo ngày, danh sách SKU) được đo trên lần chạy `configs/default.yaml` (4.000 Order/ngày, Amazon ở MinIO, Walmart ở PostgreSQL) bằng lệnh `report`, vì lệnh này đọc lại toàn bộ dữ liệu và join với `seller.skus`. Phương pháp đo giống hệt ở quy mô 100 GB, chỉ con số tuyệt đối khác. Mỗi mục dưới ghi rõ nguồn số.
 
 - Cấu hình nhỏ: `configs/default.yaml` (seed 42, 2.000 SKU, 180 ngày từ 2026-01-01, 4.000 Order mỗi ngày).
-- Nơi lưu: Amazon ở MinIO (bucket `fsds`), Walmart và `seller.skus` ở PostgreSQL (database `sources`). Cách dựng xem [Docker.md](Docker.md).
+- Nơi lưu: Amazon ở MinIO (bucket `platform`), Walmart và `seller.skus` ở PostgreSQL (database `sources`). Cách dựng xem [Docker.md](Docker.md).
 - Lệnh đo:
 
 ```bash
 set -a; . ./.env; set +a
 export AWS_ACCESS_KEY_ID=$MINIO_ROOT_USER AWS_SECRET_ACCESS_KEY=$MINIO_ROOT_PASSWORD \
        FSSPEC_S3_ENDPOINT_URL=http://localhost:$MINIO_API_PORT
-uv run python -m generator report --source s3://fsds \
+uv run python -m generator report --source s3://platform \
     --dsn "postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:$POSTGRES_PORT/$POSTGRES_DB"
 ```
 
 Cột `_truth` là đáp án generator ghi trong `run_manifest.json`. Số đo đọc lại từ dữ liệu đã lưu, không lấy từ bộ nhớ của generator. Bảng đầy đủ của lệnh `report` nằm ở [generator-design.md, mục Kết quả chạy](generator-design.md#kết-quả-chạy).
 
-## Tóm tắt theo rubric
+## Kết quả đo
 
-| Dòng rubric | Kết quả | Số đo chính (100 GB) |
+| Đặc tính | Ghi nhận | Số đo chính (100 GB) |
 |---|---|---|
-| Simulate skew | Đạt | Prime Day 2026-04-30/05-01: 2.281.202 Order Amazon/ngày so với 570.490 ngày thường (×4,0), tỷ lệ trả 13,7% so với 11,4%. Chi tiết thành phố/danh mục đo ở lần chạy nhỏ |
-| Simulate high cardinality | Đạt | `amazon.orders`: 106.109.650 khóa Order khác nhau trên 108.248.563 dòng; `walmart.orders`: 10.732.935 khóa trên 10.949.058 dòng |
-| Simulate schema evolution | Đạt | `amazon.orders` đổi schema đúng ngày export 2026-04-10 (`proceeds` null 100% → 0%, `IsPrime` ngược lại) |
-| Simulate another offline problem (duplicate 2%) | Đạt | Trùng 1,98% (Amazon) và 1,97% (Walmart); phần lớn là bản cũ hơn cùng khóa, phải giữ bản mới nhất chứ không chỉ bỏ bản y hệt |
-| Using generator configuration | Đạt | Mọi tham số nằm trong `configs/*.yaml`, xem [mục 15](generator-design.md#các-khóa-cấu-hình-đang-dùng) |
-| Store data (MinIO, PostgreSQL) | Đạt | 100,01 GB thô: `amazon.orders` 86,73 GB trong 3.316 file, `walmart.orders` 13,28 GB trong 3.255 file, `seller.skus` 0,23 MB |
+| Simulate skew | Đã đo | Prime Day 2026-04-30/05-01: 2.281.202 Order Amazon/ngày so với 570.490 ngày thường (×4,0), tỷ lệ trả 13,7% so với 11,4%. Chi tiết thành phố/danh mục đo ở lần chạy nhỏ |
+| Simulate high cardinality | Đã đo | `amazon.orders`: 106.109.650 khóa Order khác nhau trên 108.248.563 dòng; `walmart.orders`: 10.732.935 khóa trên 10.949.058 dòng |
+| Simulate schema evolution | Đã đo | `amazon.orders` đổi schema đúng ngày export 2026-04-10 (`proceeds` null 100% → 0%, `IsPrime` ngược lại) |
+| Simulate another offline problem (duplicate 2%) | Đã đo | Trùng 1,98% (Amazon) và 1,97% (Walmart); phần lớn là bản cũ hơn cùng khóa, phải giữ bản mới nhất chứ không chỉ bỏ bản y hệt |
+| Using generator configuration | Đã đo | Mọi tham số nằm trong `configs/*.yaml`, xem [mục 15](generator-design.md#các-khóa-cấu-hình-đang-dùng) |
+| Store data (MinIO, PostgreSQL) | Đã đo | 100,01 GB thô: `amazon.orders` 86,73 GB trong 3.316 file, `walmart.orders` 13,28 GB trong 3.255 file, `seller.skus` 0,23 MB |
 
 ## Chi tiết từng vấn đề (đo trên lần chạy nhỏ)
 

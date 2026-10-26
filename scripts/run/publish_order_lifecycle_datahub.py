@@ -256,7 +256,7 @@ def build_mcps(args):
         )
     result = []
     for urn, (name, meta) in datasets.items():
-        description = f"FSDS v2 {meta['platform']}: {name}"
+        description = f"PLATFORM v2 {meta['platform']}: {name}"
         if not meta["fields"]:
             description += "; chưa có schema field (job chưa xuất schema JSON trong receipt)."
         result.append(
@@ -380,7 +380,7 @@ def build_mcps(args):
             check_id = re.sub(r"[^A-Za-z0-9_-]", "_", check)
             if check_id != check:
                 check_id += "-" + hashlib.sha256(check.encode()).hexdigest()[:12]
-            urn = f"urn:li:assertion:fsds-{DAG_ID}-{task}-{check_id}-v2"
+            urn = f"urn:li:assertion:platform-{DAG_ID}-{task}-{check_id}-v2"
             result.append(
                 mcp(
                     "assertion",
@@ -390,7 +390,7 @@ def build_mcps(args):
                         "type": "CUSTOM",
                         "description": f"{task}: {check} = 0; số vi phạm khác 0 là FAIL",
                         "customAssertion": {
-                            "type": "FSDS v2 reconcile/validate",
+                            "type": "PLATFORM v2 reconcile/validate",
                             "entity": assertee,
                             "logic": f"{check} == 0",
                         },

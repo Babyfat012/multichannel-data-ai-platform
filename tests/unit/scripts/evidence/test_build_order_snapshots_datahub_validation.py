@@ -146,7 +146,7 @@ def test_assertion_urn_separates_v1_and_v2():
     base = {"dag_id": "dp1_cdc", "task_id": "validate_walmart_cdc"}
     v1 = publisher.assertion_urn(base | {"dataset": publisher.CDC_LEGACY})
     v2 = publisher.assertion_urn(base | {"dataset": publisher.CDC})
-    assert v1 == "urn:li:assertion:fsds-dp1_cdc-validate_walmart_cdc"
+    assert v1 == "urn:li:assertion:platform-dp1_cdc-validate_walmart_cdc"
     assert v2 == v1 + "-v2"
 
 

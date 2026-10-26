@@ -11,7 +11,7 @@ CREATE TABLE amazon_notifications (
   'connector' = 'kafka',
   'topic' = 'amazon.order-notifications',
   'properties.bootstrap.servers' = 'kafka:9092',
-  'properties.group.id' = 'fsds-flink-baseline-amazon',
+  'properties.group.id' = 'platform-flink-baseline-amazon',
   'scan.startup.mode' = 'earliest-offset',
   'scan.bounded.mode' = 'latest-offset',
   'format' = 'json',

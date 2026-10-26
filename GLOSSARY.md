@@ -1,10 +1,22 @@
-# FSDS Seller Analytics
+# Data & AI Platform
 
 Các định nghĩa nền về Seller, SKU, Listing, Storefront, Order Line và Return
-Label tiếp tục dùng [thuật ngữ FSDS](docs/terminology.md). Các mục dưới đây bổ
+Label tiếp tục dùng [thuật ngữ Data & AI Platform](docs/terminology.md). Các mục dưới đây bổ
 sung ngôn ngữ cho phần mở rộng phân tích phía Seller.
 
 ## Language
+
+**Data Platform**:
+Phần hệ thống cung cấp dữ liệu bán hàng đã chuẩn hóa, có kiểm tra chất lượng và truy vết để phân tích và làm đầu vào cho ML Platform, LLM Platform.
+_Avoid_: DE, Data Engineering (khi dùng làm tên phần của hệ thống)
+
+**ML Platform**:
+Phần hệ thống quản lý feature và vòng đời mô hình dự đoán, từ huấn luyện đến phục vụ và giám sát.
+_Avoid_: MLE, Feature + ML platform
+
+**LLM Platform**:
+Phần hệ thống cung cấp hội thoại và hỗ trợ Seller bằng LLM, truy xuất tài liệu và các agent sử dụng dữ liệu, mô hình.
+_Avoid_: LLM/Agent platform, tầng 3
 
 **SKU Insight**:
 Thông tin phân tích về tình hình của một SKU, giúp Seller nhận biết kết quả

@@ -231,7 +231,7 @@ def test_mcp_server_identity(client):
         },
     }
     result = client.post("/mcp/", json=body, headers=MCP_HEADERS).json()["result"]
-    assert result["serverInfo"]["name"] == "fsds-features"
+    assert result["serverInfo"]["name"] == "platform-features"
     assert result["instructions"] == (
         "Tra feature tỷ lệ trả hàng theo SKU, chấm điểm rủi ro Return cho đơn mới"
         " và tìm đoạn chính sách trả hàng."
@@ -239,7 +239,7 @@ def test_mcp_server_identity(client):
 
 
 def test_openapi_title(client):
-    assert client.get("/openapi.json").json()["info"]["title"] == "FSDS feature API"
+    assert client.get("/openapi.json").json()["info"]["title"] == "Feature API"
 
 
 # Tìm chunk RAG: rag giả trả kết quả cố định, ghi lại lời gọi.

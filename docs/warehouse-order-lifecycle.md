@@ -1,7 +1,7 @@
 <!-- Warehouse PostgreSQL v2: mô hình, publish an toàn và quy trình thu bằng chứng thật. -->
 # Warehouse v2 trên PostgreSQL
 
-Rubric dòng 21 yêu cầu tối ưu warehouse/indexing. Lát Walmart v1 không đại diện
+Phần này đo warehouse indexing. Lát Walmart v1 không đại diện
 năm Channel và mất index sau overwrite. Job `spark_jobs/warehouse/export_order_lifecycle.py` đọc `build_gold`, ghi schema mới
 `warehouse_lifecycle` trên PostgreSQL service của VM. Giữ nguyên v1, không quy đổi hay
 cộng chung currency. Cấu hình VM/storage/auth xem gcp-runtime.md.
@@ -48,14 +48,14 @@ Phải chọn `--as-of` phù hợp mục tiêu kiểm, không ngầm coi feature
    cũ để giải phóng tên schema-wide, rename staging thành bảng phục vụ, áp 002,
    ANALYZE, rồi DROP bản cũ. Commit cả nhóm bảng. Lỗi bất kỳ rollback cả nhóm.
 5. Xóa staging do lần gọi tạo khi thất bại, giữ nguyên bảng đang phục vụ. Nếu
-   process bị kill, staging có thể còn: planner kiểm tra/xóa đúng staging lỗi
+   process bị kill, staging có thể còn: người vận hành kiểm tra/xóa đúng staging lỗi
    trước retry cùng run-id; job không tự xóa staging đã tồn tại.
 
 `--tables` là danh sách phân cách dấu phẩy; mặc định cả ba. Subset chỉ publish nhóm
 được chọn, vì vậy dùng mặc định cho generation đầy đủ. Writer phải dùng quy trình
 này và không có view/FK phụ thuộc bảng phục vụ: PostgreSQL view/FK bám OID bảng cũ,
 không bám tên; DROP không CASCADE sẽ từ chối và rollback nếu có dependency.
-Không cấp quyền riêng từng bảng trong gói này: swap tạo OID mới, planner dùng cùng
+Không cấp quyền riêng từng bảng trong gói này: swap tạo OID mới, người vận hành dùng cùng
 owner hoặc quyền mặc định cấp ở schema. Transaction rename cần khóa bảng và có
 thể chờ truy vấn đang chạy; benchmark cũng chặn ghi trong suốt phép đo.
 
@@ -67,10 +67,10 @@ sẵn trong image/cache và Iceberg runtime như runner hiện có. Chưa chạy
 PostgreSQL thật trong sandbox.
 
 Compose hiện chỉ mount `spark_jobs/`, không mount `sql/`. Vì brief cấm sửa Compose,
-planner copy hai migration vào container Airflow đang chạy; không cần sửa config:
+người vận hành copy hai migration vào container Airflow đang chạy; không cần sửa config:
 
 ```bash
-# Planner chạy sau khi stack đã sẵn sàng; copy lại sau recreate container.
+# người vận hành chạy sau khi stack đã sẵn sàng; copy lại sau recreate container.
 # SQL đã mount read-only tại /opt/sql/warehouse_lifecycle.
 # DAG mới dp_order_lifecycle_warehouse: Trigger tay với generation đã validate của dp_order_lifecycle.
 # {"run_id":"GOLD_GENERATION_DA_CO","cutoff":"2026-06-01T00:00:00.000000Z"}
@@ -78,9 +78,9 @@ planner copy hai migration vào container Airflow đang chạy; không cần s�
 
 DAG mới có `validate_gold >> export_warehouse`, schedule=None, một run tại
 một thời điểm; không sửa DAG nguồn. SQL dir mặc định `/opt/sql/warehouse_lifecycle`, có thể
-đặt Airflow Variable `fsds_order_lifecycle_warehouse_sql_dir`. Receipt dưới Variable
-`fsds_order_lifecycle_receipt_dir`/warehouse/TS_NODASH. Trên GCP cũng copy SQL bằng lệnh trên
-trong `/opt/fsds`, dùng PostgreSQL trên VM và credential Connection `fsds_postgres`.
+đặt Airflow Variable `platform_order_lifecycle_warehouse_sql_dir`. Receipt dưới Variable
+`platform_order_lifecycle_receipt_dir`/warehouse/TS_NODASH. Trên GCP cũng copy SQL bằng lệnh trên
+trong `/opt/platform`, dùng PostgreSQL trên VM và credential Connection `platform_postgres`.
 
 CLI ngoài DAG (trong image/runtime có Spark và catalog):
 
@@ -96,16 +96,16 @@ và arguments, không thay runner catalog. Kết nối từ env như job `spark_
 `POSTGRES_HOST` (postgres), `POSTGRES_PORT` (5432), `POSTGRES_DB` (sources),
 `POSTGRES_USER`, `POSTGRES_PASSWORD`. Không đặt secret trong arguments/log.
 
-## Harness PostgreSQL 16 tạm — planner chạy
+## Harness PostgreSQL 16 tạm — người vận hành chạy
 
-Dùng DB **trống riêng**; harness từ chối schema warehouse_lifecycle đã tồn tại. Planner
+Dùng DB **trống riêng**; harness từ chối schema warehouse_lifecycle đã tồn tại. người vận hành
 chuẩn bị container `postgres:16` trên loopback hoặc Docker network riêng và đưa
 URI qua env `WAREHOUSE_TEST_DSN`; không dùng DB đang phục vụ. Môi trường chạy
 Python cần PySpark 3.5.3, Java và driver PostgreSQL Python sẵn có. Không tải JAR:
 
 ```bash
 # Env này chứa URI DB tạm: postgresql://USER:PASSWORD@127.0.0.1:PORT/DB
-# Planner đặt WAREHOUSE_TEST_DSN trong môi trường, không ghi vào report.
+# người vận hành đặt WAREHOUSE_TEST_DSN trong môi trường, không ghi vào report.
 PYSPARK_SUBMIT_ARGS='--jars /DUONG_DAN_CACHE/postgresql-42.7.4.jar pyspark-shell' \
   python tests/spark/check_order_lifecycle_warehouse.py
 ```
@@ -113,7 +113,7 @@ PYSPARK_SUBMIT_ARGS='--jars /DUONG_DAN_CACHE/postgresql-42.7.4.jar pyspark-shell
 Harness build fixture → Silver → Gold thật, load 1 thành công; load sai tiền
 staging bị chặn và toàn bộ giá trị bảng phục vụ giữ bản 1; lỗi DDL giữa swap cũng
 rollback bản 1; load hợp lệ tiếp theo vẫn có bốn index phụ. Staging sai được dọn,
-DB tạm giữ bản hợp lệ cuối để kiểm thêm. Planner tự quản vòng đời container.
+DB tạm giữ bản hợp lệ cuối để kiểm thêm. người vận hành tự quản vòng đời container.
 
 ## EXPLAIN trước/sau trên cùng dữ liệu
 
@@ -139,7 +139,7 @@ Seq Scan ở cả hai pha; ghi đúng kết quả, không khẳng định index 
 
 Số đo **e2e small local ngày 2026-10-19**, sau sửa và đổi tên; nguồn 45 ngày ×
 50 đơn, 100 SKU, PASS 92 s. Nguồn số và chi tiết run tại [e2e local](e2e-order-lifecycle-local.md),
-được planner xác nhận trong brief codex-26 (ghi chú nội bộ, không nằm trong repo).
+được người vận hành xác nhận trong ghi nhận local (receipt không đính kèm repo).
 Warehouse-checks trên PostgreSQL thật **PASS 116 s trước đổi tên**: load, chặn lệch
 tiền, rollback DDL và swap giữ index; đây không phải số đo speedup.
 

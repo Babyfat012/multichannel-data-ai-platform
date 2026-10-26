@@ -23,7 +23,7 @@ Không viết vào code:
 - Lịch sử quyết định ("chốt ngày ...", "Q3"): để trong `docs/` hoặc ADR.
 - Số đo của một lần chạy (GB, số dòng, giây): để trong tài liệu bằng chứng.
 - Chữ IN HOA để nhấn mạnh.
-- Tên người/công cụ làm việc (planner, brief, ...).
+- Tên người/công cụ làm việc (người vận hành, brief, ...).
 
 ## Ví dụ
 

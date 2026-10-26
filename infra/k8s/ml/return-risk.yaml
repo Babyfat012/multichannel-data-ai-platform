@@ -32,7 +32,7 @@ spec:
           - {name: MIN_HISTORY, value: "20"}
           - {name: FEAST_REDIS, value: "redis.feature-store.svc.cluster.local:6379"}
         envFrom:
-          - secretRef: {name: fsds-minio}
+          - secretRef: {name: platform-minio}
         resources:
           requests: {cpu: 100m, memory: 256Mi}
           limits: {memory: 768Mi}

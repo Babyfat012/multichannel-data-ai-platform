@@ -1,6 +1,6 @@
 # Vì sao Silver v2 chậm siêu tuyến tính
 
-Phân tích codex-21, ngày 2026-10-19. Chỉ tài liệu và diff đề xuất, chưa áp dụng thay đổi Spark.
+Phân tích hiệu năng Silver, ngày 2026-10-19. Chỉ tài liệu và diff đề xuất, chưa áp dụng thay đổi Spark.
 
 ## Kết luận và phạm vi bằng chứng
 
@@ -186,7 +186,7 @@ Bằng nhau về count chưa chứng minh từng identity/tiền đúng: vẫn p
 
 ## Diff đề xuất, thứ tự áp dụng và hiệu quả có điều kiện
 
-Các diff dưới chỉ là đề xuất để planner/implementer kế tiếp áp dụng. Không sửa
+Các diff dưới chỉ là đề xuất để người vận hành/implementer kế tiếp áp dụng. Không sửa
 `spark_jobs/*.py` hoặc runner trong task này. Mọi giây “tiết kiệm” dưới đây là ngân
 sách thời gian có thể tác động, không phải kết quả đã đo; không cộng cơ học giữa các diff.
 
@@ -276,12 +276,9 @@ thêm cache đại trà hoặc tăng driver RAM như bằng chứng giải quy�
 
 ## Cách chứng minh giữ nguyên kết quả và đo hiệu quả
 
-Không chạy Docker/Spark/PostgreSQL trong sandbox. Phân tích này dùng log đã ghi;
-không có vòng chạy trực tiếp tái hiện biểu thức chậm, không có profiler, không có
-benchmark sau diff. Bỏ các pha tái hiện/áp fix của skill diagnosing-bugs vì brief
-chỉ cho phép phân tích tài liệu và giao runtime test cho planner.
+Phân tích này dùng log đã ghi, chưa tái hiện trực tiếp biểu thức chậm, chưa có profiler hoặc benchmark sau diff. Cần chạy protocol dưới đây để kiểm chứng thay đổi.
 
-Planner áp từng diff độc lập và giữ evidence trước/sau; A trước, C rồi B, cùng nguồn,
+người vận hành áp từng diff độc lập và giữ evidence trước/sau; A trước, C rồi B, cùng nguồn,
 seed/cutoff, cấu hình local[*]/driver memory/shuffle và máy không chạy thêm workload.
 Ghi event log/physical plan khi tái chạy để gắn chính xác operator và shuffle metrics
 vào stage, đồng thời lấy heap/GC/task CPU nếu stage V vẫn chậm. So sánh nhiều lượt
@@ -301,19 +298,19 @@ Các ca cần thêm vào Spark regression trước khi áp A (chưa viết trong
   quarantine và receipts; test điểm trước/sau refund correction và as_of native.
 - Phép đo riêng A: materialize evidence dùng chung, group sequence tăng dần,
   ghi V với receipt_status, ghi thời gian/CPU và equality old/new. Chưa có script
-  này trong repo; planner cần bổ sung, pytest hiện có không đo hiệu năng Spark.
+  này trong repo; người vận hành cần bổ sung, pytest hiện có không đo hiệu năng Spark.
 
-Lệnh planner phải chạy sau khi có bản sửa (image/cache offline có sẵn):
+Lệnh người vận hành phải chạy sau khi có bản sửa (image/cache offline có sẵn):
 
 ```bash
 # Regression Silver fixture và scale, không mạng, không catalog dự án.
 docker run --rm --pull never --network none --read-only --tmpfs /tmp:rw,size=1g \
   --mount type=bind,src="$PWD",dst=/workspace,readonly --entrypoint python \
-  fsds-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_order_lifecycle_silver.py
+  platform-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_order_lifecycle_silver.py
 
 docker run --rm --pull never --network none --read-only --tmpfs /tmp:rw,size=2g \
   --mount type=bind,src="$PWD",dst=/workspace,readonly --entrypoint python \
-  fsds-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_order_lifecycle_silver_scale.py
+  platform-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_order_lifecycle_silver_scale.py
 
 # E2E tạo PostgreSQL/catalog riêng, giữ log/receipt, không dùng DB dự án.
 bash tests/harness/run_order_lifecycle_scale.sh --profile small --driver-memory 6g
@@ -321,7 +318,7 @@ bash tests/harness/run_order_lifecycle_scale.sh --profile medium --driver-memory
 ```
 
 Harness có lệnh kiểm cache/image và Docker network internal theo thiết kế sẵn;
-planner chạy các lệnh này, Codex không chạy. So small/medium Silver seconds,
+người vận hành chạy các lệnh này, Codex không chạy. So small/medium Silver seconds,
 stage cuối V, phân bố task, các bảng/kiểm nghiệp vụ; medium có lỗi Gold hiện tại
 thì báo riêng, không coi `status=running`/Silver passed là E2E passed.
 Để đo đối chứng công bằng, chạy lại bản cũ cùng `--driver-memory 6g` và nguồn với bản mới;

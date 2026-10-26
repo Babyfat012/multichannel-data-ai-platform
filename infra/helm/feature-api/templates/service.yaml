@@ -1,4 +1,4 @@
-# REST /features và MCP /mcp/ chung một cổng. NodePort để gọi từ mạng fsds_default.
+# REST /features và MCP /mcp/ chung một cổng. NodePort để gọi từ mạng platform_default.
 apiVersion: v1
 kind: Service
 metadata:

@@ -9,7 +9,7 @@ ba nguồn JSONL Channel nhỏ, bảng PostgreSQL `walmart.orders` và topic Kaf
 Bronze → Silver → Gold → feature bằng input/output của job Airflow và cạnh
 dataset lineage. Nhánh CDC nối topic Kafka với bảng Bronze riêng.
 
-Các assertion đọc kết quả **đã chạy** từ log Airflow trong volume `fsds_airflow-data`;
+Các assertion đọc kết quả **đã chạy** từ log Airflow trong volume `platform_airflow-data`;
 không chạy lại Spark khi publish. `scripts/evidence/build_order_snapshots_datahub_validation.py`
 chỉ nhận attempt có dòng `Marking task as SUCCESS`, trích số đo và thời điểm,
 đối chiếu điều kiện PASS rồi ghi
@@ -86,7 +86,7 @@ run 2026-10-18; check CDC v1 vẫn là run 2026-10-13.
 Tái tạo bộ v2 (sau khi các run trên đã có trong volume Airflow):
 
 ```bash
-docker run --rm -v fsds_airflow-data:/logs:ro -v "$PWD":/work -w /work \
+docker run --rm -v platform_airflow-data:/logs:ro -v "$PWD":/work -w /work \
   python:3.12-slim python scripts/evidence/build_order_snapshots_datahub_validation.py \
   --logs-root /logs/logs --output docs/evidence/datahub-validation-v2.json \
   --run dp1_cdc=manual__2026-10-18T05:14:10+00:00 \
@@ -114,7 +114,7 @@ docker compose --env-file "$HOME/.datahub/quickstart/.local-secrets.env" \
   --profile quickstart -f "$HOME/.datahub/quickstart/docker-compose.yml" \
   -f docker/datahub-compose.override.yml -p datahub up -d
 
-docker run --rm -v fsds_airflow-data:/logs:ro -v "$PWD":/work -w /work \
+docker run --rm -v platform_airflow-data:/logs:ro -v "$PWD":/work -w /work \
   python:3.12-slim python scripts/evidence/build_order_snapshots_datahub_validation.py \
   --logs-root /logs/logs
 
@@ -124,7 +124,7 @@ docker run --rm -v fsds_airflow-data:/logs:ro -v "$PWD":/work -w /work \
 ```
 
 Lần khởi tạo này OpenSearch tự khóa tạo index khi ổ hệ thống còn 13 GB; sau khi
-giải phóng image FSDS không dùng, đã tắt `cluster.routing.allocation.disk.threshold_enabled`
+giải phóng image Data & AI Platform không dùng, đã tắt `cluster.routing.allocation.disk.threshold_enabled`
 cho OpenSearch DataHub **một node**, kiểm tra dung lượng bằng `df -h /` trong lúc
 chạy. Nếu Compose dừng ở `403 cluster create-index blocked`, chỉ sau khi xác
 nhận ổ vẫn còn đủ chỗ, gỡ khóa trong OpenSearch DataHub rồi chạy lại lệnh

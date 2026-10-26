@@ -36,7 +36,7 @@ export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 WHICH="${1:-smoke}"
 # Driver chạy ở worker-1 chứ không ở spark-master: container master chỉ có 512 MB và bị
 # Docker kill OOM (phát hiện khi chạy brief 02 của tầng Bronze).
-MASTER_CONTAINER="${MASTER_CONTAINER:-fsds-spark-worker-1-1}"
+MASTER_CONTAINER="${MASTER_CONTAINER:-platform-spark-worker-1-1}"
 ICEBERG_PKGS="org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.11.0,org.apache.iceberg:iceberg-aws-bundle:1.11.0"
 LOG_DIR="out/silver-runs"
 mkdir -p "$LOG_DIR"

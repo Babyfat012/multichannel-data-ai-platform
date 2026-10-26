@@ -20,9 +20,9 @@ dashboardProviders:
   dashboardproviders.yaml:
     apiVersion: 1
     providers:
-      - {name: fsds, folder: FSDS, type: file, disableDeletion: true, options: {path: /var/lib/grafana/dashboards/fsds}}
+      - {name: platform, folder: PLATFORM, type: file, disableDeletion: true, options: {path: /var/lib/grafana/dashboards/platform}}
 dashboardsConfigMaps:
-  fsds: grafana-dashboards-fsds
+  platform: grafana-dashboards-platform
 # Ingress đã có basic auth (user ops) ⇒ header Authorization: Basic tới tận Grafana. Tắt basic auth của Grafana
 # để nó không hiểu nhầm đó là tài khoản Grafana (401); đăng nhập Grafana bằng form như thường.
 grafana.ini:

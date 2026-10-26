@@ -1,6 +1,6 @@
 # Coverage scale theo tuần nối tiếp
 
-Learner chốt ngày 2026-10-19 (codex-27): nguồn scale phát envelope theo tuần,
+Quyết định ngày 2026-10-19 (bản sửa coverage theo ADR-0013): nguồn scale phát envelope theo tuần,
 không chồng và không cộng dồn, trên mỗi feed. Trước đây coverage chỉ xuất cuối
 observation horizon, sau mọi Order; nhãn cuối kỳ có đủ nhưng feature PIT của
 Order gốc luôn count0. Quyết định này thay nhịp phát coverage của scale, mở rộng
@@ -21,5 +21,5 @@ authority trước lọc, nên input không tăng theo tuần tail. History revi
 chính line vẫn có chi phí riêng; giới hạn driver keyless 10.000 giữ nguyên.
 
 Kiểm Python thuần seed7/60 ngày/4 đơn mỗi ngày/3 SKU: 131/367 target thật có
-`labeled_count_90d > 0`, tối đa 30 coverage/line. Spark do planner kiểm riêng;
+`labeled_count_90d > 0`, tối đa 30 coverage/line. Spark do người vận hành kiểm riêng;
 xem [Gold](../gold-order-lifecycle.md) và [contract nhãn](../return-label-contract.md).

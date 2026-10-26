@@ -1,6 +1,6 @@
 # Feast thứ hai, riêng cho RAG: online store Postgres + pgvector (tìm theo vector), khác Feast SKU dùng Redis.
 # Biến môi trường do DAG/pod truyền vào; Postgres chạy trong kind (ns rag).
-project: fsds_rag
+project: platform_rag
 provider: local
 registry: ${FEAST_RAG_REGISTRY}
 offline_store:

@@ -71,7 +71,7 @@ def test_dag_contract_and_real_job_flags():
         assert {a for a in args if a.startswith("--")} <= flags
         assert literal(kwargs["conn_id"], names) == "spark_default"
         assert literal(kwargs["deploy_mode"], names) == "client"
-        assert "fsds_spark_packages" in literal(kwargs["packages"], names)
+        assert "platform_spark_packages" in literal(kwargs["packages"], names)
         if tasks[name] == "ingest_bronze":
             assert args[args.index("--receipt") + 1] == literal(kwargs["receipt_path"], names)
         if tasks[name] == "build_silver":
@@ -92,14 +92,14 @@ def test_dag_contract_and_real_job_flags():
         return flatten(node.left) + flatten(node.right)
 
     assert flatten(chain) == ORDER
-    used = set(re.findall(r"var\.value\.(fsds_\w+)", source))
+    used = set(re.findall(r"var\.value\.(platform_\w+)", source))
     setup = (ROOT / "scripts/setup/setup_airflow.sh").read_text()
-    declared = set(re.findall(r"variables set (fsds_\w+)", setup))
+    declared = set(re.findall(r"variables set (platform_\w+)", setup))
     assert used <= declared
     assert {
-        "fsds_order_lifecycle_source_root",
-        "fsds_order_lifecycle_cutoff",
-        "fsds_order_lifecycle_receipt_dir",
+        "platform_order_lifecycle_source_root",
+        "platform_order_lifecycle_cutoff",
+        "platform_order_lifecycle_receipt_dir",
     } <= used
     assert '"source_root"' in source and '"cutoff"' in source and '"walmart_jdbc"' in source
 
@@ -109,14 +109,14 @@ def test_v2_resource_variables_and_templates():
     resources = {"driver_memory": "3g", "executor_memory": "4g", "executor_cores": "2"}
     setup = (ROOT / "scripts/setup/setup_airflow.sh").read_text()
     for field, default in resources.items():
-        assert f"variables set fsds_order_lifecycle_{field} '{default}'" in setup
+        assert f"variables set platform_order_lifecycle_{field} '{default}'" in setup
     for path in (DAG, ROOT / "dags/dp_order_lifecycle_warehouse.py"):
         source = path.read_text()
         tree = ast.parse(source)
         assert not any(isinstance(n, ast.Constant) and n.value == "1g" for n in ast.walk(tree))
         classes = {n.name: n for n in tree.body if isinstance(n, ast.ClassDef)}
         resource_class = classes["OrderLifecycleSparkSubmitOperator"]
-        assert [base.id for base in resource_class.bases] == ["FsdsSparkSubmitOperator"]
+        assert [base.id for base in resource_class.bases] == ["PlatformSparkSubmitOperator"]
         assignment = next(
             n
             for n in resource_class.body
@@ -132,7 +132,7 @@ def test_v2_resource_variables_and_templates():
             isinstance(n, ast.Attribute)
             and n.attr == "template_fields"
             and isinstance(n.value, ast.Name)
-            and n.value.id == "FsdsSparkSubmitOperator"
+            and n.value.id == "PlatformSparkSubmitOperator"
             for n in ast.walk(assignment)
         )
         count = 0
@@ -150,7 +150,7 @@ def test_v2_resource_variables_and_templates():
             for field in resources:
                 assert (
                     ast.literal_eval(kwargs[field])
-                    == "{{ var.value.fsds_order_lifecycle_" + field + " }}"
+                    == "{{ var.value.platform_order_lifecycle_" + field + " }}"
                 )
         assert count == (4 if path == DAG else 2)
         if path == DAG:

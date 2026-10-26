@@ -5,7 +5,7 @@ kind: MCPServer
 metadata:
   name: feature-tools
 spec:
-  title: FSDS Feature Tools
+  title: PLATFORM Feature Tools
   description: >-
     Feature trả hàng theo SKU (Feast/Redis), chunk chính sách theo id và tìm theo câu hỏi (Feast/pgvector),
     điểm rủi ro Return (KServe return-risk). Tool: get_sku_features, get_policy_chunks, search_policy_chunks,

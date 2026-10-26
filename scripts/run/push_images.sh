@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Dùng chung cho kind/ECR/Artifact Registry (đăng nhập registry ngoài trước).
-# REGISTRY=localhost:5001 TAG=<sha> scripts/run/push_images.sh fsds-feature-api:<source-tag>
+# REGISTRY=localhost:5001 TAG=<sha> scripts/run/push_images.sh platform-feature-api:<source-tag>
 # Có TAG: phát hành source image dưới TAG đó; không có TAG: giữ tag nguồn bất biến.
 set -euo pipefail
 REGISTRY=${REGISTRY:-localhost:5001}

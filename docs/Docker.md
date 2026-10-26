@@ -14,12 +14,12 @@ Tài liệu này ghi cách đóng gói generator thành image, cách dựng môi
 | Service | Image | Vai trò | Kiểu chạy |
 |---|---|---|---|
 | `minio` | `quay.io/minio/minio` (bản cố định theo ngày) | Object storage chứa export dạng file của Channel | Chạy liên tục. API cổng 9000, console cổng 9001 |
-| `minio-init` | như trên (có sẵn `mc`) | Tạo bucket `fsds` | Chạy một lần |
+| `minio-init` | như trên (có sẵn `mc`) | Tạo bucket `platform` | Chạy một lần |
 | `postgres` | `postgres:15` | Hệ thống của phòng ban khác: `walmart.orders`, `seller.skus` | Chạy liên tục, cổng 5432 |
-| `generator-batch` | `data-generator` (build từ `Dockerfile`) | `generator.generate_order_snapshots`: sinh lịch sử, ghi thẳng vào MinIO | Chạy một lần, sau `minio-init` |
-| `generator-load` | `data-generator` | `load-postgres`: đọc `pg-load/` trên MinIO, nạp vào PostgreSQL | Chạy một lần, sau `generator-batch` và khi `postgres` sẵn sàng |
-| `kafka` (profile `generator.publish_order_snapshot_events`) | `apache/kafka:3.9.1` | Kafka một node, chế độ KRaft. Trong Compose là `kafka:9092`, từ host là `localhost:9094` | Chạy liên tục |
-| `generator-stream` (profile `generator.publish_order_snapshot_events`) | `data-generator` | `generator.publish_order_snapshot_events`: phát message sau `cutoff` vào Kafka, ghi `stream_manifest.json` vào MinIO | Chạy tới khi phát xong, sau khi `kafka` sẵn sàng |
+| `generator-batch` | `platform-generator` (build từ `Dockerfile`) | `generator.generate_order_snapshots`: sinh lịch sử, ghi thẳng vào MinIO | Chạy một lần, sau `minio-init` |
+| `generator-load` | `platform-generator` | `load-postgres`: đọc `pg-load/` trên MinIO, nạp vào PostgreSQL | Chạy một lần, sau `generator-batch` và khi `postgres` sẵn sàng |
+| `kafka` (profile `stream`) | `apache/kafka:3.9.1` | Kafka một node, chế độ KRaft. Trong Compose là `kafka:9092`, từ host là `localhost:9094` | Chạy liên tục |
+| `generator-stream` (profile `stream`) | `platform-generator` | `generator.publish_order_snapshot_events`: phát message sau `cutoff` vào Kafka, ghi `stream_manifest.json` vào MinIO | Chạy tới khi phát xong, sau khi `kafka` sẵn sàng |
 
 Thứ tự được đảm bảo bằng `depends_on` với `service_healthy` (MinIO, PostgreSQL có healthcheck) và `service_completed_successfully` (các bước chạy một lần).
 
@@ -30,7 +30,7 @@ docker compose wait generator-load    # chờ nạp PostgreSQL xong
 GENERATOR_CONFIG=configs/default.yaml docker compose up -d --force-recreate generator-batch generator-load   # đủ quy mô
 ```
 
-**Stream.** Kafka nằm trong profile `generator.publish_order_snapshot_events`, nên `docker compose up -d` không bật nó. `STREAM_SPEED` trong `.env` chỉnh tốc độ: 1 là đúng nhịp (khoảng 40 phút cho 30 ngày), 60 là nhanh gấp 60 lần (khoảng 40 giây).
+**Stream.** Kafka nằm trong profile `stream`, nên `docker compose up -d` không bật nó. `STREAM_SPEED` trong `.env` chỉnh tốc độ: 1 là đúng nhịp (khoảng 40 phút cho 30 ngày), 60 là nhanh gấp 60 lần (khoảng 40 giây).
 
 ```bash
 docker compose --profile stream up -d kafka
@@ -39,9 +39,9 @@ docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
     --bootstrap-server localhost:9092 --topic tiktok_shop.order-webhooks --from-beginning --max-messages 3
 ```
 
-**Sau khi sửa code, nhớ `docker compose build`.** `Dockerfile` cài generator bằng `uv sync --reinstall-package fsds-generator`: thiếu cờ đó, cache của `uv` chỉ so `pyproject.toml` nên sửa code mà không đổi phiên bản thì image vẫn cài bản cũ, build vẫn báo thành công.
+**Sau khi sửa code, nhớ `docker compose build`.** `Dockerfile` cài generator bằng `uv sync --reinstall-package platform-generator`: thiếu cờ đó, cache của `uv` chỉ so `pyproject.toml` nên sửa code mà không đổi phiên bản thì image vẫn cài bản cũ, build vẫn báo thành công.
 
-**Vì sao chỉ một bucket `fsds`.** Mỗi lần chạy ghi bốn thứ: `source-exports/`, `pg-load/`, `ground-truth/` và `run_manifest.json`. Manifest phải nằm trong một bucket, nên generator ghi vào gốc một bucket và bốn phần trên là bốn tiền tố. DP1 chỉ đọc `source-exports/`, còn `ground-truth/` dành cho phần huấn luyện mô hình.
+**Vì sao chỉ một bucket `platform`.** Mỗi lần chạy ghi bốn thứ: `source-exports/`, `pg-load/`, `ground-truth/` và `run_manifest.json`. Manifest phải nằm trong một bucket, nên generator ghi vào gốc một bucket và bốn phần trên là bốn tiền tố. DP1 chỉ đọc `source-exports/`, còn `ground-truth/` dành cho phần huấn luyện mô hình.
 
 **Mật khẩu và cổng** nằm trong `.env`, file này không được commit. Nếu máy đã có chương trình dùng cổng 9000, 9001 hoặc 5432, đổi `MINIO_API_PORT`, `MINIO_CONSOLE_PORT`, `POSTGRES_PORT` hoặc `KAFKA_PORT` trong `.env`.
 
@@ -51,7 +51,7 @@ docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
 set -a; . ./.env; set +a
 export AWS_ACCESS_KEY_ID=$MINIO_ROOT_USER AWS_SECRET_ACCESS_KEY=$MINIO_ROOT_PASSWORD \
        FSSPEC_S3_ENDPOINT_URL=http://localhost:$MINIO_API_PORT
-uv run python -m generator report --source s3://fsds \
+uv run python -m generator report --source s3://platform \
     --dsn "postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:$POSTGRES_PORT/$POSTGRES_DB"
 ```
 
@@ -77,7 +77,7 @@ Cả hai dùng chung `.dockerignore`, loại `.venv`, `out/`, `.git`, `docs/` v�
 | Image | Dung lượng |
 |---|---|
 | `data-generator:naive` | 2,35 GB |
-| `data-generator:optimize` | 677 MB |
+| `platform-generator:optimize` | 677 MB |
 
 ![Dung lượng hai image](images/docker/docker.png)
 
@@ -102,7 +102,7 @@ Muốn giảm thêm có thể tách `duckdb` thành nhóm thư viện tùy chọ
 
 ```bash
 docker build -t data-generator:naive -f docker/Dockerfile.naive .
-docker build -t data-generator:optimize .
+docker build -t platform-generator:optimize .
 docker images data-generator
 ```
 
@@ -115,16 +115,22 @@ build cả hai từ cùng working tree, liệt kê package bằng `importlib.met
 
 | Image | Digest | Dung lượng |
 |---|---|---|
-| `fsds-generator:naive` | `sha256:d9af23a28aed…` | 2,39 GB |
-| `fsds-generator:opt` | `sha256:00360a65a6a0…` | 698 MB |
+| `platform-generator:naive` | `sha256:d9af23a28aed…` | 2,39 GB |
+| `platform-generator:opt` | `sha256:00360a65a6a0…` | 698 MB |
 
 Cùng **27 package** (bỏ pip/setuptools/wheel của base và chính project) ⇒ giảm **70,8 %** chỉ nhờ cách build (base slim,
 multi-stage, không giữ cache). Receipt: [`evidence/docker-compare-20261019.json`](evidence/docker-compare-20261019.json)
 (kèm sha256 của Dockerfile, lock file, `.dockerignore`). `.dockerignore` loại thêm `.briefs/`, `.vibe-wise/`, `.claude/`
 (ghi chú làm việc, không phải mã nguồn).
 
-## 4. Inventory image/service đang nộp
+## 4. Inventory image/service đã ghi nhận
 
 `scripts/evidence/inspect_docker_images.py` đọc `docker compose config` và `docker image inspect` (không pull):
 [local, mọi profile](evidence/docker-inventory-local-20261019.json) — 20 service;
 [GCP overlay, profile catalog/spark/airflow](evidence/docker-inventory-gcp-20261019.json) — 9 service, mọi port bind `127.0.0.1`.
+
+## Tên tài nguyên và dữ liệu đã có
+
+Cấu hình hiện hành dùng Compose project `platform`, image `platform-*`, cụm kind `platform`, và tiền tố Airflow Connection/Variable `platform_`. Các tên này được dùng thống nhất trong script setup, manifest và hướng dẫn.
+
+Nếu nâng cấp từ checkout có tên tài nguyên khác, named volume, bucket, database, Vault path và Airflow metadata cũ vẫn thuộc môi trường cũ. Đổi tên cấu hình không di chuyển dữ liệu hoặc secret. Giữ bản sao dữ liệu và cấu hình cần dùng, chọn môi trường đích rồi chạy lại các bước setup tương ứng; không dùng `down -v` để đổi tên. Evidence lịch sử giữ nguyên định danh của lần chạy gốc.

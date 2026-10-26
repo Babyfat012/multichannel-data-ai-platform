@@ -18,8 +18,8 @@ from pathlib import Path
 import psycopg
 from confluent_kafka.admin import AdminClient, NewTopic
 
-CONNECTOR_NAME = "fsds-walmart-orders"
-TOPIC = "fsds_cdc.walmart.orders"
+CONNECTOR_NAME = "platform-walmart-orders"
+TOPIC = "platform_cdc.walmart.orders"
 
 
 def load_settings(path: Path) -> dict[str, str]:
@@ -64,18 +64,18 @@ def configure_postgres(settings: dict[str, str]) -> None:
         cur.execute("ALTER TABLE walmart.orders REPLICA IDENTITY FULL")
         cur.execute(
             "SELECT 1 FROM pg_publication WHERE pubname = %s",
-            ("fsds_walmart_orders",),
+            ("platform_walmart_orders",),
         )
         if cur.fetchone() is None:
-            cur.execute("CREATE PUBLICATION fsds_walmart_orders FOR TABLE walmart.orders")
+            cur.execute("CREATE PUBLICATION platform_walmart_orders FOR TABLE walmart.orders")
         else:
             cur.execute(
                 "SELECT 1 FROM pg_publication_tables "
                 "WHERE pubname = %s AND schemaname = %s AND tablename = %s",
-                ("fsds_walmart_orders", "walmart", "orders"),
+                ("platform_walmart_orders", "walmart", "orders"),
             )
             if cur.fetchone() is None:
-                cur.execute("ALTER PUBLICATION fsds_walmart_orders ADD TABLE walmart.orders")
+                cur.execute("ALTER PUBLICATION platform_walmart_orders ADD TABLE walmart.orders")
     print("PostgreSQL: WAL logical, replica identity FULL, publication sẵn sàng")
 
 
@@ -102,11 +102,11 @@ def register_connector(settings: dict[str, str]) -> None:
         "database.user": settings["POSTGRES_USER"],
         "database.password": settings["POSTGRES_PASSWORD"],
         "database.dbname": settings["POSTGRES_DB"],
-        "topic.prefix": "fsds_cdc",
+        "topic.prefix": "platform_cdc",
         "table.include.list": "walmart.orders",
         "plugin.name": "pgoutput",
-        "slot.name": "fsds_walmart_orders",
-        "publication.name": "fsds_walmart_orders",
+        "slot.name": "platform_walmart_orders",
+        "publication.name": "platform_walmart_orders",
         "publication.autocreate.mode": "disabled",
         "snapshot.mode": "no_data",
         "tombstones.on.delete": "false",

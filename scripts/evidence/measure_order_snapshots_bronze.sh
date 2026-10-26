@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Chạy job Bronze 01 ba lần để thu bằng chứng tối ưu hiệu năng cho rubric.
+# Chạy job Bronze 01 ba lần để thu bằng chứng tối ưu hiệu năng cho phép đo.
 #
 # Vì sao ba lần (chốt 2026-10-10):
 #   Lần 1 — 20 ngày, AQE TẮT  -> ảnh Spark UI thấy task lệch nhau (skew) + số giây.
@@ -44,7 +44,7 @@ cd "$(dirname "$0")/../.."
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 
 WHICH="${1:-tatca}"
-MASTER_CONTAINER="${MASTER_CONTAINER:-fsds-spark-master-1}"
+MASTER_CONTAINER="${MASTER_CONTAINER:-platform-spark-master-1}"
 ICEBERG_PKGS="org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.11.0,org.apache.iceberg:iceberg-aws-bundle:1.11.0"
 # Driver JDBC PostgreSQL — chỉ job 01b cần, nhưng thêm vào cả hai cho đỡ phải nhớ hai danh
 # sách. Spark bỏ qua jar không dùng, chi phí là vài giây tải lần đầu rồi cache lại.
@@ -94,26 +94,26 @@ case "$WHICH" in
     ;;&
   skew_0)
     # Brief 02, đối chứng: cấu hình y hệt lan1 (shuffle 200 mặc định, AQE tắt), môi trường của skew_a/b/c.
-    MASTER_CONTAINER=fsds-spark-worker-1-1 EXTRA_SUBMIT_ARGS="--driver-memory 600m" \
+    MASTER_CONTAINER=platform-spark-worker-1-1 EXTRA_SUBMIT_ARGS="--driver-memory 600m" \
       submit "skew_0-doichung" bronze/ingest_amazon_order_snapshots.py \
         --sample-days 20 --aqe off --table raw_amazon_orders_skew_0
     ;;
   skew_a)
     # Brief 02, phương pháp a: giảm số partition shuffle 200 -> 24 (chỉ đổi cờ có sẵn của job).
-    MASTER_CONTAINER=fsds-spark-worker-1-1 EXTRA_SUBMIT_ARGS="--driver-memory 600m" \
+    MASTER_CONTAINER=platform-spark-worker-1-1 EXTRA_SUBMIT_ARGS="--driver-memory 600m" \
       submit "skew_a-shuffle24" bronze/ingest_amazon_order_snapshots.py \
         --sample-days 20 --aqe off --shuffle-partitions 24 --table raw_amazon_orders_skew_a
     ;;
   skew_b)
     # Brief 02, phương pháp b: write.distribution-mode=none cho bảng thử (không shuffle trước khi ghi).
-    MASTER_CONTAINER=fsds-spark-worker-1-1 \
+    MASTER_CONTAINER=platform-spark-worker-1-1 \
       EXTRA_SUBMIT_ARGS="--driver-memory 600m --conf spark.sql.catalog.lakehouse.table-default.write.distribution-mode=none" \
       submit "skew_b-dist-none" bronze/ingest_amazon_order_snapshots.py \
         --sample-days 20 --aqe off --table raw_amazon_orders_skew_b
     ;;
   skew_c)
     # Brief 02, phương pháp c: write.distribution-mode=range cho bảng thử.
-    MASTER_CONTAINER=fsds-spark-worker-1-1 \
+    MASTER_CONTAINER=platform-spark-worker-1-1 \
       EXTRA_SUBMIT_ARGS="--driver-memory 600m --conf spark.sql.catalog.lakehouse.table-default.write.distribution-mode=range" \
       submit "skew_c-dist-range" bronze/ingest_amazon_order_snapshots.py \
         --sample-days 20 --aqe off --table raw_amazon_orders_skew_c

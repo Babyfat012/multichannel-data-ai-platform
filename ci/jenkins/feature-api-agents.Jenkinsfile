@@ -1,12 +1,12 @@
-// CI/CD MCP server + Agent (rubric mle dòng 33): test → build image Feature API (MCP tool) → helm --atomic
-// → đồng bộ system prompt từ Langfuse → deploy Agent dùng MCP tool đó → smoke test qua agentgateway. Secret ở Vault (secret/fsds/*); Jenkins chỉ giữ
+// CI/CD MCP server + Agent: test → build image Feature API (MCP tool) → helm --atomic
+// → đồng bộ system prompt từ Langfuse → deploy Agent dùng MCP tool đó → smoke test qua agentgateway. Secret ở Vault (secret/platform/*); Jenkins chỉ giữ
 // token chỉ-đọc `vault-ci-token` và `kind-kubeconfig`.
 pipeline {
   agent any
   options { timestamps(); disableConcurrentBuilds() }
   environment {
     REGISTRY = 'localhost:5001'
-    KCTX = 'kind-fsds-ml'
+    KCTX = 'kind-platform'
     VAULT_ADDR = 'http://localhost:8200'
     TAG = "${env.GIT_COMMIT ?: env.BUILD_NUMBER}"
   }
@@ -17,10 +17,10 @@ pipeline {
       }
     }
     stage('Build') {
-      steps { sh 'docker build -f docker/Dockerfile.serving -t fsds-feature-api:$TAG .' }
+      steps { sh 'docker build -f docker/Dockerfile.serving -t platform-feature-api:$TAG .' }
     }
     stage('Push') {
-      steps { sh 'scripts/run/push_images.sh fsds-feature-api:$TAG' }
+      steps { sh 'scripts/run/push_images.sh platform-feature-api:$TAG' }
     }
     stage('Deploy MCP server') {
       steps {

@@ -29,7 +29,7 @@ def main():
     cairo.cairo_destroy.argtypes = [ct.c_void_p]
     cairo.cairo_surface_destroy.argtypes = [ct.c_void_p]
     gobject.g_object_unref.argtypes = [ct.c_void_p]
-    for slug in ("architecture-layer12", "architecture-layer3"):
+    for slug in ("data-ml-platform", "llm-platform"):
         source = ROOT / "docs" / "diagrams" / f"{slug}.html"
         html = source.read_text(encoding="utf-8")
         svg = re.search(r"<svg.*?</svg>", html, re.S).group()

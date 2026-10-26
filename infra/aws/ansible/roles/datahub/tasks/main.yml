@@ -2,12 +2,12 @@
 - name: Cài uv trong venv công cụ riêng
   ansible.builtin.pip:
     name: uv==0.9.5
-    virtualenv: /mnt/fsds-data/uv
+    virtualenv: /mnt/platform-data/uv
     virtualenv_command: python3 -m venv
 - name: Cài SDK và CLI đúng phiên bản quickstart
   become_user: '{{ ansible_user }}'
   ansible.builtin.command:
-    argv: [/mnt/fsds-data/uv/bin/uv, tool, install, '--python', /usr/bin/python3, 'acryl-datahub==1.7.0.14']
+    argv: [/mnt/platform-data/uv/bin/uv, tool, install, '--python', /usr/bin/python3, 'acryl-datahub==1.7.0.14']
   environment:
     UV_TOOL_DIR: '/home/{{ ansible_user }}/.local/share/uv/tools'
     UV_TOOL_BIN_DIR: '/home/{{ ansible_user }}/.local/bin'

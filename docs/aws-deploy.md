@@ -1,13 +1,9 @@
-<!-- Mục đích: runbook người học triển khai DE batch EC2 + S3, thu proof và dọn tài nguyên. -->
-# Triển khai AWS — DE mốc 1
+<!-- Mục đích: runbook người vận hành triển khai Data Platform batch EC2 + S3, thu proof và dọn tài nguyên. -->
+# Triển khai AWS — Data Platform mốc 1
 
-Đích đã chốt: **Paid plan dùng credit, `ap-southeast-1`, EC2 `t3.xlarge` + S3**.
-Tài liệu này là hướng dẫn chạy, **chưa có bằng chứng chạy AWS**. MLE giữ proof
-local (`kind`); EKS/GPU/domain là bước bật–học–xóa sau, ngoài mốc 1.
-Rà soát 2026-10-22 ghi tình trạng trước khi chốt
-Paid plan/region; kiểm offline không thay cho kiểm tài khoản thật bên dưới.
+Cấu hình mặc định: `ap-southeast-1`, EC2 `t3.xlarge` và hai bucket S3. Tài liệu hướng dẫn triển khai và thu evidence; **chưa có bằng chứng chạy AWS**. ML Platform / LLM Platform hiện có ghi nhận local; EKS/GPU/domain cần môi trường triển khai riêng.
 Cấu hình và ảnh IaC: [IaC.md](IaC.md). Sơ đồ: [hạ tầng](diagrams/aws-infra.html),
-[DE](diagrams/aws-de.html), [MLE sau mốc 1](diagrams/aws-ml.html).
+[Data Platform](diagrams/aws-data-platform.html), [ML Platform / LLM Platform sau mốc 1](diagrams/aws-ml-llm-platform.html).
 
 <a id="chuan-bi"></a>
 ## 1. Máy điều khiển và tài khoản (laptop)
@@ -27,25 +23,20 @@ terraform version
 ansible-playbook --version
 rsync --version
 # Chỉ tạo nếu chưa có key; không ghi đè key đang dùng.
-test -f ~/.ssh/fsds_aws || ssh-keygen -t ed25519 -f ~/.ssh/fsds_aws
+test -f ~/.ssh/platform_aws || ssh-keygen -t ed25519 -f ~/.ssh/platform_aws
 aws configure sso
-aws sso login --profile fsds
-export AWS_PROFILE=fsds
+aws sso login --profile platform
+export AWS_PROFILE=platform
 export AWS_REGION=ap-southeast-1
 aws sts get-caller-identity
-aws freetier get-account-plan-state
-aws ec2 describe-instance-types --region ap-southeast-1 \
-  --filters Name=free-tier-eligible,Values=true \
-  --query 'InstanceTypes[*].[InstanceType,VCpuInfo.DefaultVCpus,MemoryInfo.SizeInMiB]'
 aws service-quotas get-service-quota --service-code ec2 \
   --quota-code L-1216C47A --region ap-southeast-1
 ```
 
 Điền thông tin SSO/profile của tài khoản đang dùng; nếu đã có profile đăng nhập
 hợp lệ thì dùng profile đó, bỏ hai lệnh cấu hình SSO. Mong đợi: CLI v2,
-plugin có phiên bản, đúng account, Paid plan và quota Standard On-Demand còn
-ít nhất **4 vCPU** cho máy này (trừ các instance đang dùng). Truy vấn Free Tier
-chỉ tham khảo, không yêu cầu `t3.xlarge` nằm trong kết quả. Lỗi hay gặp:
+plugin có phiên bản, đúng account và quota Standard On-Demand còn
+ít nhất **4 vCPU** cho máy này (trừ các instance đang dùng). Lỗi hay gặp:
 `ExpiredToken` → đăng nhập lại; `AccessDenied` → kiểm quyền của profile;
 quota không đủ → xử lý quota trước apply. Các truy vấn chỉ đọc này chưa chứng
 minh loại máy có sẵn ở AZ hoặc launch được.
@@ -56,7 +47,7 @@ minh loại máy có sẵn ở AZ hoặc launch được.
 ```bash
 cd infra/aws/terraform
 cp terraform.tfvars.example terraform.tfvars
-cat ~/.ssh/fsds_aws.pub
+cat ~/.ssh/platform_aws.pub
 # Sửa terraform.tfvars theo mẫu bên dưới rồi mới chạy tiếp.
 ```
 
@@ -78,9 +69,9 @@ force_destroy     = false
 terraform init
 terraform fmt -check
 terraform validate
-terraform plan -out de.tfplan
+terraform plan -out data-platform.tfplan
 # Đọc plan: một EC2, đúng region/AZ, hai S3, EBS, VPC/IAM và budget.
-terraform apply de.tfplan
+terraform apply data-platform.tfplan
 terraform output
 ```
 
@@ -115,11 +106,11 @@ cp group_vars/all.example.yml group_vars/all.yml
 | `instance_id` | `inventory.ini`: thay `INSTANCE_ID` trong `ansible_host` |
 | `region` | thay `REGION` trong ProxyCommand và `all.yml`: `aws_region` |
 | `data_volume_id`, `raw_bucket`, `lakehouse_bucket` | các khóa cùng tên trong `all.yml` (bucket không có `s3://`) |
-| Đường dẫn repo tuyệt đối trên laptop | `repo_local`, ví dụ `/home/you/FSDS` |
+| Đường dẫn repo tuyệt đối trên laptop | `repo_local`, ví dụ `/home/you/Data & AI Platform` |
 | Secret ngẫu nhiên chỉ gồm chữ/số/`_`/`-` | `postgres_password` ≥16 ký tự; `lakekeeper_encryption_key` ≥32 ký tự |
 | Nguồn | giữ mặc định `source_mode: scale`, `source_dataset_name: aws-scale150-seed7` (150 ngày × 20 đơn); đổi tên dataset khi đổi cấu hình nguồn |
 
-Giữ `app_dir: /opt/fsds`; key private trong inventory là `~/.ssh/fsds_aws`.
+Giữ `app_dir: /opt/platform`; key private trong inventory là `~/.ssh/platform_aws`.
 Mã hóa toàn bộ biến trước khi chạy:
 
 ```bash
@@ -154,7 +145,7 @@ Mở phiên vào EC2 qua SSM (không mở cổng SSH), rồi chạy **theo đún
 eval "$(terraform -chdir=infra/aws/terraform output -raw ssm_command)"
 # Trong phiên EC2
 sudo -iu ubuntu
-cd /opt/fsds
+cd /opt/platform
 bash scripts/run/run_order_lifecycle_live.sh --phase source    # chỉ kiểm manifest trên S3
 bash scripts/run/run_order_lifecycle_live.sh --phase airflow   # DAG dp_order_lifecycle, receipt, rồi dừng pha A
 ```
@@ -179,7 +170,7 @@ eval "$(terraform -chdir=infra/aws/terraform output -raw port_forward_command)"
 (giữ volume, không `down -v`):
 
 ```bash
-cd /opt/fsds
+cd /opt/platform
 DATAHUB_VERSION=v1.7.0.1 UI_INGESTION_DEFAULT_CLI_VERSION=1.7.0.14 \
 DATAHUB_MAPPED_GMS_PORT=8089 DATAHUB_MAPPED_FRONTEND_PORT=9002 \
 docker compose --env-file "$HOME/.datahub/quickstart/.local-secrets.env" \
@@ -194,7 +185,7 @@ Mong đợi: DAG success, receipt đúng generation,
 Lineage/Quality được publish và capture từ laptop qua tunnel. Lỗi hay gặp:
 thiếu manifest → chạy tag source_data; sai `source_root` → kiểm prefix S3/dataset;
 DataHub OOM → kiểm Spark/Airflow đã dừng; capture lỗi → kiểm tunnel/UI và receipt
-cùng run. Chỉ đổi rubric thành có proof sau khi đã kiểm output và ảnh thực.
+cùng run. Chỉ ghi nhận kết quả sau khi kiểm output và ảnh thực của cùng run.
 
 <a id="do"></a>
 ## 5. Đo trên bảng thật (EC2)
@@ -202,21 +193,21 @@ cùng run. Chỉ đổi rubric thành có proof sau khi đã kiểm output và �
 Chạy trên EC2 **sau** pha airflow và **trước** pha datahub (runner từ chối chạy khi DataHub đang bật):
 
 ```bash
-cd /opt/fsds
-bash scripts/run/run_aws_measurements.sh --what skew          # baseline vs salted, rubric DE 11–12
-bash scripts/run/run_aws_measurements.sh --what maintenance   # compact/z-order bảng thật, DE 20
-bash scripts/run/run_aws_measurements.sh --what warehouse     # EXPLAIN trước/sau index n=5, DE 21
+cd /opt/platform
+bash scripts/run/run_aws_measurements.sh --what skew          # baseline vs salted
+bash scripts/run/run_aws_measurements.sh --what maintenance   # compact/z-order bảng thật
+bash scripts/run/run_aws_measurements.sh --what warehouse     # EXPLAIN trước/sau index n=5
 ```
 
 Kết quả: `out/aws-evidence/<ngày UTC>/{skew,maintenance,warehouse}-<timestamp>-<pid>/` (JSON, image ID, log, event log;
-skew có thêm Parquet). Bản gốc event log ở `/mnt/fsds-data/spark-events/aws-evidence/`. Lấy về laptop để đưa vào `docs/evidence/`:
+skew có thêm Parquet). Bản gốc event log ở `/mnt/platform-data/spark-events/aws-evidence/`. Lấy về laptop để đưa vào `docs/evidence/`:
 
 ```bash
 # Trong phiên EC2: đóng gói
-tar czf /tmp/fsds-aws-evidence.tgz -C /opt/fsds out/aws-evidence out/receipts-v2-run
+tar czf /tmp/platform-aws-evidence.tgz -C /opt/platform out/aws-evidence out/receipts-v2-run
 # Laptop (dùng chính ProxyCommand SSM của inventory)
-scp -i ~/.ssh/fsds_aws -o ProxyCommand="aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p --region ap-southeast-1" \
-  ubuntu@$(terraform -chdir=infra/aws/terraform output -raw instance_id):/tmp/fsds-aws-evidence.tgz .
+scp -i ~/.ssh/platform_aws -o ProxyCommand="aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p --region ap-southeast-1" \
+  ubuntu@$(terraform -chdir=infra/aws/terraform output -raw instance_id):/tmp/platform-aws-evidence.tgz .
 ```
 
 Mong đợi: baseline/salted có bag equality cùng input; maintenance giữ nguyên
@@ -226,7 +217,7 @@ phạm vi; CPU chậm khi hết credit standard → kiểm CPU credit, không t�
 unlimited. Không dùng số thời gian harness làm phần trăm cải thiện index.
 
 <a id="anh"></a>
-## 6. Tunnel UI và ảnh nộp rubric (laptop)
+## 6. Tunnel UI và thu evidence (laptop)
 
 Từ thư mục gốc repo, lấy rồi chạy đúng lệnh SSH in ra trong terminal riêng:
 
@@ -236,7 +227,7 @@ terraform output -raw port_forward_command
 # Chạy nguyên lệnh output; giữ terminal tunnel mở.
 ```
 
-Output dùng key `~/.ssh/fsds_aws` và ProxyCommand SSM. Airflow:
+Output dùng key `~/.ssh/platform_aws` và ProxyCommand SSM. Airflow:
 `http://127.0.0.1:8081`, Spark: `http://127.0.0.1:8080`, Lakekeeper:
 `http://127.0.0.1:8181`. Output tunnel hiện có thêm DataHub UI
 `http://127.0.0.1:9002` và GMS `http://127.0.0.1:8089`; kiểm output thực tế
@@ -247,19 +238,19 @@ profile SSM/key; UI unavailable → kiểm đúng pha và healthcheck.
 Lưu ảnh thật vào `docs/images/aws/` khi chụp; chưa tạo link ảnh chưa tồn tại.
 Mỗi ảnh ghi ngày, run_id, dataset, cỡ input, instance và đường dẫn receipt.
 
-| Rubric | Ảnh / artifact cần giữ |
+| Thành phần | Ảnh / artifact cần giữ |
 |---|---|
-| MLE 44 (cloud services), A2/IaC | `terraform apply`, Console EC2/VPC/IAM + S3, region và security group; xem [IaC](IaC.md) |
-| MLE 45 (Ansible) | PLAY RECAP `failed=0`, runtime EC2 healthy |
-| DE 11–12 | Spark UI stage/task baseline và salted, JSON thời gian/skew/bag equality cùng input |
-| DE 15, 22–27 | Airflow Graph/Grid và log Validate, receipt Bronze/Silver/Gold/feature cùng run |
-| DE 28–33 | DataHub Lineage + Quality trên bảng v2/feature, assertion đúng receipt; không dùng proof DP3 cũ |
-| DE 20 | Bảng nghiệp vụ thật trước/sau maintenance, file/partition và oracle dữ liệu |
-| DE 21 | EXPLAIN ANALYZE trước/sau index, input/truy vấn giống nhau, có dòng trả về |
-| DE 34–38 | Schema inventory/ERD, timestamp feature, dimension/fact/SCD2 nếu đã có proof v2 tương ứng |
+| Hạ tầng AWS | `terraform apply`, Console EC2/VPC/IAM + S3, region và security group; xem [IaC](IaC.md) |
+| Provisioning Ansible | PLAY RECAP `failed=0`, runtime EC2 healthy |
+| Spark baseline / skew | Spark UI stage/task baseline và salted, JSON thời gian/skew/bag equality cùng input |
+| Pipeline Airflow | Airflow Graph/Grid và log Validate, receipt Bronze/Silver/Gold/feature cùng run |
+| Governance DataHub | DataHub Lineage + Quality trên bảng v2/feature, assertion đúng receipt; không dùng proof DP3 cũ |
+| Iceberg maintenance | Bảng nghiệp vụ thật trước/sau maintenance, file/partition và oracle dữ liệu |
+| Warehouse indexing | EXPLAIN ANALYZE trước/sau index, input/truy vấn giống nhau, có dòng trả về |
+| Schema và model dữ liệu | Schema inventory/ERD, timestamp feature, dimension/fact/SCD2 nếu đã có proof v2 tương ứng |
 
 <a id="dung-don"></a>
-## 7. Dừng khi nghỉ, hủy cuối khóa (laptop)
+## 7. Dừng khi nghỉ, hủy môi trường (laptop)
 
 Tại `infra/aws/terraform`, sau khi chép receipt/log/ảnh cần giữ về laptop:
 
@@ -271,7 +262,7 @@ aws ec2 wait instance-stopped --region ap-southeast-1 \
 # Buổi sau (instance ID và key không đổi; SSM cần thời gian online lại):
 aws ec2 start-instances --region ap-southeast-1 \
   --instance-ids "$(terraform output -raw instance_id)"
-# Cuối khóa: đọc plan hủy, chỉ xác nhận sau khi đã sao lưu dữ liệu cần giữ.
+# Khi hủy môi trường: đọc plan hủy, chỉ xác nhận sau khi đã sao lưu dữ liệu cần giữ.
 terraform plan -destroy
 terraform destroy
 ```

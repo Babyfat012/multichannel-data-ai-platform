@@ -1,7 +1,7 @@
 """Fixture nguồn seller-source-v2 nhỏ, chỉ chạy local, độc lập với engine Batch v1.
 
 Chạy `python -m generator.generate_order_lifecycle_fixture --output /new/local/root`. Module
-chỉ xuất nguồn: không publish nhãn, không nạp PostgreSQL, không chạy pipeline DE.
+chỉ xuất nguồn: không publish nhãn, không nạp PostgreSQL, không chạy pipeline Data Platform.
 JSONL Walmart chỉ để dựng DB, không thay cho đường nạp JDBC.
 """
 
@@ -1276,7 +1276,7 @@ def coverage_receipt(rows, envelope):
     """Kiểm một tập đã phát và đóng băng; đủ dữ liệu không xoá được sự mơ hồ về liên kết.
 
     Dải sequence và partition kỳ vọng lấy từ envelope của producer, không từ dòng nhận được.
-    Đây là receipt của nguồn, không phải validator của DE.
+    Đây là receipt của nguồn, không phải validator của Data Platform.
     """
     if envelope.get("capability_status") == "unavailable":
         return {"status": "unavailable", "reasons": ["missing_capability"]}

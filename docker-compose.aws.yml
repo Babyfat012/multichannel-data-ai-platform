@@ -2,11 +2,11 @@
 # Chỉ khởi động catalog, spark, airflow; không bật profile disabled-aws. Không có access key:
 # Spark, Iceberg và Lakekeeper lấy credential tạm từ IAM role qua IMDSv2 (hop limit 2).
 x-s3-env: &s3-env
-  FSDS_STORAGE: s3
+  PLATFORM_STORAGE: s3
   AWS_REGION: ${AWS_REGION:?AWS_REGION_required}
   RAW_BUCKET: ${RAW_BUCKET:?RAW_BUCKET_required}
   LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:?LAKEHOUSE_BUCKET_required}
-  FSDS_CONTRACTS_DIR: /opt/contracts
+  PLATFORM_CONTRACTS_DIR: /opt/contracts
 services:
   minio:
     profiles: !override [disabled-aws]
@@ -23,7 +23,7 @@ services:
     cpus: "0.5"
     mem_limit: 2g
     volumes: !override
-      - /mnt/fsds-data/postgres:/var/lib/postgresql/data
+      - /mnt/platform-data/postgres:/var/lib/postgresql/data
   generator-batch:
     profiles: !override [disabled-aws]
     scale: 0
@@ -59,7 +59,7 @@ services:
       - "127.0.0.1:${SPARK_UI_PORT:-8080}:8080"
     cpus: "0.25"
     mem_limit: 512m
-    image: fsds-airflow:2.10.5-spark3.5.3
+    image: platform-airflow:2.10.5-spark3.5.3
     command: !override
       - /home/airflow/.local/lib/python3.10/site-packages/pyspark/bin/spark-class
       - org.apache.spark.deploy.master.Master
@@ -76,11 +76,11 @@ services:
       - ./generator:/opt/generator:ro
       - ./contracts:/opt/contracts:ro
       - ./sql:/opt/sql:ro
-      - /mnt/fsds-data/spark-events:/spark-events
+      - /mnt/platform-data/spark-events:/spark-events
   spark-worker-1:
     cpus: "1"
     mem_limit: 3500m
-    image: fsds-airflow:2.10.5-spark3.5.3
+    image: platform-airflow:2.10.5-spark3.5.3
     command: !override
       - /home/airflow/.local/lib/python3.10/site-packages/pyspark/bin/spark-class
       - org.apache.spark.deploy.worker.Worker
@@ -98,12 +98,12 @@ services:
       - ./generator:/opt/generator:ro
       - ./contracts:/opt/contracts:ro
       - ./sql:/opt/sql:ro
-      - /mnt/fsds-data/spark-events:/spark-events
-      - /mnt/fsds-data/spark-worker-1:/spark-local
+      - /mnt/platform-data/spark-events:/spark-events
+      - /mnt/platform-data/spark-worker-1:/spark-local
   spark-worker-2:
     cpus: "1"
     mem_limit: 3500m
-    image: fsds-airflow:2.10.5-spark3.5.3
+    image: platform-airflow:2.10.5-spark3.5.3
     command: !override
       - /home/airflow/.local/lib/python3.10/site-packages/pyspark/bin/spark-class
       - org.apache.spark.deploy.worker.Worker
@@ -121,8 +121,8 @@ services:
       - ./generator:/opt/generator:ro
       - ./contracts:/opt/contracts:ro
       - ./sql:/opt/sql:ro
-      - /mnt/fsds-data/spark-events:/spark-events
-      - /mnt/fsds-data/spark-worker-2:/spark-local
+      - /mnt/platform-data/spark-events:/spark-events
+      - /mnt/platform-data/spark-worker-2:/spark-local
   airflow-db-init:
     cpus: "0.1"
     mem_limit: 128m
@@ -137,18 +137,18 @@ services:
       SPARK_HOME: /home/airflow/.local/lib/python3.10/site-packages/pyspark
       PYSPARK_PYTHON: /usr/local/bin/python
       PYSPARK_DRIVER_PYTHON: /usr/local/bin/python
-      AIRFLOW_VAR_FSDS_SPARK_PACKAGES: ${FSDS_SPARK_PACKAGES_AWS:?packages_required}
-      AIRFLOW_VAR_FSDS_ORDER_LIFECYCLE_SOURCE_ROOT: s3a://${RAW_BUCKET}/order_lifecycle/${FSDS_DATASET_NAME:-fixture}
-      AIRFLOW_VAR_FSDS_ORDER_LIFECYCLE_CUTOFF: ${FSDS_ORDER_LIFECYCLE_CUTOFF:-2026-06-01T00:00:00.000000Z}
+      AIRFLOW_VAR_PLATFORM_SPARK_PACKAGES: ${PLATFORM_SPARK_PACKAGES_AWS:?packages_required}
+      AIRFLOW_VAR_PLATFORM_ORDER_LIFECYCLE_SOURCE_ROOT: s3a://${RAW_BUCKET}/order_lifecycle/${PLATFORM_DATASET_NAME:-fixture}
+      AIRFLOW_VAR_PLATFORM_ORDER_LIFECYCLE_CUTOFF: ${PLATFORM_ORDER_LIFECYCLE_CUTOFF:-2026-06-01T00:00:00.000000Z}
     volumes: !override
       - ./spark_jobs:/opt/spark_jobs:ro
       - ./generator:/opt/generator:ro
       - ./contracts:/opt/contracts:ro
       - ./sql:/opt/sql:ro
-      - /mnt/fsds-data/spark-events:/spark-events
-      - /mnt/fsds-data/airflow:/opt/airflow
+      - /mnt/platform-data/spark-events:/spark-events
+      - /mnt/platform-data/airflow:/opt/airflow
       - ./dags:/opt/airflow/dags:ro
-      - ./scripts:/opt/fsds/scripts:ro
+      - ./scripts:/opt/platform/scripts:ro
       - ./infra/aws/ansible:/opt/aws-runtime:ro
   flink-jobmanager:
     profiles: !override [disabled-aws]

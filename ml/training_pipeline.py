@@ -1,6 +1,6 @@
 """Kubeflow Pipelines: load (Feast offline) → split → train → evaluate → register (MLflow).
 
-Mọi bước chạy trong image `fsds-train` (docker/Dockerfile.train), gọi hàm của `ml/train_lib.py`.
+Mọi bước chạy trong image `platform-train` (docker/Dockerfile.train), gọi hàm của `ml/train_lib.py`.
 Biên dịch + submit: `scripts/run/run_training_pipeline.sh`.
 """
 
@@ -8,11 +8,9 @@ import os
 
 from kfp import dsl, kubernetes
 
-IMAGE = (
-    f"{os.environ.get('REGISTRY', 'localhost:5001')}/fsds-train:{os.environ.get('TAG', '0.1.0')}"
-)
+IMAGE = f"{os.environ.get('REGISTRY', 'localhost:5001')}/platform-train:{os.environ.get('TAG', '0.1.0')}"
 # Credential MinIO cho Feast đọc kho offline; Secret tạo từ .env lúc submit, không nằm trong YAML.
-SECRET = "fsds-minio"
+SECRET = "platform-minio"
 
 
 @dsl.component(base_image=IMAGE)
@@ -160,7 +158,7 @@ def register(
 
 @dsl.pipeline(name="return-risk-training", description="Feast offline → LightGBM → MLflow")
 def return_risk_training(
-    entity_path: str = "s3://fsds/feature-store/training_lines",
+    entity_path: str = "s3://platform/feature-store/training_lines",
     test_days: int = 10,
     tracking_uri: str = "http://mlflow:5000",
     model_name: str = "return-risk",

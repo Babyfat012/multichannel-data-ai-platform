@@ -21,7 +21,7 @@ def main(argv=None):
     """Đọc Gold hiện tại, ghi Parquet và in số dòng."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--cutoff", required=True)
-    parser.add_argument("--output", required=True, help="vd s3a://fsds/feature-store/sku_daily")
+    parser.add_argument("--output", required=True, help="vd s3a://platform/feature-store/sku_daily")
     args = parser.parse_args(argv)
     spark = build_spark("export-sku-daily-features", shuffle_partitions=4)
     try:

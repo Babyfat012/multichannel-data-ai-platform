@@ -17,7 +17,7 @@ export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 set -a; source .env; set +a
 
 LAKEKEEPER_URL="http://localhost:${LAKEKEEPER_PORT:-8181}"
-WAREHOUSE_NAME="${WAREHOUSE_NAME:-fsds}"
+WAREHOUSE_NAME="${WAREHOUSE_NAME:-platform}"
 # Endpoint MinIO nhìn từ TRONG mạng Compose: Lakekeeper và Spark đều là container.
 MINIO_ENDPOINT="${MINIO_INTERNAL_ENDPOINT:-http://minio:9000}"
 

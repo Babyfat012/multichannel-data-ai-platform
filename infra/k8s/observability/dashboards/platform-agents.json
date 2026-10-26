@@ -1,0 +1,745 @@
+{
+ "uid": "platform-agents",
+ "title": "Agents, LLM, MCP",
+ "schemaVersion": 39,
+ "time": {
+  "from": "now-3h",
+  "to": "now"
+ },
+ "refresh": "30s",
+ "panels": [
+  {
+   "type": "row",
+   "title": "LLM (qua agentgateway)",
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 24,
+    "h": 1
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Tổng request LLM",
+   "gridPos": {
+    "x": 0,
+    "y": 1,
+    "w": 6,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(agentgateway_gen_ai_client_token_usage_count{gen_ai_token_type=\"input\"})"
+    }
+   ]
+  },
+  {
+   "type": "stat",
+   "title": "Token input / request (TB)",
+   "gridPos": {
+    "x": 6,
+    "y": 1,
+    "w": 6,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(agentgateway_gen_ai_client_token_usage_sum{gen_ai_token_type=\"input\"}) / sum(agentgateway_gen_ai_client_token_usage_count{gen_ai_token_type=\"input\"})"
+    }
+   ]
+  },
+  {
+   "type": "stat",
+   "title": "Token output / request (TB)",
+   "gridPos": {
+    "x": 12,
+    "y": 1,
+    "w": 6,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(agentgateway_gen_ai_client_token_usage_sum{gen_ai_token_type=\"output\"}) / sum(agentgateway_gen_ai_client_token_usage_count{gen_ai_token_type=\"output\"})"
+    }
+   ]
+  },
+  {
+   "type": "stat",
+   "title": "Tổng token",
+   "gridPos": {
+    "x": 18,
+    "y": 1,
+    "w": 6,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(agentgateway_gen_ai_client_token_usage_sum)"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "Token/giây theo loại",
+   "gridPos": {
+    "x": 0,
+    "y": 5,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (gen_ai_token_type) (rate(agentgateway_gen_ai_client_token_usage_sum[5m]))",
+     "legendFormat": "{{gen_ai_token_type}}"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "Thời gian 1 lượt LLM (round-trip)",
+   "gridPos": {
+    "x": 12,
+    "y": 5,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "histogram_quantile(0.5, sum by (le) (rate(agentgateway_gen_ai_server_request_duration_bucket[5m])))",
+     "legendFormat": "p50"
+    },
+    {
+     "refId": "B",
+     "expr": "histogram_quantile(0.95, sum by (le) (rate(agentgateway_gen_ai_server_request_duration_bucket[5m])))",
+     "legendFormat": "p95"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "llama.cpp: token sinh ra/giây, request đang xử lý",
+   "gridPos": {
+    "x": 0,
+    "y": 13,
+    "w": 24,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "llamacpp:predicted_tokens_seconds",
+     "legendFormat": "tokens/s"
+    },
+    {
+     "refId": "B",
+     "expr": "llamacpp:requests_processing",
+     "legendFormat": "đang xử lý"
+    }
+   ]
+  },
+  {
+   "type": "row",
+   "title": "Agent và MCP tool",
+   "gridPos": {
+    "x": 0,
+    "y": 21,
+    "w": 24,
+    "h": 1
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Số lần gọi mỗi Agent (A2A qua gateway)",
+   "gridPos": {
+    "x": 0,
+    "y": 22,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (route) (increase(agentgateway_requests_total{route=~\"default/a2a-.*\"}[5m]))",
+     "legendFormat": "{{route}}"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "Số lần gọi mỗi MCP tool",
+   "gridPos": {
+    "x": 12,
+    "y": 22,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (resource) (increase(agentgateway_mcp_requests_total{method=\"tools/call\"}[5m]))",
+     "legendFormat": "{{resource}}"
+    }
+   ]
+  },
+  {
+   "type": "stat",
+   "title": "Tổng lần gọi Agent",
+   "gridPos": {
+    "x": 0,
+    "y": 30,
+    "w": 6,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(agentgateway_requests_total{route=~\"default/a2a-[a-z-]+\"})"
+    }
+   ]
+  },
+  {
+   "type": "stat",
+   "title": "Tổng lần gọi MCP tool",
+   "gridPos": {
+    "x": 6,
+    "y": 30,
+    "w": 6,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(agentgateway_mcp_requests_total{method=\"tools/call\"})"
+    }
+   ]
+  },
+  {
+   "type": "row",
+   "title": "Gateway / Web API",
+   "gridPos": {
+    "x": 0,
+    "y": 34,
+    "w": 24,
+    "h": 1
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Request/giây theo route",
+   "gridPos": {
+    "x": 0,
+    "y": 35,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (route) (rate(agentgateway_requests_total[1m]))",
+     "legendFormat": "{{route}}"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "Request lỗi/giây theo status",
+   "gridPos": {
+    "x": 12,
+    "y": 35,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (status, route) (rate(agentgateway_requests_total{status!~\"2..\"}[1m]))",
+     "legendFormat": "{{status}} {{route}}"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "Feature API: request/giây và lỗi",
+   "gridPos": {
+    "x": 0,
+    "y": 43,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (handler) (rate(http_requests_total{job=\"kubernetes-pods\",namespace=\"feature-store\"}[1m]))",
+     "legendFormat": "{{handler}}"
+    },
+    {
+     "refId": "B",
+     "expr": "sum(rate(http_requests_total{namespace=\"feature-store\",status=~\"5..\"}[1m]))",
+     "legendFormat": "5xx"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "Feature API: độ trễ p95",
+   "gridPos": {
+    "x": 12,
+    "y": 43,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "histogram_quantile(0.95, sum by (le, handler) (rate(http_request_duration_seconds_bucket{namespace=\"feature-store\"}[5m])))",
+     "legendFormat": "{{handler}}"
+    }
+   ]
+  },
+  {
+   "type": "row",
+   "title": "Model KServe return-risk",
+   "gridPos": {
+    "x": 0,
+    "y": 51,
+    "w": 24,
+    "h": 1
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Dự đoán/giây (abstain hay không)",
+   "gridPos": {
+    "x": 0,
+    "y": 52,
+    "w": 8,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (abstain) (rate(return_risk_predictions_total[5m]))",
+     "legendFormat": "abstain={{abstain}}"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "Lỗi dự đoán/giây",
+   "gridPos": {
+    "x": 8,
+    "y": 52,
+    "w": 8,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (reason) (rate(return_risk_errors_total[5m]))",
+     "legendFormat": "{{reason}}"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "Thời gian tra Feast của model p95",
+   "gridPos": {
+    "x": 16,
+    "y": 52,
+    "w": 8,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "histogram_quantile(0.95, sum by (le) (rate(return_risk_feast_lookup_seconds_bucket[5m])))",
+     "legendFormat": "p95"
+    }
+   ]
+  },
+  {
+   "type": "row",
+   "title": "LLM: TTFT, tốc độ sinh, PII",
+   "gridPos": {
+    "x": 0,
+    "y": 60,
+    "w": 24,
+    "h": 1
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "TTFT (request streaming)",
+   "gridPos": {
+    "x": 0,
+    "y": 61,
+    "w": 8,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "histogram_quantile(0.5, sum by (le) (rate(agentgateway_gen_ai_server_time_to_first_token_bucket[5m])))",
+     "legendFormat": "p50"
+    },
+    {
+     "refId": "B",
+     "expr": "histogram_quantile(0.95, sum by (le) (rate(agentgateway_gen_ai_server_time_to_first_token_bucket[5m])))",
+     "legendFormat": "p95"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "Thời gian mỗi token ra",
+   "gridPos": {
+    "x": 8,
+    "y": 61,
+    "w": 8,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "histogram_quantile(0.5, sum by (le) (rate(agentgateway_gen_ai_server_time_per_output_token_bucket[5m])))",
+     "legendFormat": "p50"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "Guardrail PII theo kết quả",
+   "gridPos": {
+    "x": 16,
+    "y": 61,
+    "w": 8,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (phase, action) (increase(agentgateway_guardrail_checks_total[5m]))",
+     "legendFormat": "{{phase}} {{action}}"
+    }
+   ]
+  },
+  {
+   "type": "stat",
+   "title": "Tổng request bị chặn vì PII",
+   "gridPos": {
+    "x": 0,
+    "y": 69,
+    "w": 6,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(agentgateway_guardrail_checks_total{action=\"Reject\"}) or vector(0)"
+    }
+   ]
+  },
+  {
+   "type": "stat",
+   "title": "Tỷ lệ chặn PII",
+   "gridPos": {
+    "x": 6,
+    "y": 69,
+    "w": 6,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(agentgateway_guardrail_checks_total{phase=\"Request\",action=\"Reject\"}) / sum(agentgateway_guardrail_checks_total{phase=\"Request\"})"
+    }
+   ]
+  },
+  {
+   "type": "row",
+   "title": "MCP tool: thành công / lỗi (Feature API)",
+   "gridPos": {
+    "x": 0,
+    "y": 73,
+    "w": 24,
+    "h": 1
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Lượt gọi tool theo kết quả",
+   "gridPos": {
+    "x": 0,
+    "y": 74,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (tool, outcome) (increase(mcp_tool_calls_total[5m]))",
+     "legendFormat": "{{tool}} {{outcome}}"
+    }
+   ]
+  },
+  {
+   "type": "timeseries",
+   "title": "Tổng lỗi mỗi tool",
+   "gridPos": {
+    "x": 12,
+    "y": 74,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (tool) (mcp_tool_calls_total{outcome=\"error\"})",
+     "legendFormat": "{{tool}}"
+    }
+   ]
+  }
+ ],
+ "tags": [
+  "platform",
+  "ml-platform"
+ ]
+}

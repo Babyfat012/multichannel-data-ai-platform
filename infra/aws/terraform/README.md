@@ -1,5 +1,5 @@
-<!-- Mục đích: điểm vào Terraform AWS cho DE (mốc 1): dựng gì, chạy thế nào, tốn gì. -->
-# Terraform AWS cho DE (mốc 1)
+<!-- Mục đích: điểm vào Terraform AWS Data Platform: dựng gì, chạy thế nào, tốn gì. -->
+# Terraform AWS Data Platform
 
 Terraform ≥1.6, provider `hashicorp/aws` `~> 6.0` (bản cụ thể ghim trong
 `.terraform.lock.hcl`). State để local. Mốc 1 **chưa có EKS**.
@@ -9,9 +9,7 @@ Dựng: VPC `10.42.0.0/16` + 1 public subnet + Internet Gateway, security group
 IAM role (instance profile, không access key), 2 bucket S3 (`raw`, `lakehouse`),
 budget tùy chọn. Sơ đồ: [`docs/diagrams/aws-infra.html`](../../../docs/diagrams/aws-infra.html).
 
-Trước khi chạy: xem rà soát sẵn sàng AWS.
-Credit không tự mở quyền dùng mọi loại EC2: ảnh tài khoản ngày 2026-10-22 vẫn là
-Free plan; `t3.xlarge` chưa được xác nhận có thể launch trên tài khoản này.
+Trước khi chạy, kiểm quyền của AWS profile, quota và cấu hình instance/region của tài khoản triển khai theo [runbook](../../../docs/aws-deploy.md). Repo chưa có bằng chứng launch EC2 trên AWS.
 
 ## Chạy
 
@@ -19,8 +17,8 @@ Free plan; `t3.xlarge` chưa được xác nhận có thể launch trên tài kh
 cd infra/aws/terraform
 cp terraform.tfvars.example terraform.tfvars   # điền ssh_public_key
 terraform init
-terraform plan -out de.tfplan
-terraform apply de.tfplan
+terraform plan -out data-platform.tfplan
+terraform apply data-platform.tfplan
 ```
 
 Máy bạn cần `aws` CLI đã đăng nhập và `session-manager-plugin` (để SSH qua SSM).
@@ -42,6 +40,10 @@ Sau đó sang [Ansible](../ansible/README.md).
 |---|---|
 | IAP + OS Login, firewall mở 22 cho dải IAP | SSM, security group không ingress |
 | Service account gắn VM | IAM role + instance profile |
-| `/dev/disk/by-id/google-fsds-data` | `/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_vol…` |
+| `/dev/disk/by-id/google-platform-data` | `/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_vol…` |
 | Budget tự gửi mail Billing Admin | Phải ghi `budget_email` |
 | Bật API (`google_project_service`) | Không cần |
+
+## State của môi trường đã tồn tại
+
+Resource address hiện hành dùng `data_platform` và `operator`; tên AWS dùng tiền tố `platform` / `data-platform`. Nếu đã apply cấu hình có resource address hoặc tên cũ, cần kiểm state và lập kế hoạch di chuyển trước khi apply. Xem toàn bộ plan để phân biệt cập nhật metadata với thao tác tạo lại EC2, EBS hoặc bucket; đổi tên trong repo không tự di chuyển state hay dữ liệu.

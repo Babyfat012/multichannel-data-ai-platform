@@ -46,12 +46,12 @@
   changed_when: false
 - name: Tạo mountpoint
   ansible.builtin.file:
-    path: /mnt/fsds-data
+    path: /mnt/platform-data
     state: directory
     mode: '0755'
 - name: Ghi mount UUID và mount nếu chưa có
   ansible.posix.mount:
-    path: /mnt/fsds-data
+    path: /mnt/platform-data
     src: 'UUID={{ disk_uuid.stdout | trim }}'
     fstype: '{{ disk_fstype.stdout | trim }}'
     opts: defaults

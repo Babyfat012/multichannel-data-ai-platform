@@ -1,18 +1,11 @@
 ---
-status: accepted
+status: superseded
 ---
 
-# Triển khai GCP và bật khi cần
+# GCP on-demand — quyết định lịch sử
 
-Ngày 2026-10-17, người dùng chọn GCP với khoản trial credit 300 USD, và chỉ
-chạy hệ thống khi cần. Hướng AWS trước đó chỉ là ứng viên được đề xuất và
-không còn là hướng đích. Sau câu trả lời Q6/Q8/Q9, đã chốt chi ngoài credit
-là 0 USD, GCE trước cho DE/Feast, Kubernetes khi làm MLE/agent; kiểm nhỏ rồi
-nghiệm thu Cloud với nguồn 100 GB và đủ năm Channel trong dự toán phù hợp.
-Mức credit thực còn lại/hạn dùng, region, quota và phương án storage chưa
-kiểm chứng; không coi khoản credit là 300 USD mỗi tháng hoặc quyền bật paid
-upgrade. Xem thêm [nguyên tắc local/cloud](0004-local-learning-cloud-delivery.md).
+Ngày 2026-10-17, thiết kế ban đầu chọn GCP, GCE cho Data Platform/Feast và Kubernetes cho ML Platform/LLM Platform. Các cấu hình GCP hiện được lưu nội bộ; repo không có bằng chứng triển khai GCP.
 
-Cập nhật D22/Q26: đã chọn GCS và Feast Spark/Redis theo
-[0006-gcs-feast-integration.md](0006-gcs-feast-integration.md); phần còn cần
-kiểm chứng là POC, sizing/region/quota/credit thực và retention/backup.
+Quyết định đích triển khai này đã được thay bằng AWS EC2 + S3 vào 2026-10-22. Cấu hình và hướng dẫn hiện hành: [AWS runbook](../aws-deploy.md), [IaC](../IaC.md). Inventory overlay GCP trong evidence chỉ được thu local, không chứng minh runtime cloud.
+
+Nguyên tắc cấu hình môi trường và tái tạo runtime tiếp tục được ghi tại [local/cloud](0004-local-development-cloud-delivery.md).

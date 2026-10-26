@@ -1,4 +1,4 @@
-"""DE-N2: unittest Iceberg Hadoop local, không mạng; chỉ dùng jar đã cache trong ivy.
+"""Iceberg maintenance: unittest Iceberg Hadoop local, không mạng; chỉ dùng jar đã cache trong ivy.
 
 Chạy trong Docker. Receipt ghi /tmp, không sửa evidence trong repo.
 Chỉ xuất evidence khi cả suite xanh; stdout có JSON + sha256.
@@ -35,7 +35,7 @@ class MaintenanceChecks(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Hadoop catalog tạm với extension CALL, không packages/network/service."""
-        cls.temp = tempfile.TemporaryDirectory(prefix="fsds-maintenance-")
+        cls.temp = tempfile.TemporaryDirectory(prefix="platform-maintenance-")
         jar = Path("/ivy/.ivy2/jars/org.apache.iceberg_iceberg-spark-runtime-3.5_2.12-1.11.0.jar")
         if not jar.is_file():
             raise RuntimeError(f"Thiếu jar offline: {jar}")

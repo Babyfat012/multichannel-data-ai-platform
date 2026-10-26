@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 os.environ.setdefault("SPARK_LOCAL_IP", "127.0.0.1")
 os.environ.setdefault("SPARK_LOCAL_HOSTNAME", "localhost")
-os.environ["FSDS_CONTRACTS_DIR"] = str(ROOT / "contracts")
+os.environ["PLATFORM_CONTRACTS_DIR"] = str(ROOT / "contracts")
 
 
 def serving(cur):

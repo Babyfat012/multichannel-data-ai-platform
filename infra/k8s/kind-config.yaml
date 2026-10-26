@@ -1,8 +1,8 @@
-# Cụm k8s local cho phần MLE (1 node, image node mặc định của kind đang cài). Tên node: fsds-ml-control-plane.
-# Airflow/Spark trong Compose gọi vào qua NodePort sau khi nối node vào mạng fsds_default.
+# Cụm k8s local cho ML Platform (1 node, image node mặc định của kind đang cài). Tên node: platform-control-plane.
+# Airflow/Spark trong Compose gọi vào qua NodePort sau khi nối node vào mạng platform_default.
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
-name: fsds-ml
+name: platform
 # Registry local (scripts/setup/setup_kind_registry.sh): containerd đọc hosts.toml trong certs.d.
 containerdConfigPatches:
   - |-

@@ -22,7 +22,7 @@ chúng có vòng đời riêng. Training dataset của model bất biến, khôn
 ID với data generation mới phục vụ model đó. Một turn dùng đúng một context.
 
 Chọn PostgreSQL 15 đang có trong [Compose](../docker-compose.yml) làm control
-store, schema `fsds_control` trong DB riêng của ứng dụng; không dùng DB catalog
+store, schema `platform_control` trong DB riêng của ứng dụng; không dùng DB catalog
 Lakekeeper hoặc DB Airflow làm bảng nghiệp vụ. Bộ nhỏ có thể dùng cùng
 PostgreSQL server nhưng roles và DB phải riêng. Chưa tạo DB/schema tại đây.
 Dùng object store hiện có để giữ immutable JSON/report/artifact. Không thêm
@@ -38,7 +38,7 @@ service điều phối mới. Đây là lựa chọn triển khai local để th
 | Model/RAG | Image digest, weights/preprocessor/embedding/corpus/index digests | Endpoint startup chứng minh artifact thực nạp; alias/tag không làm identity |
 
 Namespace output mẫu: `out/<epoch>/<run>/<attempt>/...`,
-`pub_<generation>_<attempt>.sales_daily`, Feast project `fsds_<generation>_<attempt>`; manifest trỏ attempt đã chọn,
+`pub_<generation>_<attempt>.sales_daily`, Feast project `platform_<generation>_<attempt>`; manifest trỏ attempt đã chọn,
 không để hai retry ghi chung project.
 POC phải kiểm bản Feast đã pin thực sự tách Redis keys theo project và registry;
 không dựa vào tên project trên config để suy có isolation. Nếu adapter không
@@ -58,7 +58,7 @@ Không đặt credential, URL có token hoặc payload nhạy cảm vào manifes
 
 ```json
 {
-  "schema_version": "fsds.run-input.v1",
+  "schema_version": "platform.run-input.v1",
   "run_id": "r_018",
   "dataset_version": "d_world_07",
   "world_digest": "h_world",
@@ -78,7 +78,7 @@ Không đặt credential, URL có token hoặc payload nhạy cảm vào manifes
     {
       "role": "amazon_orders_bronze",
       "kind": "iceberg",
-      "catalog": "fsds",
+      "catalog": "platform",
       "table": "bronze.amazon_orders",
       "table_uuid": "uuid_a",
       "snapshot_id": "81234001",
@@ -141,7 +141,7 @@ outputs riêng; optional không làm mất số liệu chính hoặc biến thi�
 
 ```json
 {
-  "schema_version": "fsds.output-profile.v1",
+  "schema_version": "platform.output-profile.v1",
   "profile_id": "seller-demo-v1",
   "scope": {"channels": ["amazon", "walmart", "tiktok_shop", "shopify", "shopee"]},
   "required": ["sales_daily_pg", "listing_inventory_pg", "coverage_pg"],
@@ -162,7 +162,7 @@ coverage như nhau. Required capability trong scope đã khai báo mà bị mấ
 feed/receipt thì candidate fail, giữ activation tốt trước. Scope ngoài
 capability hiển thị `unsupported`/`unknown`; không cắt dòng lặng lẽ. Optional
 thiếu phải có receipt `unavailable` và consumer không được suy0. Đổi requirement
-hay scope tạo profile revision mới, audit và acceptance theo rubric tương ứng.
+hay scope tạo profile revision mới, audit và kiểm chứng theo contract tương ứng.
 
 Mỗi output receipt phải có role/status, input/stage digest, physical identity,
 key/schema/content digest, logical row count, quantity/amount theo currency,
@@ -218,7 +218,7 @@ Training manifest phải riêng với publication manifest:
 
 ```json
 {
-  "schema_version": "fsds.training-dataset.v1",
+  "schema_version": "platform.training-dataset.v1",
   "training_dataset_id": "td_fold_03",
   "world_digest": "h_world",
   "clock_id": "sim_world_07",
@@ -273,7 +273,7 @@ mới. Bundle độc lập pin model/RAG/tool artifacts:
 
 ```json
 {
-  "schema_version": "fsds.serving-bundle.v1",
+  "schema_version": "platform.serving-bundle.v1",
   "bundle_id": "b_07",
   "model": {
     "image_digest": "h_image",
@@ -373,10 +373,10 @@ Pseudocode này mô tả service transaction, không phải migration chạy đ�
 ```sql
 BEGIN;
 -- lock + check environment, lane lease, dependencies, compatibility first
-SELECT * FROM fsds_control.active_pointer WHERE lane = :lane FOR UPDATE;
+SELECT * FROM platform_control.active_pointer WHERE lane = :lane FOR UPDATE;
 -- application checks expected version, intent and exact candidate digest
-INSERT INTO fsds_control.activation (...) VALUES (...);
-UPDATE fsds_control.active_pointer
+INSERT INTO platform_control.activation (...) VALUES (...);
+UPDATE platform_control.active_pointer
 SET activation_id = :activation, pointer_version = pointer_version + 1
 WHERE lane = :lane AND epoch = :epoch AND pointer_version = :expected;
 -- assert affected_rows = 1; insert event with UNIQUE idempotency key

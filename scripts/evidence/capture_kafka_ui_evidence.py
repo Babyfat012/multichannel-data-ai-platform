@@ -17,8 +17,8 @@ from scripts.evidence.chrome import chrome_page
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / "docs" / "images" / "cdc" / "kafka-ui-cdc-topic.png"
 BASE_URL = "http://127.0.0.1:8085"
-CLUSTER = "fsds"
-TOPIC = "fsds_cdc.walmart.orders"
+CLUSTER = "platform"
+TOPIC = "platform_cdc.walmart.orders"
 
 
 async def capture(url: str, output: Path, expects: list[str]) -> None:

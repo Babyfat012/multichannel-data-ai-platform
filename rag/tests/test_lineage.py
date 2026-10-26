@@ -20,18 +20,20 @@ def by_aspect(mcps, aspect):
 
 
 def test_lineage_chain_raw_to_online():
-    mcps = lineage_mcps("fsds/rag", RECEIPT)
+    mcps = lineage_mcps("platform/rag", RECEIPT)
     edges = {
         urn: [u["dataset"] for u in v["upstreams"]] for urn, v in by_aspect(mcps, "upstreamLineage")
     }
-    online = "urn:li:dataset:(urn:li:dataPlatform:postgres,rag.public.fsds_rag_policy_chunks,PROD)"
-    vectors = "urn:li:dataset:(urn:li:dataPlatform:s3,fsds/rag/chunks.parquet,PROD)"
+    online = (
+        "urn:li:dataset:(urn:li:dataPlatform:postgres,rag.public.platform_rag_policy_chunks,PROD)"
+    )
+    vectors = "urn:li:dataset:(urn:li:dataPlatform:s3,platform/rag/chunks.parquet,PROD)"
     assert edges[online] == [vectors]
     assert len(edges) == 4  # raw, chunks_text, chunks, online
 
 
 def test_jobs_follow_task_order():
-    jobs = by_aspect(lineage_mcps("fsds/rag", RECEIPT), "dataJobInputOutput")
+    jobs = by_aspect(lineage_mcps("platform/rag", RECEIPT), "dataJobInputOutput")
     names = [urn.rsplit(",", 1)[1].rstrip(")") for urn, _ in jobs]
     assert names == ["upload", "chunk", "embed", "load", "validate"]
     assert jobs[0][1]["inputDatajobs"] == []
@@ -39,6 +41,6 @@ def test_jobs_follow_task_order():
 
 
 def test_assertion_result_follows_check_value():
-    runs = by_aspect(lineage_mcps("fsds/rag", RECEIPT), "assertionRunEvent")
+    runs = by_aspect(lineage_mcps("platform/rag", RECEIPT), "assertionRunEvent")
     results = sorted(v["result"]["type"] for _, v in runs)
     assert results == ["FAILURE", "SUCCESS"]

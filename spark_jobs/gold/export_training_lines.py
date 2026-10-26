@@ -29,7 +29,7 @@ def main(argv=None):
     """Ghép nhãn generation hiện tại với fact, ghi đè Parquet và in phân bố nhãn."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
-        "--output", required=True, help="vd s3a://fsds/feature-store/training_lines"
+        "--output", required=True, help="vd s3a://platform/feature-store/training_lines"
     )
     args = parser.parse_args(argv)
     spark = build_spark("export-training-lines", shuffle_partitions=4)

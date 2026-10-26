@@ -5,9 +5,11 @@
 # Spark standalone (1 master + 2 worker) cũng ở profile riêng: docker compose --profile spark up -d
 # Lakekeeper (REST catalog cho Iceberg) nằm trong profile catalog và được profile spark kéo theo.
 
+name: platform
+
 x-generator: &generator
   build: .
-  image: data-generator:optimize
+  image: platform-generator:optimize
   env_file: .env
   environment:
     AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
@@ -170,7 +172,7 @@ services:
               ./out/ground-truth-bridge:/data/ground-truth-bridge:ro,
               ./out/channels-small/source-exports:/data/channels-small/source-exports:ro,
               ./out/spark-events:/spark-events,
-              "${FSDS_ORDER_LIFECYCLE_DIR:-./out/order_lifecycle_live}:/data/order_lifecycle:ro"]
+              "${PLATFORM_ORDER_LIFECYCLE_DIR:-./out/order_lifecycle_live}:/data/order_lifecycle:ro"]
     mem_limit: 512m
 
   # Worker làm việc thật. RAM worker là con số mình ĐẶT (SPARK_WORKER_MEMORY), thiếu thì
@@ -191,7 +193,7 @@ services:
               "./out/ground-truth-bridge:/data/ground-truth-bridge:ro",
               "./out/channels-small/source-exports:/data/channels-small/source-exports:ro",
               "./out/spark-events:/spark-events",
-              "${FSDS_ORDER_LIFECYCLE_DIR:-./out/order_lifecycle_live}:/data/order_lifecycle:ro"]
+              "${PLATFORM_ORDER_LIFECYCLE_DIR:-./out/order_lifecycle_live}:/data/order_lifecycle:ro"]
     mem_limit: ${SPARK_WORKER_MEM_LIMIT:-2560m}
 
   spark-worker-2:
@@ -201,7 +203,7 @@ services:
               "./out/ground-truth-bridge:/data/ground-truth-bridge:ro",
               "./out/channels-small/source-exports:/data/channels-small/source-exports:ro",
               "./out/spark-events:/spark-events",
-              "${FSDS_ORDER_LIFECYCLE_DIR:-./out/order_lifecycle_live}:/data/order_lifecycle:ro"]
+              "${PLATFORM_ORDER_LIFECYCLE_DIR:-./out/order_lifecycle_live}:/data/order_lifecycle:ro"]
 
   # Airflow dùng DB riêng trong PostgreSQL hiện có. Chỉ tạo DB, không đổi `sources`.
   airflow-db-init:
@@ -222,7 +224,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.airflow
-    image: fsds-airflow:2.10.5-spark3.5.3
+    image: platform-airflow:2.10.5-spark3.5.3
     profiles: [airflow]
     user: "${AIRFLOW_UID:-1000}:0"
     env_file: .env
@@ -234,7 +236,7 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/airflow
       PYTHONPATH: /opt
       SPARK_LOCAL_HOSTNAME: airflow
-      FSDS_CONTRACTS_DIR: /opt/contracts
+      PLATFORM_CONTRACTS_DIR: /opt/contracts
     depends_on:
       airflow-db-init: {condition: service_completed_successfully}
     # `airflow standalone` để lại PID file trong volume sau khi container dừng.
@@ -243,14 +245,14 @@ services:
     ports: ["${AIRFLOW_WEB_PORT:-8081}:8080"]
     volumes: [airflow-data:/opt/airflow, ./out/receipts:/opt/airflow/receipts,
               ./dags:/opt/airflow/dags:ro,
-              ./scripts:/opt/fsds/scripts:ro,
+              ./scripts:/opt/platform/scripts:ro,
               ./sql:/opt/sql:ro, ./spark_jobs:/opt/spark_jobs:ro, ./contracts:/opt/contracts:ro, /data/raw:/data/raw:ro,
               ./feature_repo:/opt/feature_repo:ro, ./rag:/opt/rag/rag:ro,
               /data/raw/ground-truth:/data/ground-truth:ro,
               ./out/ground-truth-bridge:/data/ground-truth-bridge:ro,
               ./out/channels-small/source-exports:/data/channels-small/source-exports:ro,
               ./out/spark-events:/spark-events,
-              "${FSDS_ORDER_LIFECYCLE_DIR:-./out/order_lifecycle_live}:/data/order_lifecycle:ro"]
+              "${PLATFORM_ORDER_LIFECYCLE_DIR:-./out/order_lifecycle_live}:/data/order_lifecycle:ro"]
     # 6g: driver Spark client mode của DAG v2 chạy trong container này với heap 3g.
     mem_limit: 6g
 
@@ -260,7 +262,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.flink
-    image: fsds-flink:1.20.3-kafka3.4.0
+    image: platform-flink:1.20.3-kafka3.4.0
     profiles: [flink]
     command: jobmanager
     environment:
@@ -273,7 +275,7 @@ services:
     mem_limit: 1024m
 
   flink-taskmanager:
-    image: fsds-flink:1.20.3-kafka3.4.0
+    image: platform-flink:1.20.3-kafka3.4.0
     profiles: [flink]
     command: taskmanager
     depends_on: [flink-jobmanager]
@@ -285,11 +287,11 @@ services:
     volumes: [./flink_jobs:/opt/flink/jobs:ro, ./out/flink:/opt/flink/output]
     mem_limit: 1280m
 
-  # MLE: đọc stream feature Flink ghi ở Kafka, push vào Feast (Redis trong kind + Parquet MinIO).
+  # ML Platform: đọc stream feature Flink ghi ở Kafka, push vào Feast (Redis trong kind + Parquet MinIO).
   # Cần chạy scripts/setup/setup_kind_feature_store.sh trước để có Redis.
   feast-pusher:
     build: {context: ., dockerfile: docker/Dockerfile.feast}
-    image: fsds-feast:0.66.0
+    image: platform-feast:0.66.0
     profiles: [ml-stream]
     command: ["python", "push_stream_features.py"]
     environment:
@@ -299,12 +301,12 @@ services:
       FEAST_REGISTRY: s3://${MINIO_BUCKET}/feature-store/registry.db
       FEAST_SKU_DAILY_PATH: s3://${MINIO_BUCKET}/feature-store/sku_daily
       FEAST_SKU_RETURN_24H_PATH: s3://${MINIO_BUCKET}/feature-store/sku_return_24h.parquet
-      FEAST_REDIS: fsds-ml-control-plane:30379
+      FEAST_REDIS: platform-control-plane:30379
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     restart: on-failure
     mem_limit: 768m
 
-  # MLE: MLflow tracking + model registry. Sổ ghi ở DB `mlflow` của PostgreSQL có sẵn, artifact
+  # ML Platform: MLflow tracking + model registry. Sổ ghi ở DB `mlflow` của PostgreSQL có sẵn, artifact
   # ở MinIO; client (bước KFP trong kind) gửi artifact qua server nên không cần credential S3.
   registry:
     image: registry:2.8.3
@@ -336,7 +338,7 @@ services:
 
   mlflow:
     build: {context: ., dockerfile: docker/Dockerfile.mlflow}
-    image: fsds-mlflow:3.17.0
+    image: platformflow:3.17.0
     profiles: [ml]
     depends_on:
       mlflow-db-init: {condition: service_completed_successfully}
@@ -355,7 +357,7 @@ services:
     restart: unless-stopped
     mem_limit: 512m
 
-  # Quản lý secret tập trung (rubric mle 54). Chế độ server, lưu file trong volume; init/unseal và nạp
+  # Quản lý secret tập trung. Chế độ server, lưu file trong volume; init/unseal và nạp
   # secret bằng scripts/setup/setup_vault.sh. UI: http://localhost:8200
   vault:
     image: hashicorp/vault:2.1.1
@@ -370,12 +372,12 @@ services:
     volumes: [vault-data:/vault/file]
     mem_limit: 256m
 
-  # Jenkins CI/CD (rubric mle 33–36). network_mode host: build gọi được Vault, Flink REST, API kind
+  # Jenkins CI/CD. network_mode host: build gọi được Vault, Flink REST, API kind
   # như trên máy host. JENKINS_HOME mount CÙNG đường dẫn host để bind mount của `docker compose` trong
   # workspace trỏ đúng. Khởi động bằng scripts/setup/setup_jenkins.sh (lấy secret từ Vault). UI :8090
   jenkins:
     build: {context: ., dockerfile: docker/Dockerfile.jenkins}
-    image: fsds-jenkins:2.580.1
+    image: platform-jenkins:2.580.1
     profiles: [ci]
     network_mode: host
     group_add: ["${DOCKER_GID:-973}"]
@@ -383,7 +385,7 @@ services:
       JENKINS_HOME: ${PWD}/out/jenkins_home
       JENKINS_OPTS: --httpPort=8090
       CASC_JENKINS_CONFIG: /var/jenkins_casc/jenkins.yaml
-      COMPOSE_PROJECT_NAME: fsds
+      COMPOSE_PROJECT_NAME: platform
       JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:-}
       VAULT_CI_TOKEN: ${VAULT_CI_TOKEN:-}
     volumes: ["/var/run/docker.sock:/var/run/docker.sock",
@@ -421,10 +423,10 @@ services:
       postgres: {condition: service_healthy}
     environment:
       BOOTSTRAP_SERVERS: kafka:9092
-      GROUP_ID: fsds-cdc-connect
-      CONFIG_STORAGE_TOPIC: fsds_cdc_connect_configs
-      OFFSET_STORAGE_TOPIC: fsds_cdc_connect_offsets
-      STATUS_STORAGE_TOPIC: fsds_cdc_connect_statuses
+      GROUP_ID: platform-cdc-connect
+      CONFIG_STORAGE_TOPIC: platform_cdc_connect_configs
+      OFFSET_STORAGE_TOPIC: platform_cdc_connect_offsets
+      STATUS_STORAGE_TOPIC: platform_cdc_connect_statuses
       KAFKA_HEAP_OPTS: -Xms256m -Xmx768m
     ports: ["${DEBEZIUM_PORT:-8084}:8083"]
     mem_limit: 1280m
@@ -436,7 +438,7 @@ services:
     depends_on:
       kafka: {condition: service_healthy}
     environment:
-      KAFKA_CLUSTERS_0_NAME: fsds
+      KAFKA_CLUSTERS_0_NAME: platform
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
     ports: ["${KAFKA_UI_PORT:-8085}:8080"]
     mem_limit: 640m

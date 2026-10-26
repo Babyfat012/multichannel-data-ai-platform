@@ -172,7 +172,7 @@ def run(args, receipt):
     from spark_jobs.lib.order_lifecycle_warehouse import TABLES, connect, cutoff_utc, export_frames
 
     spark = None
-    with tempfile.TemporaryDirectory(prefix="fsds-e2e-v2-", dir="/tmp") as work:
+    with tempfile.TemporaryDirectory(prefix="platform-e2e-v2-", dir="/tmp") as work:
         work = Path(work)
         receipt["local_warehouse"] = str(work / "warehouse")
         try:

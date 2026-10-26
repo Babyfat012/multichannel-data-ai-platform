@@ -119,7 +119,7 @@ def plan_maintenance(metadata, config, now=None):
             }
         )
     snapshots = sorted(metadata.get("snapshots", []), key=lambda s: utc(s["committed_at"]))
-    marker = metadata.get("properties", {}).get("fsds.maintenance.last_zorder_snapshot_id")
+    marker = metadata.get("properties", {}).get("platform.maintenance.last_zorder_snapshot_id")
     by_id = {str(s["snapshot_id"]): s for s in snapshots}
     # Đi theo parent để không đếm file trên nhánh không thuộc trạng thái hiện hành.
     cursor = str(

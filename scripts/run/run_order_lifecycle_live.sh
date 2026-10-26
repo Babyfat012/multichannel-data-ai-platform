@@ -10,14 +10,14 @@ usage() {
 Cách chạy: bash scripts/run/run_order_lifecycle_live.sh --phase source|airflow|datahub|capture|all
 Mặc định: --phase all. --help chỉ in hướng dẫn, không gọi Docker.
 Biến môi trường:
-  FSDS_ORDER_LIFECYCLE_DIR  fixture host (mặc định ./out/order_lifecycle_live)
-  FSDS_ORDER_LIFECYCLE_CUTOFF      mặc định 2026-06-01T00:00:00.000000Z
-  FSDS_V2_RUN_ID      chọn run mới khi trigger; chọn run cũ khi publish
-  FSDS_V2_TIMEOUT    timeout DAG giây (1800); FSDS_V2_START_TIMEOUT (600)
-  FSDS_V2_EXECUTOR_MEMORY  mặc định 2g, vừa worker mặc định cho fixture nhỏ
-  FSDS_STORAGE       minio (mặc định) hoặc s3; đọc từ environment hoặc .env
-  FSDS_PYTHON        local .venv/bin/python; S3 /mnt/fsds-data/venv/bin/python
-  RAW_BUCKET, AWS_REGION, FSDS_DATASET_NAME  nguồn S3 đã sync bởi Ansible
+  PLATFORM_ORDER_LIFECYCLE_DIR  fixture host (mặc định ./out/order_lifecycle_live)
+  PLATFORM_ORDER_LIFECYCLE_CUTOFF      mặc định 2026-06-01T00:00:00.000000Z
+  PLATFORM_V2_RUN_ID      chọn run mới khi trigger; chọn run cũ khi publish
+  PLATFORM_V2_TIMEOUT    timeout DAG giây (1800); PLATFORM_V2_START_TIMEOUT (600)
+  PLATFORM_V2_EXECUTOR_MEMORY  mặc định 2g, vừa worker mặc định cho fixture nhỏ
+  PLATFORM_STORAGE       minio (mặc định) hoặc s3; đọc từ environment hoặc .env
+  PLATFORM_PYTHON        local .venv/bin/python; S3 /mnt/platform-data/venv/bin/python
+  RAW_BUCKET, AWS_REGION, PLATFORM_DATASET_NAME  nguồn S3 đã sync bởi Ansible
   DATAHUB_PYTHON     Python có acryl-datahub SDK, mặc định môi trường uv đã chuẩn bị
   DATAHUB_GMS_URL    mặc định http://127.0.0.1:8089
   DATAHUB_GMS_TOKEN  token tùy chọn, chỉ truyền qua environment
@@ -36,29 +36,29 @@ while (($#)); do
 done
 case "$phase" in source|airflow|datahub|capture|all) ;; *) echo "Pha không hợp lệ: $phase" >&2; exit 2 ;; esac
 # Đọc giá trị cần thiết từ .env, giữ ưu tiên environment và không export secret.
-if [[ ! -v FSDS_STORAGE && -f .env ]]; then
-  export FSDS_STORAGE="$( (source .env; printf '%s' "${FSDS_STORAGE:-minio}") )"
+if [[ ! -v PLATFORM_STORAGE && -f .env ]]; then
+  export PLATFORM_STORAGE="$( (source .env; printf '%s' "${PLATFORM_STORAGE:-minio}") )"
 fi
-if [[ "${FSDS_STORAGE:-minio}" = s3 && -f .env ]]; then
-  for key in RAW_BUCKET FSDS_DATASET_NAME AWS_REGION FSDS_SPARK_PACKAGES_AWS COMPOSE_FILE FSDS_ORDER_LIFECYCLE_CUTOFF; do
+if [[ "${PLATFORM_STORAGE:-minio}" = s3 && -f .env ]]; then
+  for key in RAW_BUCKET PLATFORM_DATASET_NAME AWS_REGION PLATFORM_SPARK_PACKAGES_AWS COMPOSE_FILE PLATFORM_ORDER_LIFECYCLE_CUTOFF; do
     if [[ ! -v "$key" ]]; then
       value=$( (set -a; source .env; printf '%s' "${!key:-}") )
       export "$key=$value"
     fi
   done
 fi
-storage="${FSDS_STORAGE:-minio}"
+storage="${PLATFORM_STORAGE:-minio}"
 source_root=/data/order_lifecycle
-export FSDS_ORDER_LIFECYCLE_DIR="${FSDS_ORDER_LIFECYCLE_DIR:-./out/order_lifecycle_live}"
-py="${FSDS_PYTHON:-.venv/bin/python}"
+export PLATFORM_ORDER_LIFECYCLE_DIR="${PLATFORM_ORDER_LIFECYCLE_DIR:-./out/order_lifecycle_live}"
+py="${PLATFORM_PYTHON:-.venv/bin/python}"
 if [[ "$storage" = s3 ]]; then
-  source_root="s3a://${RAW_BUCKET:?Cần RAW_BUCKET}/order_lifecycle/${FSDS_DATASET_NAME:-fixture}"
-  py="${FSDS_PYTHON:-/mnt/fsds-data/venv/bin/python}"
-  export FSDS_ORDER_LIFECYCLE_DIR="/mnt/fsds-data/source/${FSDS_DATASET_NAME:-fixture}"
+  source_root="s3a://${RAW_BUCKET:?Cần RAW_BUCKET}/order_lifecycle/${PLATFORM_DATASET_NAME:-fixture}"
+  py="${PLATFORM_PYTHON:-/mnt/platform-data/venv/bin/python}"
+  export PLATFORM_ORDER_LIFECYCLE_DIR="/mnt/platform-data/source/${PLATFORM_DATASET_NAME:-fixture}"
 fi
-cutoff="${FSDS_ORDER_LIFECYCLE_CUTOFF:-2026-06-01T00:00:00.000000Z}"
-timeout="${FSDS_V2_TIMEOUT:-1800}"
-start_timeout="${FSDS_V2_START_TIMEOUT:-600}"
+cutoff="${PLATFORM_ORDER_LIFECYCLE_CUTOFF:-2026-06-01T00:00:00.000000Z}"
+timeout="${PLATFORM_V2_TIMEOUT:-1800}"
+start_timeout="${PLATFORM_V2_START_TIMEOUT:-600}"
 for seconds in "$timeout" "$start_timeout"; do
   [[ "$seconds" =~ ^[1-9][0-9]*$ ]] || { echo 'Timeout phải là số giây nguyên dương' >&2; exit 2; }
 done
@@ -99,17 +99,17 @@ wait_until() {
 }
 source_phase() {
   if [[ "$storage" = s3 ]]; then
-    aws s3 ls "s3://${RAW_BUCKET}/order_lifecycle/${FSDS_DATASET_NAME:-fixture}/manifest.json" --region "${AWS_REGION:?Cần AWS_REGION}"
+    aws s3 ls "s3://${RAW_BUCKET}/order_lifecycle/${PLATFORM_DATASET_NAME:-fixture}/manifest.json" --region "${AWS_REGION:?Cần AWS_REGION}"
     return
   fi
-  if [[ -f "$FSDS_ORDER_LIFECYCLE_DIR/manifest.json" ]]; then
-    echo "Giữ fixture đã có: $FSDS_ORDER_LIFECYCLE_DIR"
+  if [[ -f "$PLATFORM_ORDER_LIFECYCLE_DIR/manifest.json" ]]; then
+    echo "Giữ fixture đã có: $PLATFORM_ORDER_LIFECYCLE_DIR"
   else
     # Không ghi đè thư mục dở dang/nguồn của người khác.
-    if [[ -d "$FSDS_ORDER_LIFECYCLE_DIR" ]] && [[ -n "$(ls -A "$FSDS_ORDER_LIFECYCLE_DIR")" ]]; then
+    if [[ -d "$PLATFORM_ORDER_LIFECYCLE_DIR" ]] && [[ -n "$(ls -A "$PLATFORM_ORDER_LIFECYCLE_DIR")" ]]; then
       echo 'Thư mục nguồn không rỗng nhưng thiếu manifest; hãy chọn thư mục mới.' >&2; return 1
     fi
-    "$py" -m generator.generate_order_lifecycle_fixture --output "$FSDS_ORDER_LIFECYCLE_DIR"
+    "$py" -m generator.generate_order_lifecycle_fixture --output "$PLATFORM_ORDER_LIFECYCLE_DIR"
   fi
 }
 airflow_ready() {
@@ -146,7 +146,7 @@ print(json.dumps({"state": r.state, "directory": r.execution_date.strftime("%Y%m
 PY
 }
 airflow_phase() {
-  [[ "$storage" = s3 || -f "$FSDS_ORDER_LIFECYCLE_DIR/manifest.json" ]] || { echo 'Chạy --phase source trước' >&2; return 1; }
+  [[ "$storage" = s3 || -f "$PLATFORM_ORDER_LIFECYCLE_DIR/manifest.json" ]] || { echo 'Chạy --phase source trước' >&2; return 1; }
   if [[ -n "$(docker ps -q --filter label=com.docker.compose.project=datahub)" ]]; then
     echo 'Dừng Compose DataHub trước pha A để đủ RAM (docs/datahub.md).' >&2; return 1
   fi
@@ -165,11 +165,11 @@ airflow_phase() {
   wait_until Spark spark_ready
   wait_until DAG-v2 dag_ready
   bash scripts/setup/setup_airflow.sh
-  "${compose[@]}" exec -T airflow airflow variables set fsds_order_lifecycle_executor_memory "${FSDS_V2_EXECUTOR_MEMORY:-2g}"
+  "${compose[@]}" exec -T airflow airflow variables set platform_order_lifecycle_executor_memory "${PLATFORM_V2_EXECUTOR_MEMORY:-2g}"
   "${compose[@]}" exec -T airflow airflow dags list-import-errors --output json
-  run_id="${FSDS_V2_RUN_ID:-}"
+  run_id="${PLATFORM_V2_RUN_ID:-}"
   # Không dùng dấu ':' hoặc '/' trong run_id mặc định để thư mục host dễ dùng.
-  if [[ -z "${FSDS_V2_RUN_ID:-}" ]]; then
+  if [[ -z "${PLATFORM_V2_RUN_ID:-}" ]]; then
     run_id="live_v2__$(date -u +%Y%m%dT%H%M%S)_$("$py" -c 'import uuid; print(uuid.uuid4().hex[:8])')"
   fi
   validate_run_id
@@ -201,7 +201,7 @@ validate_run_id() {
   [[ "$run_id" =~ ^[A-Za-z0-9_][A-Za-z0-9_.:+-]*$ ]] || { echo 'run_id không hợp lệ cho thư mục host' >&2; return 1; }
 }
 datahub_phase() {
-  run_id="${FSDS_V2_RUN_ID:-$(cat out/receipts-v2-run/latest-run-id)}"
+  run_id="${PLATFORM_V2_RUN_ID:-$(cat out/receipts-v2-run/latest-run-id)}"
   validate_run_id
   local receipts="out/receipts-v2-run/$run_id"
   # Từ chối publish nhầm run hoặc bộ receipt thiếu; không suy PASS từ file thiếu.

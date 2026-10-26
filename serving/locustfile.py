@@ -1,4 +1,4 @@
-"""Load test Web API feature (rubric `mle` dòng 95), xuất HTML.
+"""Load test Web API feature, xuất HTML.
 
 locust -f serving/locustfile.py --host http://localhost:8000 --headless -u 20 -r 5 -t 60s \
     --html out/load-test.html

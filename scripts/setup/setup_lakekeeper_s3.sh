@@ -28,7 +28,7 @@ def request(path, body=None):
 
 if not request('info')['bootstrapped']:
     request('bootstrap', {'accept-terms-of-use': True})
-name = os.environ.get('WAREHOUSE_NAME', 'fsds-aws')
+name = os.environ.get('WAREHOUSE_NAME', 'platform-aws')
 expected = {'type': 's3', 'bucket': os.environ['LAKEHOUSE_BUCKET'], 'key-prefix': 'lakehouse',
             'region': os.environ['AWS_REGION']}
 warehouses = request('warehouse')['warehouses']

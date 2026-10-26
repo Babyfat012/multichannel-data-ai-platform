@@ -1,4 +1,4 @@
-# Khai báo Terraform và ghim provider AWS; state local cho tới khi người học chủ động chuyển.
+# Khai báo Terraform và ghim provider AWS; state local cho tới khi người vận hành chủ động chuyển.
 terraform {
   required_version = ">= 1.6.0, < 2.0.0"
   required_providers {

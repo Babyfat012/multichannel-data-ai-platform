@@ -4,9 +4,9 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 PYTHON="${PYTHON:-$PWD/.venv/bin/python}"
-IMAGE=fsds-airflow:2.10.5-spark3.5.3
-PREFIX="fsds-cdc-v2-$$"
-WORK="$(mktemp -d /tmp/fsds-cdc-v2.XXXXXX)"
+IMAGE=platform-airflow:2.10.5-spark3.5.3
+PREFIX="platform-cdc-v2-$$"
+WORK="$(mktemp -d /tmp/platform-cdc-v2.XXXXXX)"
 chmod 777 "$WORK"
 NETWORK="$PREFIX-net"
 cleanup() {
@@ -19,13 +19,13 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 # Không tự tạo volume rỗng nếu cache chưa có.
-docker volume inspect fsds_airflow-data >/dev/null
+docker volume inspect platform_airflow-data >/dev/null
 for image in postgres:15 apache/kafka:3.9.1 quay.io/debezium/connect:3.4 "$IMAGE"; do
   docker image inspect "$image" >/dev/null
 done
 # ls bắt buộc để planner thấy cache thực, rồi kiểm đủ dependency Kafka Spark offline.
 docker run --rm --pull never --network none --name "$PREFIX-spark" \
-  -v fsds_airflow-data:/ivy:ro --entrypoint bash "$IMAGE" -c '
+  -v platform_airflow-data:/ivy:ro --entrypoint bash "$IMAGE" -c '
   ls /ivy/.ivy2/jars
   for pattern in "org.apache.iceberg_iceberg-spark-runtime-3.5_2.12-1.11.0.jar" \
     "org.apache.spark_spark-sql-kafka-0-10_2.12-3.5.3.jar" \
@@ -90,7 +90,7 @@ spark_job() {
   local status=0
   docker run --rm --pull never --name "$PREFIX-spark" --network "$NETWORK" \
     -e SPARK_LOCAL_HOSTNAME=localhost -e PYTHONPATH=/workspace \
-    -v "$PWD":/workspace:ro -v "$WORK":/proof -v fsds_airflow-data:/ivy:ro \
+    -v "$PWD":/workspace:ro -v "$WORK":/proof -v platform_airflow-data:/ivy:ro \
     --entrypoint bash "$IMAGE" -c '
       jars=$(find /ivy/.ivy2/jars -maxdepth 1 -name "*.jar" -printf "%p," )
       "$SPARK_HOME/bin/spark-submit" --master "local[2]" --driver-memory 3g --conf spark.jars.ivy=/tmp/.ivy2 --jars "${jars%,}" "$@"

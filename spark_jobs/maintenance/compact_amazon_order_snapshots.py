@@ -80,7 +80,7 @@ def main() -> None:
         help="Recheck the already compacted snapshot after an interrupted run",
     )
     args = parser.parse_args()
-    spark = build_spark("fsds-compact-amazon-bronze", shuffle_partitions=4)
+    spark = build_spark("platform-compact-amazon-bronze", shuffle_partitions=4)
     spark.sparkContext.setLogLevel("ERROR")
     try:
         before_files, duplicate = file_stats(spark)

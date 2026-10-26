@@ -1,4 +1,4 @@
-<!-- Simulated policy for the FSDS coursework. Not Amazon's real policy. -->
+<!-- Simulated policy for this simulated dataset. Not Amazon's real policy. -->
 # Amazon — Return and Refund Policy (simulated)
 
 ## Return window

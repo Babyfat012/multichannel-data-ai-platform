@@ -8,7 +8,7 @@ py="$repo/.venv/bin/python"
 run_dir=${1:-"$repo/out/order-lifecycle-stream-$(date +%Y%m%dT%H%M%S)-$$"}
 mkdir "$run_dir"
 run_dir=$(cd "$run_dir" && pwd)
-prefix="fsds-v2-$$"
+prefix="platform-v2-$$"
 network="$prefix-net"
 kafka="$prefix-kafka"
 jm="$prefix-jm"
@@ -32,7 +32,7 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 # Không pull/build ngầm: planner chuẩn bị hai image trước khi chạy.
-docker image inspect apache/kafka:3.9.1 fsds-flink:1.20.3-kafka3.4.0 >/dev/null
+docker image inspect apache/kafka:3.9.1 platform-flink:1.20.3-kafka3.4.0 >/dev/null
 "$py" -m generator.generate_order_lifecycle --output "$run_dir/source" --orders-per-day 200 --days 10 --seed 7 >"$run_dir/source.log"
 mkdir "$run_dir/output" "$run_dir/checkpoints"
 chmod 777 "$run_dir/output" "$run_dir/checkpoints"
@@ -67,9 +67,9 @@ for epoch in 1 2; do
 props=$'jobmanager.rpc.address: flink-jobmanager\nrest.address: flink-jobmanager\njobmanager.memory.process.size: 1024m\ntaskmanager.memory.process.size: 1536m\ntaskmanager.numberOfTaskSlots: 2\nrestart-strategy.type: fixed-delay\nrestart-strategy.fixed-delay.attempts: 5\nrestart-strategy.fixed-delay.delay: 1s\nheartbeat.timeout: 10000'
 mounts=(--mount "type=bind,src=$run_dir/output,dst=/opt/flink/output" --mount "type=bind,src=$run_dir/checkpoints,dst=/opt/flink/checkpoints" --mount "type=bind,src=$run_dir,dst=/harness,readonly")
 docker run -d --pull never --name "$jm" --network "$network" --network-alias flink-jobmanager -p 127.0.0.1::8081 \
- -e "FLINK_PROPERTIES=$props" "${mounts[@]}" fsds-flink:1.20.3-kafka3.4.0 jobmanager >/dev/null
+ -e "FLINK_PROPERTIES=$props" "${mounts[@]}" platform-flink:1.20.3-kafka3.4.0 jobmanager >/dev/null
 docker run -d --pull never --name "$tm" --network "$network" -e "FLINK_PROPERTIES=$props" "${mounts[@]}" \
- fsds-flink:1.20.3-kafka3.4.0 taskmanager >/dev/null
+ platform-flink:1.20.3-kafka3.4.0 taskmanager >/dev/null
 rest_port=$(docker port "$jm" 8081/tcp | sed 's/.*://')
 for attempt in $(seq 1 60); do
  if "$py" -c 'import json,sys,urllib.request; assert json.load(urllib.request.urlopen(sys.argv[1],timeout=2))["taskmanagers"]' "http://127.0.0.1:$rest_port/overview" 2>/dev/null; then break; fi

@@ -295,7 +295,7 @@ def test_estimate_within_twenty_percent(tmp_path, config):
 
 
 def test_spark_jobs_never_read_truth():
-    """Không có tham chiếu truth trong cây job DE."""
+    """Không có tham chiếu truth trong cây job Data Platform."""
     import re
 
     for path in Path("spark_jobs").rglob("*"):

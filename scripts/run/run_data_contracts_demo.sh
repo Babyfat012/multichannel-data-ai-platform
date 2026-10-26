@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Demo DE-N1 không Docker: ba fixture, CLI infer/diff/gate và evidence có hash nguồn.
+# Demo Data contracts không Docker: ba fixture, CLI infer/diff/gate và evidence có hash nguồn.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 exec .venv/bin/python - <<'PY'
 """Chạy demo, giữ output/mã exit nguyên văn và in bảng số đo thật."""
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -26,7 +27,7 @@ def run(args):
     return json.loads(result.stdout) if result.stdout.strip() else None
 
 
-with tempfile.TemporaryDirectory(prefix="fsds-de-n1-") as directory:
+with tempfile.TemporaryDirectory(prefix="platform-contracts-") as directory:
     root = Path(directory)
     cli = [sys.executable, "-m", "spark_jobs.lib.data_contracts"]
     run([*cli, "check-registry", "--contracts-dir", "contracts"])
@@ -50,12 +51,12 @@ with tempfile.TemporaryDirectory(prefix="fsds-de-n1-") as directory:
     tracked_sources += sorted(Path("spark_jobs/lib/data_contracts").glob("*.py")) + sorted(Path("contracts").rglob("*.json"))
     hashes = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in tracked_sources}
     head = subprocess.run(["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
-    evidence = {"description": "DE-N1: số đo fixture Python, không khẳng định đã chạy Spark",
+    evidence = {"description": "Data contracts: số đo fixture Python, không khẳng định đã chạy Spark",
                 "git_head": head, "commands": commands, "sha256": hashes, "results": rows,
                 "shopee_diff": comparison, "spark": {"status": "chưa chạy",
-                "reason": "Chưa chạy Spark sau sửa; brief codex-01b giao planner chạy Docker."}}
-    path = Path("docs/evidence/de-n1-contracts-20261018.json")
-    # Brief codex-01b cho phép cập nhật duy nhất evidence thuộc gói DE-N1 này.
+                "reason": "Demo này chỉ chạy Python; Spark được kiểm riêng."}}
+    path = Path("out/data-contracts-evidence") / (datetime.now(timezone.utc).strftime("receipt-%Y%m%dT%H%M%S.%fZ.json"))
+    # Mỗi lần chạy tạo receipt mới; giữ nguyên evidence lịch sử đã commit.
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n")
     print("check-registry: PASS (exit 0)")

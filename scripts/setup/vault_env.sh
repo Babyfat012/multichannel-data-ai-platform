@@ -3,10 +3,10 @@
 #   eval "$(scripts/setup/vault_env.sh postgres)"   → POSTGRES_USER/PASSWORD/DB
 #   eval "$(scripts/setup/vault_env.sh minio)"      → MINIO_ROOT_USER/PASSWORD
 #   eval "$(scripts/setup/vault_env.sh agentgateway)" → AGW_AGENT_KEY
-# Cần VAULT_ADDR + VAULT_TOKEN (token chỉ-đọc policy fsds-read).
+# Cần VAULT_ADDR + VAULT_TOKEN (token chỉ-đọc policy platform-read).
 set -euo pipefail
 : "${VAULT_ADDR:?}" "${VAULT_TOKEN:?}" "${1:?postgres|minio|agentgateway|duckdns}"
-curl -fsS -H "X-Vault-Token: $VAULT_TOKEN" "$VAULT_ADDR/v1/secret/data/fsds/$1" | python3 -c '
+curl -fsS -H "X-Vault-Token: $VAULT_TOKEN" "$VAULT_ADDR/v1/secret/data/platform/$1" | python3 -c '
 import json, shlex, sys
 kind, data = sys.argv[1], json.load(sys.stdin)["data"]["data"]
 names = {"postgres": {"user": "POSTGRES_USER", "password": "POSTGRES_PASSWORD", "db": "POSTGRES_DB"},

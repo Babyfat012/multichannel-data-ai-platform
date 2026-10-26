@@ -1,7 +1,7 @@
 # Budget tùy chọn: cảnh báo chi phí thật trước credit; không chặn chi tiêu.
-resource "aws_budgets_budget" "de" {
+resource "aws_budgets_budget" "data_platform" {
   count        = var.enable_budget ? 1 : 0
-  name         = "${var.name_prefix}-de-monthly"
+  name         = "${var.name_prefix}-data-platform-monthly"
   budget_type  = "COST"
   limit_amount = tostring(var.budget_amount_usd)
   limit_unit   = "USD"

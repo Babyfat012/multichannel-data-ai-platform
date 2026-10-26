@@ -4,7 +4,7 @@
 # Theo https://kind.sigs.k8s.io/docs/user/local-registry/ (containerd hosts.toml).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-cluster=${KIND_CLUSTER:-fsds-ml}
+cluster=${KIND_CLUSTER:-platform}
 nodes=$(kind get nodes --name "$cluster")
 [[ -n "$nodes" ]] || { echo "Chưa có cụm $cluster; giữ nguyên hạ tầng." >&2; exit 1; }
 for node in $nodes; do

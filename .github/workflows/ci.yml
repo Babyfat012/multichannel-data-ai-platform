@@ -25,7 +25,7 @@ jobs:
         run: |
           uv run ruff format --check .
           uv run ruff check .
-      - name: Kiểm registry hợp đồng (DE-N1)
+      - name: Kiểm registry hợp đồng
         run: uv run python -m spark_jobs.lib.data_contracts check-registry --contracts-dir contracts
       - name: Pytest
         run: uv run pytest -q

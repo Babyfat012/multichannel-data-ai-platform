@@ -2,10 +2,10 @@
 
 Ví dụ:
     uv run python -m generator batch --config configs/small.yaml
-    uv run python -m generator batch --config configs/default.yaml --output s3://fsds
-    uv run python -m generator load-postgres --source s3://fsds --dsn postgresql://fsds:fsds@localhost:5432/sources
-    uv run python -m generator load-postgres --source /data/raw --sample-days 20 --dsn postgresql://fsds:fsds@localhost:5432/sources
-    uv run python -m generator report --source s3://fsds --dsn postgresql://fsds:fsds@localhost:5432/sources
+    uv run python -m generator batch --config configs/default.yaml --output s3://platform
+    uv run python -m generator load-postgres --source s3://platform --dsn postgresql://platform:platform@localhost:5432/sources
+    uv run python -m generator load-postgres --source /data/raw --sample-days 20 --dsn postgresql://platform:platform@localhost:5432/sources
+    uv run python -m generator report --source s3://platform --dsn postgresql://platform:platform@localhost:5432/sources
     uv run python -m generator stream --config configs/small.yaml --sink file --speed 0
     uv run python -m generator stream --config configs/default.yaml --sink kafka --bootstrap localhost:9092
 

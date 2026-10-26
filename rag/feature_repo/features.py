@@ -35,7 +35,7 @@ policy_chunks = FeatureView(
     ],
     source=FileSource(
         name="policy_chunks_source",
-        path=os.environ.get("FEAST_RAG_CHUNKS_PATH", "s3://fsds/rag/chunks.parquet"),
+        path=os.environ.get("FEAST_RAG_CHUNKS_PATH", "s3://platform/rag/chunks.parquet"),
         timestamp_field="event_timestamp",
         s3_endpoint_override=os.environ.get("FEAST_S3_ENDPOINT_URL"),
     ),

@@ -1,4 +1,4 @@
-"""MLE RAG: tài liệu text → chunk → embedding → Feast online store (pgvector) → validate → DataHub.
+"""LLM Platform RAG: tài liệu text → chunk → embedding → Feast online store (pgvector) → validate → DataHub.
 
 Mỗi task gọi một bước của `rag/pipeline.py` trong feast-venv; credential lấy từ Airflow Connection lúc chạy.
 """
@@ -22,17 +22,17 @@ MODEL_CACHE = "/opt/airflow/rag-models"  # volume airflow-data: tải model 1 l�
 
 def run_step(step, receipt_dir=None, run_id=None, **_):
     """Chạy `python -m rag.pipeline <step>` với env dựng từ Connection/Variable."""
-    minio = BaseHook.get_connection("fsds_minio")
-    pg = BaseHook.get_connection("fsds_rag_pg")
-    root = Variable.get("fsds_rag_root")
+    minio = BaseHook.get_connection("platform_minio")
+    pg = BaseHook.get_connection("platform_rag_pg")
+    root = Variable.get("platform_rag_root")
     env = {
         **os.environ,
         "PYTHONPATH": "/opt/rag",
         "AWS_ACCESS_KEY_ID": minio.login,
         "AWS_SECRET_ACCESS_KEY": minio.password,
-        "FEAST_S3_ENDPOINT_URL": Variable.get("fsds_minio_internal_endpoint"),
+        "FEAST_S3_ENDPOINT_URL": Variable.get("platform_minio_internal_endpoint"),
         "RAG_ROOT": root,
-        "FEAST_RAG_REGISTRY": Variable.get("fsds_feast_root") + "/rag-registry.db",
+        "FEAST_RAG_REGISTRY": Variable.get("platform_feast_root") + "/rag-registry.db",
         "FEAST_RAG_CHUNKS_PATH": f"{root}/chunks.parquet",
         "RAG_PG_HOST": pg.host,
         "RAG_PG_PORT": str(pg.port),
@@ -43,9 +43,11 @@ def run_step(step, receipt_dir=None, run_id=None, **_):
     if receipt_dir:
         args += ["--receipt-dir", receipt_dir, "--run-id", run_id]
     if step == "publish":
-        server = Variable.get("fsds_datahub_gms_url", default_var="")
+        server = Variable.get("platform_datahub_gms_url", default_var="")
         if not server:
-            raise AirflowSkipException("chưa đặt Variable fsds_datahub_gms_url (DataHub chưa chạy)")
+            raise AirflowSkipException(
+                "chưa đặt Variable platform_datahub_gms_url (DataHub chưa chạy)"
+            )
         args += ["--datahub", server]
     result = subprocess.run(args, env=env, capture_output=True, text=True, check=False)
     print(result.stdout, result.stderr, sep="\n")
@@ -54,13 +56,13 @@ def run_step(step, receipt_dir=None, run_id=None, **_):
 
 with DAG(
     dag_id="ml_rag_ingest",
-    description="RAG: text → chunk → embedding → Feast pgvector (rubric mle 9–10)",
+    description="RAG: text → chunk → embedding → Feast pgvector",
     start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
     schedule=None,
     catchup=False,
     is_paused_upon_creation=False,
     max_active_runs=1,
-    tags=["fsds", "mle", "rag"],
+    tags=["platform", "ml-platform", "rag"],
 ) as dag:
     tasks = [
         PythonOperator(task_id=step, python_callable=run_step, op_kwargs={"step": step})

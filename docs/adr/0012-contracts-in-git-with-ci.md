@@ -4,9 +4,9 @@ status: accepted
 
 # Hợp đồng schema nằm trong Git, CI chặn thay đổi phá vỡ
 
-Ngày 2026-10-19, người học chọn giữ registry của DE-N1 là **file trong Git** (`contracts/registry.json`,
+Ngày 2026-10-19, người vận hành chọn giữ registry của Data contracts là **file trong Git** (`contracts/registry.json`,
 `contracts/schemas/**`) và thêm **CI chạy `check-registry`**, thay vì dựng một service schema registry.
-Lý do của người học: **team nhỏ** — thêm một service là thêm thứ phải vận hành và một điểm có thể sập.
+Lý do của người vận hành: **team nhỏ** — thêm một service là thêm thứ phải vận hành và một điểm có thể sập.
 
 Producer ngoài (Amazon, Walmart, Shopee…) không đăng ký schema vào registry của mình; lớp bảo vệ thật với họ
 là **cổng cách ly lúc chạy** ở đầu Silver (`silver.lifecycle_quarantine_records`). CI chỉ bảo vệ phía mình: không ai
@@ -20,7 +20,7 @@ sửa registry/schema theo cách phá vỡ (version breaking dùng lại parser 
   `spark_jobs/lib/data_contracts/` — báo sớm trên máy, không thay CI.
 - **Branch protection** cho `main` (bắt CI xanh trước khi merge, cấm push thẳng) do người dùng tự bật trên GitHub.
 
-## Giá phải trả (phân tích phiên Sonnet, người học chưa tự nêu)
+## Giá phải trả (phân tích phiên Sonnet, người vận hành chưa tự nêu)
 
 - Chỉ chặn khi CI chạy: thiếu branch protection thì push thẳng lên `main` vẫn lọt; `git commit --no-verify` bỏ
   qua được hook local.

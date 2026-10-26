@@ -268,7 +268,7 @@ def test_resuming_a_finished_run_changes_nothing(tiny_config, tmp_path):
 def test_the_manifest_of_a_resumed_run_still_matches_the_files_on_disk(tiny_config, tmp_path):
     """Số byte và số file trong manifest sau khi chạy tiếp vẫn là số thật trên đĩa.
 
-    `datasets[*].bytes` là bằng chứng đạt ngưỡng 100 GB của rubric. Nó được cộng dồn
+    `datasets[*].bytes` là bằng chứng đạt ngưỡng 100 GB của bộ dữ liệu. Nó được cộng dồn
     qua tem, nên nếu `_counters` bỏ sót một trường thì nó sai đúng ở lần chạy bị cắt
     — tức đúng ở lần chạy thật, chứ không phải ở test chạy một lèo.
     """

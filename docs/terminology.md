@@ -1,4 +1,4 @@
-# FSDS Multi-channel Seller Data Platform
+# Data & AI Platform Multi-channel Seller Data Platform
 
 Nền tảng dữ liệu phía seller, gom dữ liệu bán hàng từ nhiều nền tảng thương mại điện tử bên ngoài (Amazon, TikTok Shop, Shopify, Walmart, Shopee) vào một lakehouse. Dữ liệu hoàn toàn được sinh giả lập, lấy Amazon làm mô hình tham chiếu.
 

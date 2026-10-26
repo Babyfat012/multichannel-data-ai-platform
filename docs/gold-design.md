@@ -93,7 +93,7 @@ không có khóa trùng hoặc dòng lỗi; xem [bằng chứng runtime](gold.md
 
 ## ✅ Q4 — Nguồn lịch sử cho bảng chiều SCD2
 
-Rubric yêu cầu một bảng `dim_` có `valid_from_ts`, `valid_to_ts`, `is_current`
+Bảng dimension SCD2 sử dụng `valid_from_ts`, `valid_to_ts`, `is_current`
 và quan hệ với fact. Nguồn `seller.skus` hiện là catalog tĩnh; giá trên Order
 Line là giá giao dịch, không thể coi là lịch sử giá Listing. Bronze Amazon có
 các bản export chồng lấn của cùng Order, Silver giữ bản mới nhất, nên Bronze

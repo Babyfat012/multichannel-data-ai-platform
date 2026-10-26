@@ -28,7 +28,7 @@ def test_default_configuration_is_original():
         p: "org.apache.iceberg.spark.SparkCatalog",
         p + ".type": "rest",
         p + ".uri": "http://lakekeeper:8181/catalog",
-        p + ".warehouse": "fsds",
+        p + ".warehouse": "platform",
         p + ".io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
         p + ".s3.endpoint": "http://minio:9000",
         p + ".s3.path-style-access": "true",
@@ -39,7 +39,7 @@ def test_default_configuration_is_original():
         "spark.eventLog.dir": "file:///spark-events",
     }
     assert catalog_conf({}) == expected
-    assert catalog_conf({"FSDS_STORAGE": "minio"}) == expected
+    assert catalog_conf({"PLATFORM_STORAGE": "minio"}) == expected
     env = {
         "MINIO_INTERNAL_ENDPOINT": "http://custom:9000",
         "WAREHOUSE_NAME": "custom",
@@ -58,7 +58,7 @@ def test_default_configuration_is_original():
 def test_unknown_storage_is_rejected():
     """Chỉ nhận minio (local) và s3 (AWS); gõ sai thì dừng ngay."""
     with pytest.raises(ValueError):
-        catalog_conf({"FSDS_STORAGE": "typo"})
+        catalog_conf({"PLATFORM_STORAGE": "typo"})
 
 
 def manifest_reader():

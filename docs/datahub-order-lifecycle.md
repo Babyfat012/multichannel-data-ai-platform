@@ -75,7 +75,7 @@ riêng; số vi phạm bằng 0 → `SUCCESS`, khác 0 (kể cả âm) → `FAIL
 Không loại check fail khi publish. `quarantine` và `info` là số quan sát, không
 biến thành assertion thất bại. Check phải là số hữu hạn; thiếu `run_id` bị từ chối.
 
-URN assertion `urn:li:assertion:fsds-dp_order_lifecycle-<task>-<check>-v2` tách khỏi v1.
+URN assertion `urn:li:assertion:platform-dp_order_lifecycle-<task>-<check>-v2` tách khỏi v1.
 `assertionRunEvent.runId` và `result.nativeResults.run_id` giữ nguyên ID từ receipt,
 không thay bằng ID lúc publish. Nhiều receipt độc lập có thể mang run_id khác nhau.
 Assertion Silver gắn lên `lifecycle_stg_line_lifecycle` như dataset đại diện của nhóm
@@ -106,13 +106,13 @@ Dry-run với receipt Silver đã có trong repo; không cần GMS/SDK:
   --receipt build_silver=docs/evidence/silver-v2-receipt-20261018.json \
   --source-root /data/order_lifecycle --walmart-jdbc walmart_lifecycle.orders > /tmp/datahub-v2-mcps.json
 
-# Sau khi planner đã chạy DAG và copy receipt về host:
+# Sau khi người vận hành đã chạy DAG và copy receipt về host:
 .venv/bin/python scripts/run/publish_order_lifecycle_datahub.py --dry-run \
   --receipt-dir out/receipts-v2-run/THAY_RUN_ID --source-root /data/order_lifecycle \
   --walmart-jdbc walmart_lifecycle.orders > /tmp/datahub-v2-run-mcps.json
 ```
 
-Planner kiểm JSON rồi gửi thật bằng môi trường SDK sẵn có (token đọc từ
+người vận hành kiểm JSON rồi gửi thật bằng môi trường SDK sẵn có (token đọc từ
 `DATAHUB_GMS_TOKEN`, không ghi token vào args):
 
 ```bash
@@ -126,7 +126,7 @@ Lệnh gửi thật **chưa chạy**. **Chưa đo — Đo trên GCP:**
 `bash scripts/run/run_order_lifecycle_live.sh --phase datahub` sau khi pha airflow
 thành công trên host đã chuẩn bị theo runbook dưới đây và checklist GCP.
 Chưa có xác nhận ingest MCP, UI/Lineage/Quality hay số assertion thực;
-brief codex-26 (ghi chú nội bộ, không nằm trong repo) xác nhận người học bỏ bước lâu ở local.
+các bước này chưa có receipt runtime đính kèm repo.
 
 Kiểm thử offline dùng receipt mẫu trong `tmp_path`, socket bị chặn; không dùng
 số mẫu làm bằng chứng Spark thành công. Chưa tự động publish từ DAG, chưa chứng
@@ -135,7 +135,7 @@ minh ingest/hiển thị MCP trên GMS. Xem giới hạn vận hành trong [Airf
 
 ## Chạy thật
 
-Planner chạy [`scripts/run/run_order_lifecycle_live.sh`](../scripts/run/run_order_lifecycle_live.sh) trên host đã
+người vận hành chạy [`scripts/run/run_order_lifecycle_live.sh`](../scripts/run/run_order_lifecycle_live.sh) trên host đã
 chuẩn bị `.env`, Docker Compose, image Spark/Airflow, DataHub quickstart và SDK
 như [DataHub v1](datahub.md#cách-tái-tạo-trên-máy-đã-chuẩn-bị-datahub-quickstart).
 Python `.venv/bin/python` cần generator và `aiohttp`; capture cần `google-chrome`.
@@ -143,7 +143,7 @@ Script không cài hay tải công cụ. Mặc định đọc Walmart bootstrap 
 nạp JDBC; dry-run/publish đều dùng nguồn `/data/order_lifecycle` giống DAG.
 
 ```bash
-# Có thể export FSDS_ORDER_LIFECYCLE_DIR=/đường/dẫn/fixture trước cả bốn lệnh.
+# Có thể export PLATFORM_ORDER_LIFECYCLE_DIR=/đường/dẫn/fixture trước cả bốn lệnh.
 bash scripts/run/run_order_lifecycle_live.sh --phase source
 bash scripts/run/run_order_lifecycle_live.sh --phase airflow
 bash scripts/run/run_order_lifecycle_live.sh --phase datahub
@@ -155,13 +155,13 @@ bash scripts/run/run_order_lifecycle_live.sh --phase capture
 Pha source giữ fixture nếu đã có manifest; từ chối ghi đè thư mục không rỗng
 thiếu manifest. Pha A bật đúng Airflow, hai Spark worker/master, catalog,
 PostgreSQL và MinIO (không chạy generator v1). Timeout khởi động mặc định 600s,
-DAG 1800s, chỉnh bằng `FSDS_V2_START_TIMEOUT`/`FSDS_V2_TIMEOUT`.
+DAG 1800s, chỉnh bằng `PLATFORM_V2_START_TIMEOUT`/`PLATFORM_V2_TIMEOUT`.
 Runbook chọn run_id mới, truyền conf `source_root`/`cutoff`, tìm logical timestamp
 qua metadata Airflow, copy cả thư mục receipt/schema vào
 `out/receipts-v2-run/<run_id>/` rồi dừng pha A. Run thành công ghi
 `out/receipts-v2-run/latest-run-id`; pha datahub dùng run này hoặc
-`FSDS_V2_RUN_ID` được chỉ định. Không trỏ publisher vào thư mục cha nhiều run.
-`FSDS_ORDER_LIFECYCLE_CUTOFF` mặc định `2026-06-01T00:00:00.000000Z`.
+`PLATFORM_V2_RUN_ID` được chỉ định. Không trỏ publisher vào thư mục cha nhiều run.
+`PLATFORM_ORDER_LIFECYCLE_CUTOFF` mặc định `2026-06-01T00:00:00.000000Z`.
 
 Pha B kiểm đủ năm receipt cùng run và không có check lỗi, dừng pha A, bật
 quickstart với override sẵn có, chờ GMS rồi dry-run/publish cùng arguments.
@@ -173,7 +173,7 @@ GMS mặc định `http://127.0.0.1:8089`, UI `http://127.0.0.1:9002`.
 Ước lượng pha A 8–12 GiB RAM (Airflow giới hạn 6g gồm driver 3g, worker
 2 × 2560m, master 512m, catalog 256m cùng MinIO/PostgreSQL); tổng giới hạn
 có thể gần 14 GiB nên dừng workload khác. Pha B quickstart DataHub khoảng
-7–10 GiB, Chrome chụp ảnh thêm khoảng 0,5–1 GiB. Đây là dự toán, planner đo
+7–10 GiB, Chrome chụp ảnh thêm khoảng 0,5–1 GiB. Đây là dự toán, người vận hành đo
 thực tế trên host. Không chạy hai pha cùng lúc; script từ chối pha A nếu
 Compose project `datahub` còn container chạy.
 
@@ -194,7 +194,7 @@ là đầu ra dự kiến. Không tạo ảnh giả khi chưa chạy UI thật.
 
 Nếu lỗi, trap in lệnh dọn và giữ receipt/volume. Dùng Compose pha A `stop`
 hoặc lệnh quickstart trong docs/datahub.md thay `up -d` bằng `stop` để giải
-phóng RAM. Không dùng `down -v`. Pha B để DataHub chạy cho planner kiểm UI;
-sau capture planner dừng quickstart bằng lệnh `stop` đó. Run đã append Gold
+phóng RAM. Không dùng `down -v`. Pha B để DataHub chạy cho người vận hành kiểm UI;
+sau capture người vận hành dừng quickstart bằng lệnh `stop` đó. Run đã append Gold
 cần run_id mới khi chạy lại, tránh clear/retry cùng generation. Timeout DAG
 có thể để job còn chạy; kiểm log và dừng pha A trước khi chuyển sang pha B.

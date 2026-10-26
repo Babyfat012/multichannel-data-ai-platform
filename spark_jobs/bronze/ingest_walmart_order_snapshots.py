@@ -101,7 +101,7 @@ def source_query() -> str:
 def build_spark(aqe: str, app_name: str) -> SparkSession:
     """SparkSession nối catalog Iceberg trên Lakekeeper, dữ liệu nằm trên MinIO."""
     minio_endpoint = os.environ.get("MINIO_INTERNAL_ENDPOINT", "http://minio:9000")
-    warehouse = os.environ.get("WAREHOUSE_NAME", "fsds")
+    warehouse = os.environ.get("WAREHOUSE_NAME", "platform")
     catalog_uri = os.environ.get("LAKEKEEPER_CATALOG_URI", "http://lakekeeper:8181/catalog")
 
     builder = (

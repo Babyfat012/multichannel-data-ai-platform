@@ -21,7 +21,7 @@ def main() -> None:
         if not TABLE_NAME.fullmatch(table):
             parser.error(f"Invalid table name: {table}")
 
-    spark = build_spark("fsds-inspect-storage", shuffle_partitions=4)
+    spark = build_spark("platform-inspect-storage", shuffle_partitions=4)
     spark.sparkContext.setLogLevel("ERROR")
     try:
         for table in args.tables:

@@ -9,8 +9,8 @@ airflow_cmd() {
 }
 
 for channel in tiktok_shop shopify shopee; do
-  airflow_cmd variables set "fsds_dp2_${channel}_bronze_table" "raw_${channel}_orders_dp1"
-  airflow_cmd variables set "fsds_dp2_${channel}_silver_table" "stg_${channel}_order_lines_dp2"
+  airflow_cmd variables set "platform_dp2_${channel}_bronze_table" "raw_${channel}_orders_dp1"
+  airflow_cmd variables set "platform_dp2_${channel}_silver_table" "stg_${channel}_order_lines_dp2"
 done
 
 printf 'DP2 Silver Variables cho ba Channel mới đã nạp.\n'

@@ -1,6 +1,6 @@
-// CI/CD cho stream feature job (rubric mle dòng 36): test → build → deploy → kiểm tra.
-// Job Flink `ml-sku-return-24h` + feast-pusher (Compose). Secret nằm ở Vault (secret/fsds/*); Jenkins
-// chỉ giữ token CHỈ-ĐỌC `vault-ci-token` (policy fsds-read, scripts/setup/setup_vault.sh tạo).
+// CI/CD cho stream feature job: test → build → deploy → kiểm tra.
+// Job Flink `ml-sku-return-24h` + feast-pusher (Compose). Secret nằm ở Vault (secret/platform/*); Jenkins
+// chỉ giữ token CHỈ-ĐỌC `vault-ci-token` (policy platform-read, scripts/setup/setup_vault.sh tạo).
 // Agent cần Docker, docker compose, uv; chạy trên máy có stack (local hoặc VM GCE).
 pipeline {
   agent any
@@ -20,7 +20,7 @@ pipeline {
         sh 'uv run pytest -q tests/unit/test_docstrings.py tests/unit/generator/test_publish_order_lifecycle_events.py'
         sh '''docker run --rm --network none --read-only --tmpfs /tmp:rw,exec,size=1g \
               --mount type=bind,src=$PWD,dst=/workspace,readonly --entrypoint python \
-              fsds-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_sku_daily_features.py'''
+              platform-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_sku_daily_features.py'''
       }
     }
     stage('Build') {
@@ -29,12 +29,12 @@ pipeline {
       }
     }
     stage('Push') {
-      steps { sh 'scripts/run/push_images.sh fsds-flink:1.20.3-kafka3.4.0 fsds-feast:0.66.0' }
+      steps { sh 'scripts/run/push_images.sh platform-flink:1.20.3-kafka3.4.0 platform-feast:0.66.0' }
     }
     stage('Release config') {
       steps {
         sh 'mkdir -p out'
-        sh 'scripts/run/compose_release_images.sh flink-jobmanager=fsds-flink flink-taskmanager=fsds-flink feast-pusher=fsds-feast > out/ci-compose-images.yaml'
+        sh 'scripts/run/compose_release_images.sh flink-jobmanager=platform-flink flink-taskmanager=platform-flink feast-pusher=platform-feast > out/ci-compose-images.yaml'
       }
     }
     stage('Deploy') {

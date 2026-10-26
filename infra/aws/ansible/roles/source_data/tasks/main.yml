@@ -7,22 +7,22 @@
 - name: Sinh fixture nhỏ nếu chưa có manifest
   ansible.builtin.command:
     argv:
-      - /mnt/fsds-data/venv/bin/python
+      - /mnt/platform-data/venv/bin/python
       - -m
       - generator.generate_order_lifecycle_fixture
       - --output
-      - '/mnt/fsds-data/source/{{ source_dataset_name }}'
+      - '/mnt/platform-data/source/{{ source_dataset_name }}'
     chdir: '{{ app_dir }}'
-    creates: '/mnt/fsds-data/source/{{ source_dataset_name }}/manifest.json'
+    creates: '/mnt/platform-data/source/{{ source_dataset_name }}/manifest.json'
   when: source_mode == 'fixture'
 - name: Sinh nguồn scale theo seed và horizon nếu chưa có manifest
   ansible.builtin.command:
     argv:
-      - /mnt/fsds-data/venv/bin/python
+      - /mnt/platform-data/venv/bin/python
       - -m
       - generator.generate_order_lifecycle
       - --output
-      - '/mnt/fsds-data/source/{{ source_dataset_name }}'
+      - '/mnt/platform-data/source/{{ source_dataset_name }}'
       - --seed
       - '{{ source_seed | string }}'
       - --days
@@ -34,7 +34,7 @@
       - --observation-days
       - '{{ source_observation_days | string }}'
     chdir: '{{ app_dir }}'
-    creates: '/mnt/fsds-data/source/{{ source_dataset_name }}/manifest.json'
+    creates: '/mnt/platform-data/source/{{ source_dataset_name }}/manifest.json'
   when: source_mode == 'scale'
 - name: Đồng bộ nguồn lên prefix S3 riêng bằng IAM role của EC2
   ansible.builtin.command:
@@ -44,7 +44,7 @@
       - sync
       - --exclude=_truth/*
       - --region={{ aws_region }}
-      - '/mnt/fsds-data/source/{{ source_dataset_name }}'
+      - '/mnt/platform-data/source/{{ source_dataset_name }}'
       - 's3://{{ raw_bucket }}/order_lifecycle/{{ source_dataset_name }}'
   register: source_upload
   changed_when: "'upload:' in source_upload.stdout"
@@ -56,10 +56,10 @@
     PYTHONPATH: '{{ app_dir }}'
   vars:
     source_loader_argv: >-
-      {{ ['/mnt/fsds-data/venv/bin/python',
+      {{ ['/mnt/platform-data/venv/bin/python',
       ('scripts/setup/load_order_lifecycle_walmart.py' if source_mode == 'fixture' else
        'infra/aws/ansible/roles/source_data/files/load_scaled_walmart.py'),
-      '--root', '/mnt/fsds-data/source/' + source_dataset_name] }}
+      '--root', '/mnt/platform-data/source/' + source_dataset_name] }}
   # Script thay trong một transaction; chạy lại không tăng số dòng.
   changed_when: false
   no_log: true

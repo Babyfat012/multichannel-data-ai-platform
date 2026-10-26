@@ -49,7 +49,7 @@
   register: app_sync
 - name: Tạo các thư mục persistent cho Spark
   ansible.builtin.file:
-    path: '/mnt/fsds-data/{{ item }}'
+    path: '/mnt/platform-data/{{ item }}'
     state: directory
     mode: '0775'
     owner: '{{ airflow_uid }}'
@@ -57,7 +57,7 @@
   loop: [airflow, spark-events, spark-worker-1, spark-worker-2, source]
 - name: Tạo thư mục PostgreSQL riêng
   ansible.builtin.file:
-    path: /mnt/fsds-data/postgres
+    path: /mnt/platform-data/postgres
     state: directory
     mode: '0700'
 - name: Sinh env từ biến đã điền
@@ -68,7 +68,7 @@
     mode: '0600'
   no_log: true
 - name: Kiểm image đã được build
-  ansible.builtin.command: docker image inspect fsds-airflow:2.10.5-spark3.5.3
+  ansible.builtin.command: docker image inspect platform-airflow:2.10.5-spark3.5.3
   register: airflow_image
   changed_when: false
   failed_when: false
@@ -83,13 +83,13 @@
     argv:
       - python3
       - infra/aws/ansible/roles/app/files/ensure_fernet.py
-      - /mnt/fsds-data/airflow/.fernet_key
+      - /mnt/platform-data/airflow/.fernet_key
       - '{{ airflow_uid | string }}'
     chdir: '{{ app_dir }}'
   register: fernet_setup
   changed_when: "'created' in fernet_setup.stdout"
   no_log: true
-- name: Bật đúng dịch vụ DE v2, chờ healthcheck
+- name: Bật đúng dịch vụ Data Platform v2, chờ healthcheck
   ansible.builtin.command: >-
     docker compose --profile catalog --profile spark --profile airflow up -d --wait --wait-timeout 300
     postgres lakekeeper spark-master spark-worker-1 spark-worker-2 airflow
@@ -133,5 +133,5 @@
       - 'psycopg[binary]==3.2.13'
       # Loader Walmart dùng load_settings từ setup_debezium, nơi import client Kafka.
       - 'confluent-kafka==2.15.1'
-    virtualenv: /mnt/fsds-data/venv
+    virtualenv: /mnt/platform-data/venv
     virtualenv_command: python3 -m venv

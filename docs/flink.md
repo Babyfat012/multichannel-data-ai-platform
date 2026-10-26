@@ -44,7 +44,7 @@ Xem
 [hàm CURRENT_WATERMARK](https://nightlies.apache.org/flink/flink-docs-release-1.20/docs/dev/table/functions/systemfunctions/)
 và [watermark SQL](https://nightlies.apache.org/flink/flink-docs-release-1.20/docs/dev/table/sql/create/).
 
-## Bắt tin đến muộn bằng watermark (rubric C17)
+## Bắt tin đến muộn bằng watermark
 
 `flink_jobs/order_snapshots/late_arrival.sql` gán watermark `event_ts - INTERVAL '1' HOUR`:
 Flink coi một bản tin là đến muộn khi event time của nó đã nằm trước watermark
@@ -60,7 +60,7 @@ Lần chạy 2026-10-14 phát lại đúng lô 399.410 notification; job
 
 ![Flink UI: job late_amazon FINISHED, nguồn amazon_notifications → Calc → StreamingFileWriter](images/flink/flink-late-arrival.png)
 
-## Cửa sổ tumbling và sliding (rubric C19)
+## Cửa sổ tumbling và sliding
 
 `flink_jobs/order_snapshots/windows.sql` khai hai cửa sổ trên cùng luồng Order mới
 (`new_orders`, lọc `order_status = 'UNPAID'`): một tumbling 5 phút và một hopping

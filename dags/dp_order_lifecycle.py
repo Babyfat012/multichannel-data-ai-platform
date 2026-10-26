@@ -15,16 +15,16 @@ from pathlib import Path
 from airflow import DAG
 from airflow.models.param import Param
 from airflow.operators.python import PythonOperator
-from fsds_spark_operator import FsdsSparkSubmitOperator
+from platform_spark_operator import PlatformSparkSubmitOperator
 
 
-class OrderLifecycleSparkSubmitOperator(FsdsSparkSubmitOperator):
+class OrderLifecycleSparkSubmitOperator(PlatformSparkSubmitOperator):
     """Render tài nguyên v2 kể cả khi provider không template các trường này."""
 
     template_fields = tuple(
         dict.fromkeys(
             (
-                *FsdsSparkSubmitOperator.template_fields,
+                *PlatformSparkSubmitOperator.template_fields,
                 "_driver_memory",
                 "_executor_memory",
                 "_executor_cores",
@@ -33,11 +33,11 @@ class OrderLifecycleSparkSubmitOperator(FsdsSparkSubmitOperator):
     )
 
 
-DIRECTORY = "{{ var.value.fsds_order_lifecycle_receipt_dir }}/{{ ts_nodash }}"
-SOURCE_ROOT = "{{ params.source_root or var.value.fsds_order_lifecycle_source_root }}"
-CUTOFF = "{{ params.cutoff or var.value.fsds_order_lifecycle_cutoff }}"
+DIRECTORY = "{{ var.value.platform_order_lifecycle_receipt_dir }}/{{ ts_nodash }}"
+SOURCE_ROOT = "{{ params.source_root or var.value.platform_order_lifecycle_source_root }}"
+CUTOFF = "{{ params.cutoff or var.value.platform_order_lifecycle_cutoff }}"
 RUN_ID = "{{ run_id }}"
-PACKAGES = "{{ var.value.fsds_spark_packages }}"
+PACKAGES = "{{ var.value.platform_spark_packages }}"
 CONF = {
     "spark.driver.host": "airflow",
     "spark.driver.bindAddress": "0.0.0.0",
@@ -151,7 +151,7 @@ with DAG(
             description="Ví dụ walmart_lifecycle.orders; null đọc bootstrap file",
         ),
     },
-    tags=["fsds", "v2", "contracts"],
+    tags=["platform", "v2", "contracts"],
 ) as dag:
     check_contracts = PythonOperator(
         task_id="check_contracts",
@@ -175,9 +175,9 @@ with DAG(
         conn_id="spark_default",
         deploy_mode="client",
         packages=PACKAGES,
-        driver_memory="{{ var.value.fsds_order_lifecycle_driver_memory }}",
-        executor_memory="{{ var.value.fsds_order_lifecycle_executor_memory }}",
-        executor_cores="{{ var.value.fsds_order_lifecycle_executor_cores }}",
+        driver_memory="{{ var.value.platform_order_lifecycle_driver_memory }}",
+        executor_memory="{{ var.value.platform_order_lifecycle_executor_memory }}",
+        executor_cores="{{ var.value.platform_order_lifecycle_executor_cores }}",
         conf=CONF,
     )
     build_silver = OrderLifecycleSparkSubmitOperator(
@@ -196,9 +196,9 @@ with DAG(
         conn_id="spark_default",
         deploy_mode="client",
         packages=PACKAGES,
-        driver_memory="{{ var.value.fsds_order_lifecycle_driver_memory }}",
-        executor_memory="{{ var.value.fsds_order_lifecycle_executor_memory }}",
-        executor_cores="{{ var.value.fsds_order_lifecycle_executor_cores }}",
+        driver_memory="{{ var.value.platform_order_lifecycle_driver_memory }}",
+        executor_memory="{{ var.value.platform_order_lifecycle_executor_memory }}",
+        executor_cores="{{ var.value.platform_order_lifecycle_executor_cores }}",
         conf=CONF,
     )
     build_gold = OrderLifecycleSparkSubmitOperator(
@@ -215,9 +215,9 @@ with DAG(
         conn_id="spark_default",
         deploy_mode="client",
         packages=PACKAGES,
-        driver_memory="{{ var.value.fsds_order_lifecycle_driver_memory }}",
-        executor_memory="{{ var.value.fsds_order_lifecycle_executor_memory }}",
-        executor_cores="{{ var.value.fsds_order_lifecycle_executor_cores }}",
+        driver_memory="{{ var.value.platform_order_lifecycle_driver_memory }}",
+        executor_memory="{{ var.value.platform_order_lifecycle_executor_memory }}",
+        executor_cores="{{ var.value.platform_order_lifecycle_executor_cores }}",
         conf=CONF,
     )
     validate_gold = OrderLifecycleSparkSubmitOperator(
@@ -234,9 +234,9 @@ with DAG(
         conn_id="spark_default",
         deploy_mode="client",
         packages=PACKAGES,
-        driver_memory="{{ var.value.fsds_order_lifecycle_driver_memory }}",
-        executor_memory="{{ var.value.fsds_order_lifecycle_executor_memory }}",
-        executor_cores="{{ var.value.fsds_order_lifecycle_executor_cores }}",
+        driver_memory="{{ var.value.platform_order_lifecycle_driver_memory }}",
+        executor_memory="{{ var.value.platform_order_lifecycle_executor_memory }}",
+        executor_cores="{{ var.value.platform_order_lifecycle_executor_cores }}",
         conf=CONF,
     )
     check_contracts >> ingest_bronze >> build_silver >> build_gold >> validate_gold

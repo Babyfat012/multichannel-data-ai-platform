@@ -1,7 +1,7 @@
 # KServe predictor return-risk, model-inside-image: file model nằm trong image, không tải lúc chạy.
-# Dựng trên fsds-train (đã có LightGBM + Feast + ml/) để dùng chung lớp. Build context do
+# Dựng trên platform-train (đã có LightGBM + Feast + ml/) để dùng chung lớp. Build context do
 # scripts/run/deploy_return_risk.sh dựng: ml/ + model.lgb tải từ MLflow alias production.
-FROM fsds-train:0.1.0
+FROM platform-train:0.1.0
 USER root
 RUN pip install --no-cache-dir "kserve==0.21.0"
 ARG MODEL_VERSION=unknown

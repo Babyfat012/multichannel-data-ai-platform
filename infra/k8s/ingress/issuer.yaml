@@ -1,4 +1,4 @@
-# CA nội bộ cho HTTPS local: self-signed → cert CA (10 năm) → ClusterIssuer `fsds-local-ca`.
+# CA nội bộ cho HTTPS local: self-signed → cert CA (10 năm) → ClusterIssuer `platform-local-ca`.
 # Trên GKE với domain thật thay bằng ClusterIssuer ACME (Let's Encrypt).
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
@@ -7,16 +7,16 @@ spec: {selfSigned: {}}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
-metadata: {name: fsds-local-ca, namespace: cert-manager}
+metadata: {name: platform-local-ca, namespace: cert-manager}
 spec:
   isCA: true
-  commonName: FSDS Local CA
-  secretName: fsds-local-ca
+  commonName: PLATFORM Local CA
+  secretName: platform-local-ca
   duration: 87600h
   privateKey: {algorithm: ECDSA, size: 256}
   issuerRef: {name: selfsigned, kind: ClusterIssuer}
 ---
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
-metadata: {name: fsds-local-ca}
-spec: {ca: {secretName: fsds-local-ca}}
+metadata: {name: platform-local-ca}
+spec: {ca: {secretName: platform-local-ca}}

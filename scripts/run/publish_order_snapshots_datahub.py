@@ -42,7 +42,7 @@ RAW_FILES = {
     for channel in ("tiktok_shop", "shopify", "shopee")
 }
 RAW_WALMART = "walmart.orders"
-KAFKA_WALMART_CDC = "fsds_cdc.walmart.orders"
+KAFKA_WALMART_CDC = "platform_cdc.walmart.orders"
 SOURCE_DATASETS = {
     RAW_AMAZON: "file",
     **{name: "file" for name in RAW_FILES.values()},
@@ -91,14 +91,14 @@ def job_map() -> dict[str, dict[str, tuple[list[str], list[str]]]]:
 def description(name: str, platform: str) -> str:
     """Mô tả dataset; bảng CDC v1 ghi rõ là bản lịch sử."""
     if name == CDC_LEGACY:
-        return f"FSDS {platform}: {name} (legacy CDC v1, bằng chứng run 2026-10-13; DAG hiện ghi {CDC})"
-    return f"FSDS {platform}: {name}"
+        return f"PLATFORM {platform}: {name} (legacy CDC v1, bằng chứng run 2026-10-13; DAG hiện ghi {CDC})"
+    return f"PLATFORM {platform}: {name}"
 
 
 def assertion_urn(item: dict) -> str:
     """URN assertion; check trên bảng v2 có hậu tố riêng để không đè lịch sử của bảng v1."""
     suffix = "-v2" if item["dataset"].endswith("_v2") else ""
-    return f"urn:li:assertion:fsds-{item['dag_id']}-{item['task_id']}{suffix}"
+    return f"urn:li:assertion:platform-{item['dag_id']}-{item['task_id']}{suffix}"
 
 
 def check_passed(item: dict) -> None:
@@ -115,7 +115,9 @@ def check_passed(item: dict) -> None:
 
 def main() -> None:
     """Publish dataset lineage and validation assertions to DataHub GMS."""
-    parser = argparse.ArgumentParser(description="Publish FSDS lineage and validation to DataHub")
+    parser = argparse.ArgumentParser(
+        description="Publish PLATFORM lineage and validation to DataHub"
+    )
     parser.add_argument("--server", default=os.getenv("DATAHUB_GMS_URL", "http://localhost:8089"))
     parser.add_argument(
         "--evidence", type=Path, default=Path("docs/evidence/datahub-validation.json")
@@ -147,7 +149,9 @@ def main() -> None:
         )
 
     for dag_id, tasks in job_map().items():
-        flow = DataFlow(platform="airflow", name=dag_id, description=f"FSDS Airflow DAG {dag_id}")
+        flow = DataFlow(
+            platform="airflow", name=dag_id, description=f"PLATFORM Airflow DAG {dag_id}"
+        )
         client.entities.upsert(flow)
         for task_id, (inputs, outputs) in tasks.items():
             client.entities.upsert(
@@ -172,7 +176,7 @@ def main() -> None:
             entity_urn=str(urn(dataset)),
             type="Airflow Spark Validate",
             description=f"{item['dag_id']}.{item['task_id']} kiểm {dataset}",
-            platform_name="FSDS Airflow",
+            platform_name="PLATFORM Airflow",
             logic=item["rule"],
         )
         completed = datetime.fromisoformat(item["completed_at"].replace("Z", "+00:00"))

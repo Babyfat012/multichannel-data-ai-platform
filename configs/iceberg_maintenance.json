@@ -1,5 +1,5 @@
 {
-  "description": "Chính sách DE-N2; bảng demo riêng, planner chọn bảng thật sau khi kiểm tra.",
+  "description": "Chính sách Iceberg maintenance; bảng demo riêng, người vận hành chọn bảng thật sau khi kiểm tra.",
   "tables": {
     "lakehouse.demo.maintenance_demo": {
       "min_input_files": 5,

@@ -1,4 +1,4 @@
-# Đầu vào cho một EC2 DE; allowlist máy để không lỡ tay bật cỡ máy đốt hết credit.
+# Đầu vào cho một EC2 Data Platform; allowlist máy để không lỡ tay bật cỡ máy đốt hết credit.
 variable "region" {
   type    = string
   default = "ap-southeast-1"
@@ -20,7 +20,7 @@ variable "availability_zone" {
 
 variable "name_prefix" {
   type    = string
-  default = "fsds"
+  default = "platform"
   validation {
     condition     = can(regex("^[a-z][a-z0-9-]{0,16}[a-z0-9]$", var.name_prefix))
     error_message = "Prefix có 2–18 ký tự chữ thường/số/gạch nối để tên bucket hợp lệ."
@@ -99,7 +99,7 @@ variable "budget_amount_usd" {
 variable "tags" {
   type = map(string)
   default = {
-    project     = "fsds"
+    project     = "platform"
     environment = "learning"
   }
 }

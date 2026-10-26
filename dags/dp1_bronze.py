@@ -8,10 +8,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from airflow import DAG
-from fsds_spark_operator import FsdsSparkSubmitOperator
+from platform_spark_operator import PlatformSparkSubmitOperator
 
 
-class Dp1SparkSubmitOperator(FsdsSparkSubmitOperator):
+class Dp1SparkSubmitOperator(PlatformSparkSubmitOperator):
     """DP1 tasks share Iceberg and source-PostgreSQL credentials."""
 
     def __init__(self, **kwargs):
@@ -22,13 +22,13 @@ class Dp1SparkSubmitOperator(FsdsSparkSubmitOperator):
 
 SparkSubmitOperator = Dp1SparkSubmitOperator
 
-PACKAGES = "{{ var.value.fsds_spark_packages }}"
+PACKAGES = "{{ var.value.platform_spark_packages }}"
 RUN_ID = "{{ run_id }}"
-AMAZON_TABLE = "{{ var.value.fsds_dp1_amazon_table }}"
-WALMART_TABLE = "{{ var.value.fsds_dp1_walmart_table }}"
-SOURCE_ROOT = "{{ var.value.fsds_dp1_extra_source_root }}"
-WINDOW_DAYS = "{{ var.value.fsds_dp1_amazon_window_days }}"
-WINDOW_START = "{{ var.value.fsds_dp1_amazon_window_start }}"
+AMAZON_TABLE = "{{ var.value.platform_dp1_amazon_table }}"
+WALMART_TABLE = "{{ var.value.platform_dp1_walmart_table }}"
+SOURCE_ROOT = "{{ var.value.platform_dp1_extra_source_root }}"
+WINDOW_DAYS = "{{ var.value.platform_dp1_amazon_window_days }}"
+WINDOW_START = "{{ var.value.platform_dp1_amazon_window_start }}"
 SPARK_CONF = {
     "spark.driver.host": "airflow",
     "spark.driver.bindAddress": "0.0.0.0",
@@ -44,7 +44,7 @@ with DAG(
     is_paused_upon_creation=False,
     max_active_runs=1,
     max_active_tasks=1,
-    tags=["fsds", "dp1", "bronze"],
+    tags=["platform", "dp1", "bronze"],
 ) as dag:
     ingest_amazon = SparkSubmitOperator(
         task_id="ingest_amazon",
@@ -106,7 +106,7 @@ with DAG(
     previous = validate_walmart
     ingest_amazon >> validate_amazon >> ingest_walmart >> validate_walmart
     for channel in ("tiktok_shop", "shopify", "shopee"):
-        table = "{{ var.value.fsds_dp1_" + channel + "_table }}"
+        table = "{{ var.value.platform_dp1_" + channel + "_table }}"
         ingest = SparkSubmitOperator(
             task_id=f"ingest_{channel}",
             application="/opt/spark_jobs/bronze/ingest_file_order_snapshots.py",

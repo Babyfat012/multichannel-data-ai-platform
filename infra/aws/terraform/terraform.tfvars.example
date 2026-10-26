@@ -2,7 +2,7 @@
 ssh_public_key = "ssh-ed25519 AAAA_YOUR_PUBLIC_KEY you@laptop"
 # region            = "ap-southeast-1"
 # availability_zone = "ap-southeast-1a"
-# name_prefix       = "fsds"
+# name_prefix       = "platform"
 # instance_type     = "t3.xlarge"
 # cpu_credits       = "standard"
 # boot_disk_gb      = 30
@@ -13,4 +13,4 @@ ssh_public_key = "ssh-ed25519 AAAA_YOUR_PUBLIC_KEY you@laptop"
 # force_destroy             = false
 # noncurrent_retention_days = 30
 # temp_retention_days       = 7
-# tags = { project = "fsds", environment = "learning" }
+# tags = { project = "platform", environment = "learning" }

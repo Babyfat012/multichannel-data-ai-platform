@@ -1,4 +1,4 @@
-"""Chụp Grid của các DAG Airflow bằng Chrome headless cho hồ sơ DE.
+"""Chụp Grid của các DAG Airflow bằng Chrome headless cho pipeline Data Platform.
 
 Đọc mật khẩu standalone từ container qua stdout nội bộ của subprocess, không in
 ra terminal hay ghi vào file. Dùng Chrome DevTools Protocol để đăng nhập và lưu
@@ -99,7 +99,7 @@ def main() -> None:
             "dp1_cdc",
             "dp3_features",
             "dp3_walmart_labels",
-            "fsds_runtime_config_check",
+            "platform_runtime_config_check",
         ),
         help="DAG cần chụp; bỏ trống để chụp DP1/DP2 mặc định",
     )

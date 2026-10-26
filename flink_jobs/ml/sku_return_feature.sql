@@ -1,4 +1,4 @@
--- MLE stream feature: số Return "approved" của mỗi SKU trong 24h gần nhất (HOP trượt 1h).
+-- ML Platform stream feature: số Return "approved" của mỗi SKU trong 24h gần nhất (HOP trượt 1h).
 -- Kafka return_events → bỏ bản retry trùng → tra line_id→SKU ở PostgreSQL → Kafka ml.sku_return_24h.
 -- Chạy liên tục (streaming). @@PG_*@@ do scripts/run/run_sku_return_feature.sh điền lúc submit.
 SET 'table.local-time-zone' = 'UTC';

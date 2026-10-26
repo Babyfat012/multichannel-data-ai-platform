@@ -101,7 +101,7 @@ Amazon 2 và TikTok Shop 2 dùng đúng render tương ứng.
 `_truth/lines.jsonl` nằm ngoài `dataset_version=*/`; manifest ghi
 `truth.not_a_source=true`, số dòng và hash. Mỗi dòng chứa line identity, SKU,
 kịch bản, lượng đặt/hủy/giao/trả, approved/refund-success time. Chỉ test đọc truth.
-Pytest quét job DE để chặn tham chiếu đường dẫn `_truth/`; tên `ground_truth`
+Pytest quét job Data Platform để chặn tham chiếu đường dẫn `_truth/`; tên `ground_truth`
 của job v1 hiện có không phải thư mục truth của scale.
 
 ## Giữ fixture mặc định không đổi và tái lập
@@ -135,7 +135,7 @@ phải cam kết tuyệt đối cho mọi seed cực nhỏ.
 ## Kết quả đo
 
 **Baseline trước coverage tuần** (số byte/file/dataset dưới đây thuộc code cũ;
-chưa đo lại throughput/RSS sau codex-27). Lần chạy `2.000 đơn/ngày × 30 ngày`, seed 7, SKU=100, s=1,2:
+chưa đo lại throughput/RSS sau bản sửa coverage theo ADR-0013). Lần chạy `2.000 đơn/ngày × 30 ngày`, seed 7, SKU=100, s=1,2:
 
 | Chỉ số | Đo được |
 |---|---:|
@@ -165,19 +165,19 @@ Spark: **chưa chạy trong sandbox**. Bộ unittest tại
 `contracts_dir="/workspace/contracts"`; kiểm mọi reconcile check bằng 0,
 quarantine bằng 0 và tập line Silver bằng truth.
 
-Kết quả (planner, 2026-10-19): **`Ran 3 tests in 980.842s — OK`** (`tests/spark/check_order_lifecycle_silver_scale.py`, 200 đơn/ngày ×
-10 ngày, image `fsds-airflow:2.10.5-spark3.5.3`, `--network none --read-only`, driver 3 GB): mọi check `reconcile` = 0,
+Kết quả (người vận hành, 2026-10-19): **`Ran 3 tests in 980.842s — OK`** (`tests/spark/check_order_lifecycle_silver_scale.py`, 200 đơn/ngày ×
+10 ngày, image `platform-airflow:2.10.5-spark3.5.3`, `--network none --read-only`, driver 3 GB): mọi check `reconcile` = 0,
 quarantine = 0, tập line Silver = `_truth`. Thời gian dài vì máy chạy song song job khác; không dùng làm số hiệu năng.
 
 ```bash
 docker run --rm --network none --read-only --tmpfs /tmp:rw,size=2g \
   --mount type=bind,src=$PWD,dst=/workspace,readonly --entrypoint python \
-  fsds-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_order_lifecycle_silver_scale.py
+  platform-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_order_lifecycle_silver_scale.py
 ```
 
 ## Giới hạn
 
-- Không nạp PostgreSQL, chạy DE hay ghi nhãn; benchmark nguồn không suy ra tốc độ Spark.
+- Không nạp PostgreSQL, chạy Data Platform hay ghi nhãn; benchmark nguồn không suy ra tốc độ Spark.
 - Tồn kho và tiền USD vẫn đơn giản; chưa có price variation, many-seller hay nhiều pool khả dụng.
 - Coverage chứng minh tập nguồn đã phát, không chứng minh mọi line đã terminal;
   line censored cần được loại/giữ immature bởi label policy.

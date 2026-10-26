@@ -165,12 +165,12 @@ def test_dag_ast_and_setup():
     assert len(calls) == 2
     setup = (ROOT / "scripts/setup/setup_airflow.sh").read_text()
     for variable in (
-        "fsds_order_lifecycle_driver_memory",
-        "fsds_order_lifecycle_executor_memory",
-        "fsds_order_lifecycle_executor_cores",
-        "fsds_order_lifecycle_cdc_spark_packages",
-        "fsds_order_lifecycle_cdc_oracle",
-        "fsds_order_lifecycle_cdc_control_dir",
+        "platform_order_lifecycle_driver_memory",
+        "platform_order_lifecycle_executor_memory",
+        "platform_order_lifecycle_executor_cores",
+        "platform_order_lifecycle_cdc_spark_packages",
+        "platform_order_lifecycle_cdc_oracle",
+        "platform_order_lifecycle_cdc_control_dir",
     ):
         assert variable in source and f"variables set {variable}" in setup
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef))

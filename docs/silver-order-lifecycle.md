@@ -82,7 +82,7 @@ không bị kiểm mà được đếm ở `info.coverage_unavailable_scopes`; �
 
 ## Kết quả
 
-**Test Spark** (27 ca, image `fsds-airflow:2.10.5-spark3.5.3`, `local[1]`, không
+**Test Spark** (27 ca, image `platform-airflow:2.10.5-spark3.5.3`, `local[1]`, không
 mạng, workspace chỉ đọc, fixture sinh mới trong `/tmp`): **27/27 OK**. Ngoài ca
 sạch, test cố tình làm hỏng dữ liệu và kiểm check bắt được: bản lặp do retry,
 cùng id khác nội dung, mất sự kiện gốc, mất allocation thứ hai, correction tồn
@@ -96,7 +96,7 @@ giữ vùng ảnh hưởng, sau correction còn **0**.
 ```bash
 docker run --rm --network none --read-only --tmpfs /tmp:rw,size=1g \
   --mount type=bind,src=$PWD,dst=/workspace,readonly --entrypoint python \
-  fsds-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_order_lifecycle_silver.py
+  platform-airflow:2.10.5-spark3.5.3 /workspace/tests/spark/check_order_lifecycle_silver.py
 ```
 
 **Chạy thật vào Lakekeeper/MinIO** trên biến thể `default`
