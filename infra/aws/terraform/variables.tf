@@ -32,8 +32,8 @@ variable "instance_type" {
   type        = string
   default     = "t3.xlarge"
   validation {
-    condition     = contains(["t3.xlarge", "t3.2xlarge", "m6i.xlarge", "m6i.2xlarge"], var.instance_type)
-    error_message = "Overlay cần ít nhất 16 GiB RAM: chọn t3.xlarge/2xlarge hoặc m6i.xlarge/2xlarge."
+    condition     = contains(["t3.xlarge", "t3.2xlarge", "m6i.xlarge", "m6i.2xlarge", "c6i.2xlarge"], var.instance_type)
+    error_message = "Overlay cần ít nhất 16 GiB RAM: chọn t3.xlarge/2xlarge, m6i.xlarge/2xlarge hoặc c6i.2xlarge."
   }
 }
 

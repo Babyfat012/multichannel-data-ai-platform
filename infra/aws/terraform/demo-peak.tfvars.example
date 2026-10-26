@@ -1,0 +1,14 @@
+# Preset để review: Sydney, 8 vCPU/32 GiB Data Platform. Không phải quyền tự apply hoặc cam kết chi phí.
+region                     = "ap-southeast-2"
+availability_zone          = "ap-southeast-2a"
+secondary_availability_zone = "ap-southeast-2b"
+instance_type              = "m6i.2xlarge"
+enable_ecr                 = true
+enable_kubernetes_network  = true
+boot_disk_gb               = 30
+data_disk_gb               = 100
+enable_budget              = true
+budget_amount_usd          = 60
+# Điền SSH PUBLIC key và email trước khi plan. Budget chỉ cảnh báo, không tự dừng tài nguyên.
+# ssh_public_key = "ssh-ed25519 ..."
+# budget_email   = "your-email@example.com"

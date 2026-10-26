@@ -1,0 +1,15 @@
+# Preset đã chốt cho final: Sydney, Data Platform c6i.2xlarge 8 vCPU/16 GiB, overlay AWS chuẩn (không cần performance).
+# Ghép với EKS 2 × c6i.xlarge: tổng 16 vCPU/32 GiB = đủ quota. Review plan trước khi tự apply.
+region                      = "ap-southeast-2"
+availability_zone           = "ap-southeast-2a"
+secondary_availability_zone = "ap-southeast-2b"
+instance_type               = "c6i.2xlarge"
+enable_ecr                  = true
+enable_kubernetes_network   = true
+boot_disk_gb                = 30
+data_disk_gb                = 100
+enable_budget               = true
+budget_amount_usd           = 40
+# Điền SSH PUBLIC key và email trước khi plan. Budget chỉ cảnh báo, không tự dừng tài nguyên.
+# ssh_public_key = "ssh-ed25519 ..."
+# budget_email   = "your-email@example.com"

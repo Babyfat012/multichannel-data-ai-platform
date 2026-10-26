@@ -1,0 +1,16 @@
+# Ghép với preset Data Platform 8 vCPU: tổng 16 vCPU/64 GiB; một worker, chưa có HA ở workload.
+region              = "ap-southeast-2"
+name_prefix         = "platform"
+data_platform_state = "../terraform/terraform.tfstate"
+node_instance_types = ["m6i.2xlarge"]
+node_desired_size   = 1
+node_min_size       = 0
+node_max_size       = 1
+node_disk_gb        = 80
+# Tránh node cập nhật vượt quota 16 vCPU; chấp nhận downtime khi thay worker.
+node_update_strategy = "MINIMAL"
+single_az_workers    = true
+# Điền bản EKS standard support, IAM role ARN và CIDR quản trị thực trước plan.
+# kubernetes_version = "..."
+# admin_role_arn     = "arn:aws:iam::ACCOUNT:role/PATH/ROLE"
+# api_allowed_cidrs  = ["ADMIN_IP/32"]
