@@ -26,6 +26,7 @@ from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
 from spark_jobs.lib.day_selection import pick_sample_days, pick_window_days
+from spark_jobs.lib.iceberg_session import catalog_conf
 
 # Mount read-only; dưới nó là export_date=YYYY-MM-DD/part-*.jsonl.
 AMAZON_ROOT = "/data/raw/source-exports/channel=amazon/dataset=orders"
@@ -96,7 +97,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 # (phải đặt trước khi tạo session) và vì số đo trong docs/spark.md gắn với cấu hình này.
 # Gộp khi đo lại Bronze v1.
 def build_spark(aqe: str, shuffle_partitions: int, app_name: str) -> SparkSession:
-    """SparkSession nối catalog Iceberg trên Lakekeeper, dữ liệu nằm trên MinIO."""
+    """SparkSession nối catalog Iceberg trên Lakekeeper, dữ liệu nằm trên MinIO hoặc S3 thật."""
+    if os.environ.get("PLATFORM_STORAGE") == "s3":
+        # AWS: dùng chung cấu hình catalog S3 (IAM role của EC2), chỉ thêm cờ AQE/shuffle của job này.
+        builder = SparkSession.builder.appName(app_name)
+        for key, value in catalog_conf(os.environ).items():
+            builder = builder.config(key, value)
+        return (
+            builder.config("spark.sql.adaptive.enabled", "true" if aqe == "on" else "false")
+            .config("spark.sql.shuffle.partitions", str(shuffle_partitions))
+            .getOrCreate()
+        )
     minio_endpoint = os.environ.get("MINIO_INTERNAL_ENDPOINT", "http://minio:9000")
     warehouse = os.environ.get("WAREHOUSE_NAME", "platform")
     catalog_uri = os.environ.get("LAKEKEEPER_CATALOG_URI", "http://lakekeeper:8181/catalog")
