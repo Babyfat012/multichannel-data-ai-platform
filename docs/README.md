@@ -50,6 +50,10 @@ Hạ tầng vận hành dùng chung giữa các platform: [CI/CD](ml-llm-platfor
 
 ## Triển khai và phát triển
 
+[Cấu hình demo và ngân sách](cloud-capacity.md): lựa chọn tài nguyên, chi phí và lịch bật/tắt.
+
+[Cloud setup](cloud-setup.md) là điểm bắt đầu cho triển khai AWS cả ba platform: preflight tài khoản, EC2/S3/ECR, EKS, storage và các gate kiểm runtime.
+
 - [Docker Compose](Docker.md): môi trường nguồn, profile và image.
 - [AWS runbook](aws-deploy.md), [IaC](IaC.md): đích EC2 + S3, thao tác triển khai và dọn tài nguyên.
 - Sơ đồ AWS: [hạ tầng](diagrams/aws-infra.html), [Data Platform](diagrams/aws-data-platform.html), [ML Platform / LLM Platform](diagrams/aws-ml-llm-platform.html) — EKS là bước sau.

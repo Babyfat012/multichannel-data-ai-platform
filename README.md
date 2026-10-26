@@ -45,6 +45,8 @@ Dừng môi trường nguồn bằng `docker compose stop`. Các service bổ su
 
 ## Trạng thái và triển khai
 
+[Cloud setup cho cả ba platform](docs/cloud-setup.md): chuẩn bị tài khoản, registry, mạng và Kubernetes trên AWS; các lệnh triển khai do người vận hành trực tiếp chạy.
+
 Repo có bằng chứng chạy local bằng Docker Compose và `kind`; mức hoàn thành và giới hạn khác nhau theo từng thành phần. Mốc cloud hiện hành là Data Platform batch trên AWS EC2 + S3; chưa có bằng chứng triển khai AWS trong repo. ML Platform và LLM Platform trên EKS là bước sau.
 
 - [Trạng thái Data Platform](docs/data-platform-order-lifecycle-status.md) và [ma trận bằng chứng](docs/data-platform-evidence.md).
