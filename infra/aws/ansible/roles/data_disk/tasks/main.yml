@@ -56,3 +56,8 @@
     fstype: '{{ disk_fstype.stdout | trim }}'
     opts: defaults
     state: mounted
+- name: Nới filesystem khi EBS được tăng dung lượng (ext4 nới được lúc đang mount; đủ rồi thì không đổi gì)
+  ansible.builtin.command:
+    argv: [resize2fs, '{{ data_disk_path }}']
+  register: disk_resize
+  changed_when: "'Nothing to do' not in disk_resize.stderr"

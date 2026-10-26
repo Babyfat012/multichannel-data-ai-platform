@@ -7,7 +7,7 @@ instance_type               = "c6i.2xlarge"
 enable_ecr                  = true
 enable_kubernetes_network   = true
 boot_disk_gb                = 30
-data_disk_gb                = 100
+data_disk_gb                = 250
 enable_budget               = true
 budget_amount_usd           = 40
 # Điền SSH PUBLIC key và email trước khi plan. Budget chỉ cảnh báo, không tự dừng tài nguyên.
