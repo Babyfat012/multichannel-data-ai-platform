@@ -53,6 +53,7 @@
       - '--exclude=__pycache__/'
       - '--exclude=infra/aws/ansible/group_vars/'
       - '--exclude=infra/aws/terraform/'
+      - '--exclude=infra/aws/kubernetes/'
       - '--exclude=.archive/'
   register: app_sync
 - name: Tạo các thư mục persistent cho Spark
