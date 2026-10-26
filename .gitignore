@@ -39,3 +39,13 @@ mutants/
 
 # Tài liệu quá trình và cấu hình lịch sử: chỉ lưu local
 .archive/
+
+# State, plan và cấu hình triển khai thực tế chỉ lưu local.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+*.auto.tfvars
+infra/aws/ansible/inventory.ini
+infra/aws/ansible/group_vars/all.yml
