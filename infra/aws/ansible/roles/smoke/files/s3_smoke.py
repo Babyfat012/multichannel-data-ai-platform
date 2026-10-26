@@ -19,7 +19,9 @@ def main():
         assert any(r.col_name == "Location" and r.data_type.startswith("s3://") for r in locations)
         print("S3 Iceberg smoke: PASS")
     finally:
-        spark.sql(f"DROP TABLE IF EXISTS {table} PURGE")
+        # Không PURGE: Spark xoá bảng khỏi catalog rồi mới tự đọc lại metadata để xoá file,
+        # lúc đó Lakekeeper đã không còn bảng nên từ chối. Lakekeeper tự dọn file của bảng đã xoá.
+        spark.sql(f"DROP TABLE IF EXISTS {table}")
         spark.stop()
 
 
