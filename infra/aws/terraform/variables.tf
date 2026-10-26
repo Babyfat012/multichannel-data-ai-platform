@@ -129,3 +129,20 @@ variable "force_destroy" {
   type        = bool
   default     = false
 }
+
+# Các phần mở rộng chỉ được tạo khi người vận hành bật trong tfvars và apply plan.
+variable "enable_ecr" {
+  type    = bool
+  default = false
+}
+
+variable "enable_kubernetes_network" {
+  type    = bool
+  default = false
+}
+
+variable "secondary_availability_zone" {
+  description = "AZ thứ hai trong cùng region cho subnet EKS; bắt buộc khi bật mạng Kubernetes."
+  type        = string
+  default     = null
+}

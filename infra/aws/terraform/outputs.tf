@@ -21,6 +21,35 @@ output "region" {
   value = var.region
 }
 
+output "vpc_id" {
+  value = aws_vpc.data_platform.id
+}
+
+output "kubernetes_subnet_ids" {
+  value = var.enable_kubernetes_network ? concat(
+    [aws_subnet.public.id], aws_subnet.kubernetes_secondary[*].id
+  ) : []
+}
+
+output "data_security_group_id" {
+  value = aws_security_group.vm.id
+}
+
+output "data_private_ip" {
+  value = aws_instance.data_platform.private_ip
+}
+
+output "ecr_repositories" {
+  value = { for name, repo in aws_ecr_repository.application : name => repo.repository_url }
+}
+
+output "image_registry" {
+  description = "Prefix dùng với scripts/run/push_images.sh; gồm account registry và namespace dự án."
+  value = var.enable_ecr ? trimsuffix(
+    aws_ecr_repository.application["platform-feature-api"].repository_url, "/platform-feature-api"
+  ) : null
+}
+
 output "instance_id" {
   description = "Dùng làm ansible_host trong inventory (SSH đi qua SSM theo ID)."
   value       = aws_instance.data_platform.id

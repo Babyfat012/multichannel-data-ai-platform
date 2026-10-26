@@ -47,3 +47,7 @@ Sau đó sang [Ansible](../ansible/README.md).
 ## State của môi trường đã tồn tại
 
 Resource address hiện hành dùng `data_platform` và `operator`; tên AWS dùng tiền tố `platform` / `data-platform`. Nếu đã apply cấu hình có resource address hoặc tên cũ, cần kiểm state và lập kế hoạch di chuyển trước khi apply. Xem toàn bộ plan để phân biệt cập nhật metadata với thao tác tạo lại EC2, EBS hoặc bucket; đổi tên trong repo không tự di chuyển state hay dữ liệu.
+
+## Registry và mạng cho ML/LLM
+
+Bật `enable_ecr` để tạo repository ECR; bật `enable_kubernetes_network` và điền `secondary_availability_zone` để có hai subnet cho root [EKS](../kubernetes/README.md). Hai flag mặc định tắt. Xem [cloud setup](../../../docs/cloud-setup.md) để kiểm tài khoản, review plan và triển khai theo thứ tự.
