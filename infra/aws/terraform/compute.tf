@@ -1,11 +1,8 @@
 # Một EC2 Ubuntu 24.04 với EBS dữ liệu riêng; không cài runtime bằng user_data (Ansible lo).
-data "aws_ami" "ubuntu" {
-  most_recent = true
-  owners      = ["099720108477"] # Canonical
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
-  }
+# Hỏi tham số công khai SSM của Canonical thay vì tìm theo tên: tài khoản này không liệt kê
+# được ảnh Canonical qua DescribeImages (0 kết quả), nhưng tham số SSM vẫn trả AMI mới nhất.
+data "aws_ssm_parameter" "ubuntu" {
+  name = "/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id"
 }
 
 resource "aws_key_pair" "operator" {
@@ -14,7 +11,7 @@ resource "aws_key_pair" "operator" {
 }
 
 resource "aws_instance" "data_platform" {
-  ami                         = data.aws_ami.ubuntu.id
+  ami                         = data.aws_ssm_parameter.ubuntu.insecure_value # ID AMI công khai, không bí mật: hiện rõ trong plan
   instance_type               = var.instance_type
   subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.vm.id]
