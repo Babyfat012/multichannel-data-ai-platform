@@ -42,3 +42,11 @@ spec:
       resources:
         requests: {cpu: 50m, memory: 192Mi}
         limits: {memory: 512Mi}
+      # Ưu tiên rải replica sang worker khác: một node chết vẫn còn bản chạy. 'preferred' để kind 1 node vẫn chạy được.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector: {matchLabels: {kagent: data-agent}}

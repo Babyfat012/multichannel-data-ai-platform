@@ -23,6 +23,14 @@ spec:
       {{- if .Values.serviceAccount.name }}
       serviceAccountName: {{ .Values.serviceAccount.name }}
       {{- end }}
+      # Ưu tiên rải replica sang worker khác: một node chết vẫn còn pod phục vụ. 'preferred' để kind 1 node vẫn chạy được.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector: {matchLabels: {app: {{ .Release.Name }}}}
       containers:
         - name: api
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
