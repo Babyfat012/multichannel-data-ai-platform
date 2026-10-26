@@ -3,8 +3,8 @@
 # Jaeger (trace), Grafana (xem cả ba, có dashboard PLATFORM). Chạy lại nhiều lần vẫn an toàn.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-KC="kubectl --context kind-platform -n observability"
-H="helm --kube-context kind-platform -n observability"
+KC="kubectl --context ${KCTX:-kind-platform} -n observability"
+H="helm --kube-context "${KCTX:-kind-platform}" -n observability"
 V=infra/k8s/observability
 
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts >/dev/null
@@ -13,7 +13,7 @@ helm repo add fluent https://fluent.github.io/helm-charts >/dev/null
 helm repo add jaegertracing https://jaegertracing.github.io/helm-charts >/dev/null
 helm repo update >/dev/null
 
-kubectl --context kind-platform create namespace observability --dry-run=client -o yaml | kubectl --context kind-platform apply -f -
+kubectl --context ${KCTX:-kind-platform} create namespace observability --dry-run=client -o yaml | kubectl --context ${KCTX:-kind-platform} apply -f -
 # Mật khẩu admin Grafana sinh 1 lần, giữ trong Secret (đọc: kubectl -n observability get secret grafana-admin).
 if ! $KC get secret grafana-admin >/dev/null 2>&1; then
   $KC create secret generic grafana-admin --from-literal=admin-user=admin \

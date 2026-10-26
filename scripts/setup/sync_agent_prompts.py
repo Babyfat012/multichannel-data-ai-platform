@@ -10,6 +10,7 @@ python scripts/setup/sync_agent_prompts.py [--seed]
 import argparse
 import base64
 import json
+import os
 import subprocess
 import time
 import urllib.error
@@ -18,7 +19,7 @@ from pathlib import Path
 
 AGENTS = ("data-agent", "model-agent", "coordinator")
 SEEDS = Path(__file__).resolve().parents[2] / "infra/k8s/agents/prompts"
-KC = ["kubectl", "--context", "kind-platform"]
+KC = ["kubectl", "--context", os.environ.get("KCTX", "kind-platform")]
 URL = "http://localhost:13000"
 
 

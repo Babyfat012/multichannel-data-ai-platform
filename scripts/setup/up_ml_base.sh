@@ -8,11 +8,11 @@ docker compose --profile catalog up -d --wait minio postgres lakekeeper >/dev/nu
 scripts/setup/setup_kind_registry.sh
 scripts/setup/setup_vault.sh | tail -1
 scripts/setup/setup_jenkins.sh | tail -1
-keys=$(kubectl --context kind-platform -n feature-store exec deploy/redis -- redis-cli dbsize)
+keys=$(kubectl --context ${KCTX:-kind-platform} -n feature-store exec deploy/redis -- redis-cli dbsize)
 if [[ "$keys" == 0 ]]; then
   cutoff=${FEAST_ONLINE_END:-2026-10-13T00:00:00}  # mốc ảnh chụp online = cutoff Gold
   docker compose --profile ml-stream run --rm --no-deps feast-pusher \
     feast materialize 2025-12-01T00:00:00 "$cutoff" --views sku_return_daily >/dev/null 2>&1
-  keys=$(kubectl --context kind-platform -n feature-store exec deploy/redis -- redis-cli dbsize)
+  keys=$(kubectl --context ${KCTX:-kind-platform} -n feature-store exec deploy/redis -- redis-cli dbsize)
 fi
 printf 'Nền ML Platform sẵn sàng: Redis %s key, Vault unsealed, Jenkins :8090\n' "$keys"

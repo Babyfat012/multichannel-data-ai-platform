@@ -23,7 +23,7 @@ put() { api -X POST "$VAULT_ADDR/v1/secret/data/platform/$1" -d "{\"data\":$2}" 
 put minio "{\"user\":\"$MINIO_ROOT_USER\",\"password\":\"$MINIO_ROOT_PASSWORD\"}"
 put postgres "{\"user\":\"$POSTGRES_USER\",\"password\":\"$POSTGRES_PASSWORD\",\"db\":\"$POSTGRES_DB\"}"
 # Key agent của agentgateway: nguồn là Secret k8s do helm chart tạo; bỏ qua nếu cụm chưa có.
-if agw=$(kubectl --context kind-platform -n agentgateway get secret agentgateway-keys \
+if agw=$(kubectl --context ${KCTX:-kind-platform} -n agentgateway get secret agentgateway-keys \
     -o jsonpath='{.data.AGW_AGENT_KEY}' 2>/dev/null | base64 -d) && [[ -n "$agw" ]]; then
   put agentgateway "{\"AGW_AGENT_KEY\":\"$agw\"}"
 fi

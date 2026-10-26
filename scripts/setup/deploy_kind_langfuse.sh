@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 if [ -z "${POSTGRES_USER:-}" ]; then set -a; . ./.env; set +a; fi
-KC="kubectl --context kind-platform"
+KC="kubectl --context ${KCTX:-kind-platform}"
 $KC -n rag exec deploy/pgvector -- sh -c \
   "psql -U \"\$POSTGRES_USER\" -d rag -tc \"SELECT 1 FROM pg_database WHERE datname='langfuse'\" | grep -q 1 \
    || psql -U \"\$POSTGRES_USER\" -d rag -c 'CREATE DATABASE langfuse'"

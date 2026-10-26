@@ -35,7 +35,7 @@ image="$REGISTRY/$source_image"
 docker build -q -f docker/Dockerfile.serve --build-arg MODEL_VERSION="$version" -t "$source_image" "$ctx"
 docker tag "$source_image" "$image"
 docker push "$image"
-K="kubectl --context kind-platform"
+K="kubectl --context ${KCTX:-kind-platform}"
 $K create namespace ml-serving --dry-run=client -o yaml | $K apply -f - >/dev/null
 $K -n ml-serving create secret generic platform-minio --from-literal=AWS_ACCESS_KEY_ID="$MINIO_ROOT_USER" \
   --from-literal=AWS_SECRET_ACCESS_KEY="$MINIO_ROOT_PASSWORD" --dry-run=client -o yaml | $K apply -f - >/dev/null
