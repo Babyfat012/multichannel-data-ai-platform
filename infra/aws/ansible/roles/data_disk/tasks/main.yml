@@ -19,7 +19,7 @@
   failed_when: disk_blkid.rc not in [0, 2]
 - name: Kiểm toàn bộ chữ ký và partition trước khi cho phép format
   ansible.builtin.command:
-    argv: [lsblk, --json, --output, NAME,FSTYPE,MOUNTPOINT,PTTYPE, '{{ data_disk_path }}']
+    argv: [lsblk, --json, --output, 'NAME,FSTYPE,MOUNTPOINT,PTTYPE', '{{ data_disk_path }}']
   register: disk_layout
   changed_when: false
 - name: Từ chối format disk có partition hoặc mount dù blkid không thấy filesystem
