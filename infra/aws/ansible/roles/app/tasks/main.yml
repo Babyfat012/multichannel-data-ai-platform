@@ -11,7 +11,15 @@
       - lakekeeper_encryption_key is match('^[A-Za-z0-9_-]{32,}$')
       - source_dataset_name is match('^[a-zA-Z0-9_-]+$')
       - warehouse_name is match('^[a-zA-Z0-9_-]+$')
+      - (aws_runtime_profile | default('standard')) in ['standard', 'performance']
   no_log: true
+- name: Kiểm tài nguyên trước khi bật profile performance
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['processor_vcpus'] | int >= 8
+      - ansible_facts['memtotal_mb'] | int >= 30000
+    fail_msg: Profile performance yêu cầu VM ít nhất 8 vCPU/32 GiB.
+  when: (aws_runtime_profile | default('standard')) == 'performance'
 - name: Kiểm Compose hỗ trợ override
   ansible.builtin.command: docker compose version --short
   register: compose_version

@@ -48,6 +48,11 @@ if [ "${PLATFORM_STORAGE:-minio}" = s3 ]; then
   airflow_cmd variables set platform_order_lifecycle_driver_memory '2g'
   airflow_cmd variables set platform_order_lifecycle_executor_memory '2g'
   airflow_cmd variables set platform_order_lifecycle_executor_cores '1'
+  if [[ "${PLATFORM_RUNTIME_PROFILE:-standard}" == performance ]]; then
+    airflow_cmd variables set platform_order_lifecycle_driver_memory '4g'
+    airflow_cmd variables set platform_order_lifecycle_executor_memory '4g'
+    airflow_cmd variables set platform_order_lifecycle_executor_cores '2'
+  fi
 fi
 
 # CDC v2 riêng: oracle phải được planner tạo và mount trước khi trigger DAG paused.
