@@ -3,21 +3,25 @@
 pipeline {
   agent any
   options { timestamps(); disableConcurrentBuilds() }
+  parameters {
+    string(name: 'TARGET_CONTEXT', defaultValue: 'kind-platform', description: 'Kubecontext from the deployment kubeconfig')
+    string(name: 'KUBE_CREDENTIAL', defaultValue: 'kind-kubeconfig', description: 'Jenkins file credential containing the target kubeconfig')
+  }
   environment {
-    KCTX = 'kind-platform'
+    KCTX = "${params.TARGET_CONTEXT}"
     VAULT_ADDR = 'http://localhost:8200'
   }
   stages {
     stage('Validate') {
       steps {
-        withCredentials([file(credentialsId: 'kind-kubeconfig', variable: 'KUBECONFIG')]) {
+        withCredentials([file(credentialsId: params.KUBE_CREDENTIAL, variable: 'KUBECONFIG')]) {
           sh 'kubectl --context $KCTX apply --dry-run=server -f infra/k8s/agents/coordinator.yaml'
         }
       }
     }
     stage('Sync prompts from Langfuse') {
       steps {
-        withCredentials([file(credentialsId: 'kind-kubeconfig', variable: 'KUBECONFIG')]) {
+        withCredentials([file(credentialsId: params.KUBE_CREDENTIAL, variable: 'KUBECONFIG')]) {
           // System prompt lấy bản `production` trên Langfuse → ConfigMap agent-prompts (Agent đọc qua systemMessageFrom).
           sh 'python3 scripts/setup/sync_agent_prompts.py'
         }
@@ -25,7 +29,7 @@ pipeline {
     }
     stage('Deploy') {
       steps {
-        withCredentials([file(credentialsId: 'kind-kubeconfig', variable: 'KUBECONFIG')]) {
+        withCredentials([file(credentialsId: params.KUBE_CREDENTIAL, variable: 'KUBECONFIG')]) {
           sh '''
             kubectl --context $KCTX apply -f infra/k8s/agents/coordinator.yaml
             kubectl --context $KCTX -n kagent wait agent/coordinator --for=condition=Ready --timeout=180s
@@ -36,7 +40,7 @@ pipeline {
     stage('Eval agent') {
       steps {
         withCredentials([string(credentialsId: 'vault-ci-token', variable: 'VAULT_TOKEN'),
-                         file(credentialsId: 'kind-kubeconfig', variable: 'KUBECONFIG')]) {
+                         file(credentialsId: params.KUBE_CREDENTIAL, variable: 'KUBECONFIG')]) {
           sh 'EVAL_AGENT=coordinator bash scripts/run/eval_agent_ci.sh'
         }
       }
@@ -44,7 +48,7 @@ pipeline {
     stage('Smoke A2A') {
       steps {
         withCredentials([string(credentialsId: 'vault-ci-token', variable: 'VAULT_TOKEN'),
-                         file(credentialsId: 'kind-kubeconfig', variable: 'KUBECONFIG')]) {
+                         file(credentialsId: params.KUBE_CREDENTIAL, variable: 'KUBECONFIG')]) {
           sh '''
             set +x
             eval "$(scripts/setup/vault_env.sh agentgateway)"

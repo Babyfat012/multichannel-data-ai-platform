@@ -4,9 +4,12 @@
 pipeline {
   agent any
   options { timestamps(); disableConcurrentBuilds() }
+  parameters {
+    string(name: 'IMAGE_REGISTRY', defaultValue: 'localhost:5001', description: 'Registry namespace prefix; use ECR for cloud')
+  }
   environment {
     VAULT_ADDR = 'http://localhost:8200'
-    REGISTRY = 'localhost:5001'
+    REGISTRY = "${params.IMAGE_REGISTRY}"
     TAG = "${env.GIT_COMMIT ?: env.BUILD_NUMBER}"
   }
   stages {

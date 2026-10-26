@@ -5,8 +5,11 @@
 pipeline {
   agent any
   options { timestamps(); disableConcurrentBuilds(); timeout(time: 30, unit: 'MINUTES') }
+  parameters {
+    string(name: 'IMAGE_REGISTRY', defaultValue: 'localhost:5001', description: 'Registry namespace prefix; use ECR for cloud')
+  }
   environment {
-    REGISTRY = 'localhost:5001'
+    REGISTRY = "${params.IMAGE_REGISTRY}"
     TAG = "${env.GIT_COMMIT ?: env.BUILD_NUMBER}"
     POSTGRES_DB = 'sources'
     COMPOSE = 'docker compose --profile stream --profile flink --profile ml-stream'
