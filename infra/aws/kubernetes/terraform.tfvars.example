@@ -1,0 +1,11 @@
+# Chọn cấu hình sau khi kiểm quyền/quota/ngân sách; không commit file terraform.tfvars thật.
+region              = "ap-southeast-1"
+name_prefix         = "platform"
+data_platform_state = "../terraform/terraform.tfstate"
+# kubernetes_version = "<supported version from aws eks describe-cluster-versions>"
+# admin_role_arn     = "arn:aws:iam::<account>:role/<administrator-role>"
+# api_allowed_cidrs  = ["<your-egress-ip>/32"]
+# node_instance_types = ["<x86_64 instance selected after sizing>"]
+node_desired_size = 1
+node_max_size     = 2
+node_disk_gb      = 80
