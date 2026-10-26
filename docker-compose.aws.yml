@@ -60,6 +60,9 @@ services:
     cpus: "0.25"
     mem_limit: 512m
     image: platform-airflow:2.10.5-spark3.5.3
+    # Image Airflow có /entrypoint chuyển mọi lệnh lạ thành `airflow <lệnh>` => exit 2.
+    # Giữ dumb-init (PID 1 chuyển tín hiệu dừng), bỏ /entrypoint để chạy thẳng spark-class.
+    entrypoint: [/usr/bin/dumb-init, --]
     command: !override
       - /home/airflow/.local/lib/python3.10/site-packages/pyspark/bin/spark-class
       - org.apache.spark.deploy.master.Master
@@ -81,6 +84,9 @@ services:
     cpus: "1"
     mem_limit: 3500m
     image: platform-airflow:2.10.5-spark3.5.3
+    # Image Airflow có /entrypoint chuyển mọi lệnh lạ thành `airflow <lệnh>` => exit 2.
+    # Giữ dumb-init (PID 1 chuyển tín hiệu dừng), bỏ /entrypoint để chạy thẳng spark-class.
+    entrypoint: [/usr/bin/dumb-init, --]
     command: !override
       - /home/airflow/.local/lib/python3.10/site-packages/pyspark/bin/spark-class
       - org.apache.spark.deploy.worker.Worker
@@ -104,6 +110,9 @@ services:
     cpus: "1"
     mem_limit: 3500m
     image: platform-airflow:2.10.5-spark3.5.3
+    # Image Airflow có /entrypoint chuyển mọi lệnh lạ thành `airflow <lệnh>` => exit 2.
+    # Giữ dumb-init (PID 1 chuyển tín hiệu dừng), bỏ /entrypoint để chạy thẳng spark-class.
+    entrypoint: [/usr/bin/dumb-init, --]
     command: !override
       - /home/airflow/.local/lib/python3.10/site-packages/pyspark/bin/spark-class
       - org.apache.spark.deploy.worker.Worker
