@@ -7,6 +7,12 @@ replicas: 2
 # Secret chứa AWS_*, FEAST_*; tạo ngoài chart từ .env (scripts/setup/deploy_kind_feature_api.sh).
 envSecret: feature-api-env
 nodePort: 30800
+service:
+  type: NodePort
+  port: 8000
+serviceAccount:
+  create: false
+  name: ""
 resources:
   requests: {cpu: 50m, memory: 128Mi}
   limits: {memory: 768Mi}   # + model embedding ONNX (~200 MB khi nạp)

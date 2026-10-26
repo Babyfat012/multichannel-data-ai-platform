@@ -1,0 +1,7 @@
+# Kết hợp values mặc định; repository/tag được script deploy truyền từ ECR và commit SHA.
+service:
+  type: ClusterIP
+  port: 8000
+serviceAccount:
+  create: true
+  name: feature-api

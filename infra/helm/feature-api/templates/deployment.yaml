@@ -20,6 +20,9 @@ spec:
         prometheus.io/port: "8000"
         prometheus.io/path: /metrics
     spec:
+      {{- if .Values.serviceAccount.name }}
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      {{- end }}
       containers:
         - name: api
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
