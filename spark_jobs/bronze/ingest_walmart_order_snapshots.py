@@ -22,6 +22,8 @@ import uuid
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
+from spark_jobs.lib.iceberg_session import catalog_conf
+
 CATALOG = "lakehouse"
 NAMESPACE = "bronze"
 
@@ -99,7 +101,15 @@ def source_query() -> str:
 # (phải đặt trước khi tạo session) và vì số đo trong docs/spark.md gắn với cấu hình này.
 # Gộp khi đo lại Bronze v1.
 def build_spark(aqe: str, app_name: str) -> SparkSession:
-    """SparkSession nối catalog Iceberg trên Lakekeeper, dữ liệu nằm trên MinIO."""
+    """SparkSession nối catalog Iceberg trên Lakekeeper, dữ liệu nằm trên MinIO hoặc S3 thật."""
+    if os.environ.get("PLATFORM_STORAGE") == "s3":
+        # AWS: dùng chung cấu hình catalog S3 (IAM role của EC2), chỉ thêm cờ AQE của job này.
+        builder = SparkSession.builder.appName(app_name)
+        for key, value in catalog_conf(os.environ).items():
+            builder = builder.config(key, value)
+        return builder.config(
+            "spark.sql.adaptive.enabled", "true" if aqe == "on" else "false"
+        ).getOrCreate()
     minio_endpoint = os.environ.get("MINIO_INTERNAL_ENDPOINT", "http://minio:9000")
     warehouse = os.environ.get("WAREHOUSE_NAME", "platform")
     catalog_uri = os.environ.get("LAKEKEEPER_CATALOG_URI", "http://lakekeeper:8181/catalog")
