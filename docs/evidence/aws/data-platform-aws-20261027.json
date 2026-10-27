@@ -4,8 +4,16 @@
     "cloud": "AWS",
     "region": "ap-southeast-2",
     "account": "665116832975",
-    "ec2": {"id": "i-0a0f2f61b2ae193a2", "type": "c6i.2xlarge", "data_disk_gb": 250},
-    "spark": {"workers": 2, "cores_per_worker": 2, "executor_memory": "2g"},
+    "ec2": {
+      "id": "i-0a0f2f61b2ae193a2",
+      "type": "c6i.2xlarge",
+      "data_disk_gb": 250
+    },
+    "spark": {
+      "workers": 2,
+      "cores_per_worker": 2,
+      "executor_memory": "2g"
+    },
     "auth": "IAM role platform-data-platform-vm (credential tạm qua IMDS, không access key)"
   },
   "source": "Ghi từ output lệnh người vận hành chạy trên EC2 (journalctl/systemctl/aws s3 ls); ảnh gốc cùng thư mục.",
@@ -19,16 +27,73 @@
     "v1_scope_matches_local_manifest": "docs/evidence/batch-100gb-manifest.json",
     "sync_exit_status": 0
   },
-  "postgres_load": {"walmart.orders": 10949058, "seller.skus": 2000, "seconds": 443.4},
+  "postgres_load": {
+    "walmart.orders": 10949058,
+    "seller.skus": 2000,
+    "seconds": 443.4
+  },
   "bronze_manual": {
-    "raw_amazon_orders": {"rows": 108248563, "days": 180, "seconds": 506.6, "source": "s3a://"},
-    "raw_walmart_orders": {"rows": 10949058, "days": 180, "seconds": 267.2, "source": "PostgreSQL JDBC", "matches_source": true},
-    "lakehouse_s3_after_amazon": {"objects": 196, "bytes": 8740081322}
+    "raw_amazon_orders": {
+      "rows": 108248563,
+      "days": 180,
+      "seconds": 506.6,
+      "source": "s3a://"
+    },
+    "raw_walmart_orders": {
+      "rows": 10949058,
+      "days": 180,
+      "seconds": 267.2,
+      "source": "PostgreSQL JDBC",
+      "matches_source": true
+    },
+    "lakehouse_s3_after_amazon": {
+      "objects": 196,
+      "bytes": 8740081322
+    }
   },
   "airflow_dp1_bronze": {
     "dag_run": "manual__2026-10-27T14:58:12+00:00",
-    "validate_amazon": {"source_rows": 108248563, "bronze_rows": 108248563, "errors": 0, "table": "lakehouse.bronze.raw_amazon_orders_dp1"},
-    "evidence": ["dp1-validate-amazon-log-20261027.png", "spark-master-2x2core-20261027.png"]
+    "validate_amazon": {
+      "source_rows": 108248563,
+      "bronze_rows": 108248563,
+      "errors": 0,
+      "table": "lakehouse.bronze.raw_amazon_orders_dp1"
+    },
+    "evidence": [
+      "dp1-validate-amazon-log-20261027.png",
+      "spark-master-2x2core-20261027.png",
+      "dp1-bronze-graph-20261027.png",
+      "dp1-bronze-gantt-20261027.png"
+    ],
+    "tasks_success": "10/10",
+    "duration_min_approx": 55
   },
-  "known_issue": "Lần chạy tay ba Channel ghi nhầm vào lakehouse.bronze.raw__orders (systemd-run thay ${ch} thành rỗng); không dùng bảng đó. Ba Channel lấy từ DAG dp1_bronze."
+  "known_issue": "Lần chạy tay ba Channel ghi nhầm vào lakehouse.bronze.raw__orders (systemd-run thay ${ch} thành rỗng); không dùng bảng đó. Ba Channel lấy từ DAG dp1_bronze.",
+  "eks": {
+    "cluster": "platform-apps",
+    "kubernetes": "v1.37.1-eks",
+    "nodes": [
+      {
+        "name": "ip-10-42-0-121",
+        "status": "Ready"
+      },
+      {
+        "name": "ip-10-42-0-184",
+        "status": "Ready"
+      }
+    ],
+    "instance_type": "c6i.xlarge",
+    "terraform_resources_added": 21
+  },
+  "ecr": {
+    "registry": "665116832975.dkr.ecr.ap-southeast-2.amazonaws.com/platform",
+    "tag": "3315cae-b1",
+    "images": {
+      "platform-feast": "sha256:015b6876f7d4a1357010169922f989dd08082c468447a26c8ab5b18cc0e2079b",
+      "platform-feature-api": "sha256:5d0fcdbd43ba5a221af129d9272d037ae8168579ff3b5ab683a07f6ced2be45d",
+      "platform-train": "sha256:58f13198d10fb59c026dd3efc30d0729582fd35575cfda739f1b7158889d7167",
+      "platform-mlflow": "sha256:e79bf1bf2de5813a1f6f05784d4d62c4aadb9d2c685456146c2cdcf23bfec267"
+    },
+    "note": "Digest khớp image build trên laptop (docker build -q); entry không tag là manifest nền tảng và attestation của buildx."
+  }
 }

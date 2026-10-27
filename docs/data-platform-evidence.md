@@ -13,7 +13,8 @@ Receipt: [data-platform-aws-20261027.json](evidence/aws/data-platform-aws-202610
 | Nguồn Walmart (PostgreSQL) | `walmart.orders` 10.949.058 dòng, `seller.skus` 2.000, nạp 443 s | [Receipt](evidence/aws/data-platform-aws-20261027.json) | |
 | Bronze Amazon 100 GB | 108.248.563 dòng, 180 ngày, đọc `s3a://`, 506,6 s | [Receipt](evidence/aws/data-platform-aws-20261027.json) | Chạy tay bằng `spark-submit`; bản trong DAG ở dòng dưới |
 | Bronze Walmart | 10.949.058 dòng qua JDBC, tự so nguồn khớp, 267,2 s | [Receipt](evidence/aws/data-platform-aws-20261027.json) | Chạy tay bằng `spark-submit` |
-| Airflow `dp1_bronze` | `validate_amazon`: nguồn 108.248.563 = Bronze 108.248.563, lỗi 0, bảng `raw_amazon_orders_dp1` | [Log validate](evidence/aws/dp1-validate-amazon-log-20261027.png), [Spark master 2×2 core](evidence/aws/spark-master-2x2core-20261027.png) | Các task còn lại của DAG, `dp2_silver`, `dp3_features` đang chạy |
+| Airflow `dp1_bronze` | 10/10 task success (5 Channel ingest + validate, đủ 180 ngày), ~55 phút; `validate_amazon`: nguồn 108.248.563 = Bronze 108.248.563, lỗi 0 | [Graph](evidence/aws/dp1-bronze-graph-20261027.png), [Gantt](evidence/aws/dp1-bronze-gantt-20261027.png), [log validate](evidence/aws/dp1-validate-amazon-log-20261027.png), [Spark master 2×2 core](evidence/aws/spark-master-2x2core-20261027.png) | Ghi rồi mới kiểm (chưa phải branch WAP); `dp2_silver`, `dp3_features` đang chạy |
+| EKS `platform-apps` | Kubernetes 1.37, 2 node `c6i.xlarge` Ready; EBS CSI + Pod Identity, StorageClass `gp3` mặc định, PVC ghi/đọc đạt; Redis Feast chạy, EC2 → Redis NodePort 30379 `PONG` từ cả hai node | [PVC smoke](evidence/aws/eks-ebs-gp3-pvc-smoke-20261027.png), [EC2 → Redis](evidence/aws/ec2-to-eks-redis-ping-20261028.png) | Chưa có workload ML/LLM ngoài Redis |
 
 ## Local — 2026-10-13 đến 2026-10-22
 
