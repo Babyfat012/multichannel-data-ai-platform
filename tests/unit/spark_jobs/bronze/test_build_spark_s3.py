@@ -16,6 +16,7 @@ sys.modules.setdefault("pyspark.sql.functions", _sql.functions)
 
 from spark_jobs.bronze import ingest_amazon_order_snapshots as amazon  # noqa: E402
 from spark_jobs.bronze import ingest_walmart_order_snapshots as walmart  # noqa: E402
+from spark_jobs.bronze import validate_order_snapshots as validate  # noqa: E402
 
 
 class FakeBuilder:
@@ -55,3 +56,20 @@ def test_s3_branch_uses_catalog_conf(monkeypatch, build):
     assert conf["spark.sql.catalog.lakehouse.client.region"] == "ap-southeast-2"
     assert conf["spark.sql.adaptive.enabled"] == "true"
     assert not any("minio" in str(v) for v in conf.values())
+
+
+def test_validate_reads_amazon_source_from_flag():
+    """Validate Amazon đếm đúng nguồn được truyền (S3 trên AWS), mặc định vẫn là mount local."""
+    assert validate.parse_args(["--channel", "amazon", "--table", "t", "--run-id", "r"]).source == (
+        validate.AMAZON_SOURCE
+    )
+    s3 = "s3a://raw/order_snapshots/source-exports/channel=amazon/dataset=orders"
+    args = validate.parse_args(
+        ["--channel", "amazon", "--table", "t", "--run-id", "r", "--source", s3]
+    )
+    read = []
+    spark = SimpleNamespace(
+        read=SimpleNamespace(text=lambda p: read.append(p) or SimpleNamespace(count=lambda: 7))
+    )
+    assert validate.amazon_source_rows(spark, 0, None, args.source) == 7
+    assert read == [s3]

@@ -29,14 +29,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--window-days", type=int, default=0)
     parser.add_argument("--window-start", default=None)
+    parser.add_argument("--source", default=AMAZON_SOURCE, help="Gốc export_date=*/ của Amazon.")
     return parser.parse_args(argv)
 
 
-def amazon_source_rows(spark: SparkSession, window_days: int, window_start: str | None) -> int:
+def amazon_source_rows(
+    spark: SparkSession, window_days: int, window_start: str | None, source: str = AMAZON_SOURCE
+) -> int:
     """Đếm chính các dòng JSONL mà job Amazon đã chọn để nạp."""
     if window_days <= 0:
-        return spark.read.text(AMAZON_SOURCE).count()
-    path = spark._jvm.org.apache.hadoop.fs.Path(AMAZON_SOURCE)
+        return spark.read.text(source).count()
+    path = spark._jvm.org.apache.hadoop.fs.Path(source)
     fs = path.getFileSystem(spark.sparkContext._jsc.hadoopConfiguration())
     days = sorted(
         status.getPath().getName().split("=", 1)[1]
@@ -46,7 +49,7 @@ def amazon_source_rows(spark: SparkSession, window_days: int, window_start: str 
     selected = pick_window_days(days, window_days, window_start)
     if not selected:
         raise ValueError("Không có ngày Amazon nào để validate")
-    return spark.read.text([f"{AMAZON_SOURCE}/export_date={day}" for day in selected]).count()
+    return spark.read.text([f"{source}/export_date={day}" for day in selected]).count()
 
 
 def walmart_source_rows(spark: SparkSession) -> int:
@@ -132,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
     spark = build_spark(f"dp1-validate-{args.channel}-{args.table}")
     try:
         source_rows = (
-            amazon_source_rows(spark, args.window_days, args.window_start)
+            amazon_source_rows(spark, args.window_days, args.window_start, args.source)
             if args.channel == "amazon"
             else walmart_source_rows(spark)
         )

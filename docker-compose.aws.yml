@@ -149,6 +149,17 @@ services:
       AIRFLOW_VAR_PLATFORM_SPARK_PACKAGES: ${PLATFORM_SPARK_PACKAGES_AWS:?packages_required}
       AIRFLOW_VAR_PLATFORM_ORDER_LIFECYCLE_SOURCE_ROOT: s3a://${RAW_BUCKET}/order_lifecycle/${PLATFORM_DATASET_NAME:-fixture}
       AIRFLOW_VAR_PLATFORM_ORDER_LIFECYCLE_CUTOFF: ${PLATFORM_ORDER_LIFECYCLE_CUTOFF:-2026-06-01T00:00:00.000000Z}
+      # DAG v1 (dp1 -> dp2 -> dp3) đọc bộ 100 GB trên S3, đủ 180 ngày (window 0 = nạp hết).
+      AIRFLOW_VAR_PLATFORM_DP1_AMAZON_SOURCE: s3a://${RAW_BUCKET}/order_snapshots/source-exports/channel=amazon/dataset=orders
+      AIRFLOW_VAR_PLATFORM_DP1_EXTRA_SOURCE_ROOT: s3a://${RAW_BUCKET}/order_snapshots/source-exports
+      AIRFLOW_VAR_PLATFORM_DP1_AMAZON_WINDOW_DAYS: "0"
+      # Task Walmart của DAG v1 đọc PostgreSQL qua JDBC ngay trong driver Airflow.
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST: postgres
+      # spark-submit đọc biến này khi DAG không đặt executor memory; mặc định 1g quá chật cho Silver 100 GB.
+      SPARK_EXECUTOR_MEMORY: 2g
     volumes: !override
       - ./spark_jobs:/opt/spark_jobs:ro
       - ./generator:/opt/generator:ro

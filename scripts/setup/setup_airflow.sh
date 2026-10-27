@@ -42,6 +42,10 @@ airflow_cmd variables set platform_order_lifecycle_executor_cores '2'
 
 # AWS (t3.xlarge): worker chỉ có 3g/1 core nên hạ executor; nguồn đọc qua s3a://.
 if [ "${PLATFORM_STORAGE:-minio}" = s3 ]; then
+  # DAG v1 chạy trên AWS: nạp tên bảng dp1/dp2/dp3; nguồn s3a:// đặt bằng AIRFLOW_VAR_* trong compose.
+  for setup in dp1_file_channels dp2_silver dp2_file_channels dp3_features; do
+    bash "scripts/setup/setup_${setup}.sh"
+  done
   airflow_cmd variables set platform_spark_packages_aws "${PLATFORM_SPARK_PACKAGES_AWS:?Cần package AWS}"
   airflow_cmd variables set platform_order_lifecycle_source_root "s3a://${RAW_BUCKET:?}/order_lifecycle/${PLATFORM_DATASET_NAME:-fixture}"
   airflow_cmd variables set platform_order_lifecycle_cutoff "${PLATFORM_ORDER_LIFECYCLE_CUTOFF:-2026-06-01T00:00:00.000000Z}"

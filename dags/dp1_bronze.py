@@ -29,6 +29,11 @@ WALMART_TABLE = "{{ var.value.platform_dp1_walmart_table }}"
 SOURCE_ROOT = "{{ var.value.platform_dp1_extra_source_root }}"
 WINDOW_DAYS = "{{ var.value.platform_dp1_amazon_window_days }}"
 WINDOW_START = "{{ var.value.platform_dp1_amazon_window_start }}"
+# Local đọc mount /data/raw; AWS đặt Variable trỏ s3a:// (docker-compose.aws.yml).
+AMAZON_SOURCE = (
+    "{{ var.value.get('platform_dp1_amazon_source', "
+    "'/data/raw/source-exports/channel=amazon/dataset=orders') }}"
+)
 SPARK_CONF = {
     "spark.driver.host": "airflow",
     "spark.driver.bindAddress": "0.0.0.0",
@@ -54,6 +59,8 @@ with DAG(
             WINDOW_DAYS,
             "--window-start",
             WINDOW_START,
+            "--source",
+            AMAZON_SOURCE,
             "--table",
             AMAZON_TABLE,
             "--run-id",
@@ -74,6 +81,8 @@ with DAG(
             WINDOW_DAYS,
             "--window-start",
             WINDOW_START,
+            "--source",
+            AMAZON_SOURCE,
             "--table",
             AMAZON_TABLE,
             "--run-id",

@@ -150,6 +150,10 @@ elif "cp" in args:
         "run/run_order_lifecycle_live.sh",
         "run/run_aws_measurements.sh",
         "setup/setup_airflow.sh",
+        "setup/setup_dp1_file_channels.sh",
+        "setup/setup_dp2_silver.sh",
+        "setup/setup_dp2_file_channels.sh",
+        "setup/setup_dp3_features.sh",
     ):
         (project / "scripts" / script).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(ROOT / "scripts" / script, project / "scripts" / script)
