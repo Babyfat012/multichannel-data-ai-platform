@@ -1,0 +1,34 @@
+{
+  "recorded": "2026-10-27",
+  "environment": {
+    "cloud": "AWS",
+    "region": "ap-southeast-2",
+    "account": "665116832975",
+    "ec2": {"id": "i-0a0f2f61b2ae193a2", "type": "c6i.2xlarge", "data_disk_gb": 250},
+    "spark": {"workers": 2, "cores_per_worker": 2, "executor_memory": "2g"},
+    "auth": "IAM role platform-data-platform-vm (credential tạm qua IMDS, không access key)"
+  },
+  "source": "Ghi từ output lệnh người vận hành chạy trên EC2 (journalctl/systemctl/aws s3 ls); ảnh gốc cùng thư mục.",
+  "raw_s3": {
+    "uri": "s3://platform-665116832975-raw/order_snapshots/",
+    "generator": "configs/scale-100gb.yaml, seed 42",
+    "objects": 17393,
+    "bytes": 141774479087,
+    "matches_ec2_disk": true,
+    "v1_scope_bytes_amazon_walmart_skus": 100012790412,
+    "v1_scope_matches_local_manifest": "docs/evidence/batch-100gb-manifest.json",
+    "sync_exit_status": 0
+  },
+  "postgres_load": {"walmart.orders": 10949058, "seller.skus": 2000, "seconds": 443.4},
+  "bronze_manual": {
+    "raw_amazon_orders": {"rows": 108248563, "days": 180, "seconds": 506.6, "source": "s3a://"},
+    "raw_walmart_orders": {"rows": 10949058, "days": 180, "seconds": 267.2, "source": "PostgreSQL JDBC", "matches_source": true},
+    "lakehouse_s3_after_amazon": {"objects": 196, "bytes": 8740081322}
+  },
+  "airflow_dp1_bronze": {
+    "dag_run": "manual__2026-10-27T14:58:12+00:00",
+    "validate_amazon": {"source_rows": 108248563, "bronze_rows": 108248563, "errors": 0, "table": "lakehouse.bronze.raw_amazon_orders_dp1"},
+    "evidence": ["dp1-validate-amazon-log-20261027.png", "spark-master-2x2core-20261027.png"]
+  },
+  "known_issue": "Lần chạy tay ba Channel ghi nhầm vào lakehouse.bronze.raw__orders (systemd-run thay ${ch} thành rỗng); không dùng bảng đó. Ba Channel lấy từ DAG dp1_bronze."
+}

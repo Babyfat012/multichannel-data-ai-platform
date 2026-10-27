@@ -1,10 +1,25 @@
 # Data Platform — evidence
 
-Các kết quả dưới đây được ghi nhận trên local trong khoảng 2026-10-13 đến 2026-10-22. Mỗi phép đo có phạm vi dữ liệu và môi trường riêng; không suy từ fixture sang full-scale hoặc từ local sang AWS. Hiện chưa có bằng chứng triển khai AWS.
+Bằng chứng chạy trên AWS đứng trước; bằng chứng local giữ nguyên bên dưới làm đối chứng. Mỗi phép đo có phạm vi dữ liệu và môi trường riêng; không suy từ fixture sang full-scale hoặc từ local sang AWS.
+
+## Trên AWS (cloud) — 2026-10-27
+
+Sydney `ap-southeast-2`, EC2 `c6i.2xlarge` + S3, Spark 2 worker × 2 core, quyền S3 qua IAM role (không access key).
+Receipt: [data-platform-aws-20261027.json](evidence/aws/data-platform-aws-20261027.json).
+
+| Thành phần | Kết quả đã ghi nhận | Evidence | Giới hạn |
+|---|---|---|---|
+| Raw trên S3 | 17.393 object / 141.774.479.087 byte, khớp từng byte đĩa EC2; phần v1 (Amazon + Walmart + SKU) = 100.012.790.412 byte, khớp manifest local | [Receipt](evidence/aws/data-platform-aws-20261027.json) | Ba Channel thêm (TikTok Shop, Shopify, Shopee) chỉ có manifest EC2 đối chiếu |
+| Nguồn Walmart (PostgreSQL) | `walmart.orders` 10.949.058 dòng, `seller.skus` 2.000, nạp 443 s | [Receipt](evidence/aws/data-platform-aws-20261027.json) | |
+| Bronze Amazon 100 GB | 108.248.563 dòng, 180 ngày, đọc `s3a://`, 506,6 s | [Receipt](evidence/aws/data-platform-aws-20261027.json) | Chạy tay bằng `spark-submit`; bản trong DAG ở dòng dưới |
+| Bronze Walmart | 10.949.058 dòng qua JDBC, tự so nguồn khớp, 267,2 s | [Receipt](evidence/aws/data-platform-aws-20261027.json) | Chạy tay bằng `spark-submit` |
+| Airflow `dp1_bronze` | `validate_amazon`: nguồn 108.248.563 = Bronze 108.248.563, lỗi 0, bảng `raw_amazon_orders_dp1` | [Log validate](evidence/aws/dp1-validate-amazon-log-20261027.png), [Spark master 2×2 core](evidence/aws/spark-master-2x2core-20261027.png) | Các task còn lại của DAG, `dp2_silver`, `dp3_features` đang chạy |
+
+## Local — 2026-10-13 đến 2026-10-22
 
 Receipt, log và ảnh gốc giữ nguyên nội dung, timestamp và định danh của môi trường đã chạy. Tên tài nguyên trong artifact lịch sử có thể khác cấu hình hiện hành dùng tiền tố `platform`; đổi tên cấu hình không phải là chạy lại phép đo.
 
-## Nguồn và xử lý dữ liệu
+### Nguồn và xử lý dữ liệu
 
 | Thành phần | Kết quả đã ghi nhận | Evidence / mô tả phép đo | Giới hạn |
 |---|---|---|---|
@@ -20,7 +35,7 @@ Receipt, log và ảnh gốc giữ nguyên nội dung, timestamp và định dan
 | Stream lifecycle v2 | Hai epoch, restart/restore checkpoint; kept 15.261 khớp oracle | [Receipt stream](evidence/stream-v2-local-20261019.json), [protocol](stream-order-lifecycle.md) | Đếm sự kiện bounded; không phải HA hay số liệu kinh doanh chính thức |
 | CDC lifecycle v2 | Insert/update/delete khớp oracle; ca extra bị chặn | [Receipt CDC](evidence/cdc-v2-local-20261019.json), [protocol](cdc-order-lifecycle.md) | Harness local, chưa chứng minh live DAG v2 |
 
-## Storage, điều phối và governance
+### Storage, điều phối và governance
 
 | Thành phần | Kết quả đã ghi nhận | Evidence / mô tả phép đo | Giới hạn |
 |---|---|---|---|

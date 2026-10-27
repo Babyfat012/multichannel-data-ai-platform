@@ -1,7 +1,7 @@
 <!-- Mục đích: runbook người vận hành triển khai Data Platform batch EC2 + S3, thu proof và dọn tài nguyên. -->
 # Triển khai AWS — Data Platform mốc 1
 
-Cấu hình mặc định: `ap-southeast-1`, EC2 `t3.xlarge` và hai bucket S3. Tài liệu hướng dẫn triển khai và thu evidence; **chưa có bằng chứng chạy AWS**. ML Platform / LLM Platform hiện có ghi nhận local; EKS/GPU/domain cần môi trường triển khai riêng.
+Bản đã chạy: `ap-southeast-2`, EC2 `c6i.2xlarge` và hai bucket S3 ([preset](../infra/aws/terraform/demo.tfvars.example)). **Đã có bằng chứng chạy AWS** ngày 2026-10-27: [ma trận bằng chứng](data-platform-evidence.md#trên-aws-cloud--2026-10-27). ML Platform / LLM Platform hiện có ghi nhận local; EKS/GPU/domain cần môi trường triển khai riêng.
 Cấu hình và ảnh IaC: [IaC.md](IaC.md). Sơ đồ: [hạ tầng](diagrams/aws-infra.html),
 [Data Platform](diagrams/aws-data-platform.html), [ML Platform / LLM Platform sau mốc 1](diagrams/aws-ml-llm-platform.html).
 

@@ -47,7 +47,7 @@ Dừng môi trường nguồn bằng `docker compose stop`. Các service bổ su
 
 [Cloud setup cho cả ba platform](docs/cloud-setup.md): chuẩn bị tài khoản, registry, mạng và Kubernetes trên AWS; các lệnh triển khai do người vận hành trực tiếp chạy.
 
-Repo có bằng chứng chạy local bằng Docker Compose và `kind`; mức hoàn thành và giới hạn khác nhau theo từng thành phần. Mốc cloud hiện hành là Data Platform batch trên AWS EC2 + S3; chưa có bằng chứng triển khai AWS trong repo. ML Platform và LLM Platform trên EKS là bước sau.
+**Data Platform đã chạy trên AWS (EC2 + S3, 2026-10-27):** raw 141,8 GB trên S3, Bronze Amazon 108.248.563 dòng và Walmart 10.949.058 dòng khớp nguồn, DAG Airflow `dp1_bronze` validate đạt; xem [bằng chứng AWS](docs/data-platform-evidence.md#trên-aws-cloud--2026-10-27). Bằng chứng local (Docker Compose, `kind`) giữ làm đối chứng. ML Platform và LLM Platform trên EKS là bước sau.
 
 - [Trạng thái Data Platform](docs/data-platform-order-lifecycle-status.md) và [ma trận bằng chứng](docs/data-platform-evidence.md).
 - [Ma trận bằng chứng ML Platform / LLM Platform](docs/ml-llm-platform-evidence.md).
