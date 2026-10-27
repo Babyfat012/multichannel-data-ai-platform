@@ -207,3 +207,15 @@ def test_datahub_is_prepared_without_starting_and_all_ports_are_loopback():
         "opensearch",
     ):
         assert all(p.startswith("127.0.0.1:") for p in services[name]["ports"])
+
+
+def test_stream_overlay_only_enables_kafka_flink_on_loopback():
+    """Overlay Stream bật đúng Kafka + Flink, cổng loopback, đầu ra trên EBS; không bật MinIO."""
+    services = yaml.load(
+        (ROOT / "docker-compose.aws-stream.yml").read_text(), Loader=ComposeLoader
+    )["services"]
+    assert set(services) == {"kafka", "flink-jobmanager", "flink-taskmanager"}
+    for svc in services.values():
+        assert all(port.startswith("127.0.0.1:") for port in svc.get("ports", []))
+    for name in ("flink-jobmanager", "flink-taskmanager"):
+        assert "/mnt/platform-data/flink:/opt/flink/output" in services[name]["volumes"]

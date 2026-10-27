@@ -1,0 +1,30 @@
+# Bật Kafka + Flink trên EC2 chỉ khi đo phần Stream (time-share với Spark: không chạy job Spark cùng lúc).
+# Dùng thêm sau hai file chuẩn:
+#   docker compose -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.aws-stream.yml \
+#     --profile stream --profile flink up -d kafka flink-jobmanager flink-taskmanager
+# Cổng chỉ mở loopback; xem UI qua SSM port forwarding. Đầu ra Flink nằm trên EBS dữ liệu, thư mục phải
+# thuộc user flink của image: sudo install -d -o 9999 -g 9999 /mnt/platform-data/flink
+services:
+  kafka:
+    profiles: !override [stream]
+    scale: 1
+    cpus: "1"
+    mem_limit: 1536m
+    environment:
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx1g
+    ports: !override
+      - "127.0.0.1:${KAFKA_PORT:-9094}:9094"
+  flink-jobmanager:
+    profiles: !override [flink]
+    scale: 1
+    cpus: "1"
+    volumes: !override
+      - ./flink_jobs:/opt/flink/jobs:ro
+      - /mnt/platform-data/flink:/opt/flink/output
+  flink-taskmanager:
+    profiles: !override [flink]
+    scale: 1
+    cpus: "2"
+    volumes: !override
+      - ./flink_jobs:/opt/flink/jobs:ro
+      - /mnt/platform-data/flink:/opt/flink/output
