@@ -81,7 +81,7 @@ services:
       - ./sql:/opt/sql:ro
       - /mnt/platform-data/spark-events:/spark-events
   spark-worker-1:
-    cpus: "1"
+    cpus: "2"
     mem_limit: 3500m
     image: platform-airflow:2.10.5-spark3.5.3
     # Image Airflow có /entrypoint chuyển mọi lệnh lạ thành `airflow <lệnh>` => exit 2.
@@ -98,7 +98,7 @@ services:
       PYSPARK_PYTHON: /usr/local/bin/python
       PYSPARK_DRIVER_PYTHON: /usr/local/bin/python
       SPARK_WORKER_MEMORY: 3g
-      SPARK_WORKER_CORES: "1"
+      SPARK_WORKER_CORES: "2"
     volumes: !override
       - ./spark_jobs:/opt/spark_jobs:ro
       - ./generator:/opt/generator:ro
@@ -107,7 +107,7 @@ services:
       - /mnt/platform-data/spark-events:/spark-events
       - /mnt/platform-data/spark-worker-1:/spark-local
   spark-worker-2:
-    cpus: "1"
+    cpus: "2"
     mem_limit: 3500m
     image: platform-airflow:2.10.5-spark3.5.3
     # Image Airflow có /entrypoint chuyển mọi lệnh lạ thành `airflow <lệnh>` => exit 2.
@@ -124,7 +124,7 @@ services:
       PYSPARK_PYTHON: /usr/local/bin/python
       PYSPARK_DRIVER_PYTHON: /usr/local/bin/python
       SPARK_WORKER_MEMORY: 3g
-      SPARK_WORKER_CORES: "1"
+      SPARK_WORKER_CORES: "2"
     volumes: !override
       - ./spark_jobs:/opt/spark_jobs:ro
       - ./generator:/opt/generator:ro

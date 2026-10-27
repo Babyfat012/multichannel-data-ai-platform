@@ -128,8 +128,8 @@ def test_region_and_machine_size_match_the_runtime():
     assert '"t3.large"' not in block("variable", "instance_type")
 
 
-def test_overlay_fits_t3_xlarge_without_keys_or_gcs():
-    """Service chạy thường trực vừa 4 vCPU/16 GiB, port loopback, không key, không GCS."""
+def test_overlay_fits_c6i_2xlarge_without_keys_or_gcs():
+    """Service chạy thường trực vừa 8 vCPU/16 GiB (chừa 2 vCPU), port loopback, không key, không GCS."""
     text = (ROOT / "docker-compose.aws.yml").read_text()
     services = yaml.load(text, Loader=ComposeLoader)["services"]
     for svc in services.values():
@@ -148,7 +148,7 @@ def test_overlay_fits_t3_xlarge_without_keys_or_gcs():
         """Đổi mem_limit Compose (g/m) ra GiB."""
         return float(value[:-1]) / (1024 if value.endswith("m") else 1)
 
-    assert sum(float(services[n]["cpus"]) for n in running) <= 4
+    assert sum(float(services[n]["cpus"]) for n in running) <= 6
     assert sum(gib(str(services[n]["mem_limit"])) for n in running) <= 15
     for name in ("minio", "kafka", "flink-jobmanager", "trino"):
         assert services[name]["profiles"] == ["disabled-aws"]

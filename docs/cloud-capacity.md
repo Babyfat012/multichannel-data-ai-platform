@@ -26,7 +26,7 @@ aws pricing get-products --region us-east-1 --service-code AmazonEC2 \
   | python3 -c 'import json,sys; t=json.load(sys.stdin)["terms"]["OnDemand"]; print([d["pricePerUnit"]["USD"] for o in t.values() for d in o["priceDimensions"].values()])'
 ```
 
-Data Platform 16 GiB vẫn dùng overlay AWS chuẩn (`aws_runtime_profile: standard`); overlay performance cần 32 GiB nên không bật. Overlay chuẩn chỉ giới hạn khoảng 4 CPU cho container, nên phần CPU còn lại của máy Data là dư địa cho Kafka/Flink/Trino chạy cùng lúc, chưa được Spark dùng. ML Platform và LLM Platform chia trên hai worker 8 GiB; sau phần hệ thống/DaemonSet, mỗi node còn khoảng 6,5 GiB cho pod, nên không pod nào được xin quá mức đó. Phải đo RAM theo từng lớp; nếu không vừa, chỉ bật lớp cần demo.
+Data Platform 16 GiB vẫn dùng overlay AWS chuẩn (`aws_runtime_profile: standard`); overlay performance cần 32 GiB nên không bật. Overlay chuẩn giới hạn tổng 6 CPU cho container (hai Spark worker 2 core mỗi worker, đổi 2026-10-27 để Bronze 100 GB dùng CPU đang bỏ không); 2 vCPU còn lại chừa cho hệ điều hành, Docker và SSM. ML Platform và LLM Platform chia trên hai worker 8 GiB; sau phần hệ thống/DaemonSet, mỗi node còn khoảng 6,5 GiB cho pod, nên không pod nào được xin quá mức đó. Phải đo RAM theo từng lớp; nếu không vừa, chỉ bật lớp cần demo.
 
 Preset mẫu: [Data Platform](../infra/aws/terraform/demo.tfvars.example) và [EKS worker](../infra/aws/kubernetes/demo.tfvars.example). Bản peak giữ ở `demo-peak.tfvars.example` để tham khảo. Các mẫu không chứa key, role hay email thật. Budget cảnh báo đề xuất 40 USD trước credit cho đợt final, giữ khoảng 160 USD dự phòng. AWS Budgets chỉ cảnh báo, không phải công tắc ngắt chi phí.
 
@@ -59,7 +59,7 @@ Nguồn giá nền: [EKS](https://aws.amazon.com/eks/pricing/), [public IPv4](ht
 
 ## Khi cần máy lớn (peak)
 
-Overlay AWS chuẩn giới hạn cho VM 4 vCPU / 16 GiB. Đổi EC2 thành máy lớn hơn không tự tăng giới hạn container.
+Overlay AWS chuẩn giới hạn cho VM 8 vCPU / 16 GiB. Đổi EC2 thành máy lớn hơn không tự tăng giới hạn container.
 
 Để dùng preset peak, đặt `aws_runtime_profile: performance` trong biến Ansible thật. Playbook kiểm VM có ít nhất 8 vCPU / khoảng 32 GiB trước khi chọn thêm `docker-compose.aws-performance.yml`:
 
