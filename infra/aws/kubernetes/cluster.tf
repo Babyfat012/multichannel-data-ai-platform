@@ -68,3 +68,14 @@ resource "aws_vpc_security_group_ingress_rule" "data_services" {
   to_port                      = each.value
   description                  = "EKS workloads to Data Platform private endpoint"
 }
+
+# Chiều ngược lại: Airflow trên EC2 materialize Feast vào Redis NodePort 30379 (infra/k8s/feature-store/redis.yaml).
+# Chỉ mở đúng một cổng, chỉ từ SG của EC2 Data Platform; node dùng SG cluster vì launch template không gắn SG riêng.
+resource "aws_vpc_security_group_ingress_rule" "data_to_redis" {
+  security_group_id            = aws_eks_cluster.apps.vpc_config[0].cluster_security_group_id
+  referenced_security_group_id = data.terraform_remote_state.data.outputs.data_security_group_id
+  ip_protocol                  = "tcp"
+  from_port                    = 30379
+  to_port                      = 30379
+  description                  = "Data Platform Airflow to Feast Redis NodePort"
+}
