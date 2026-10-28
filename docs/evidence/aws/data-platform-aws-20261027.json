@@ -68,6 +68,66 @@
     "tasks_success": "10/10",
     "duration_min_approx": 55
   },
+  "airflow_dp2_silver": {
+    "dag_run": "manual__2026-10-27T16:05:58+00:00",
+    "tasks_success": "14/14",
+    "duration": "01:58:43",
+    "silver_rows": {
+      "amazon": 153849901,
+      "walmart": 15562675,
+      "tiktok_shop": 33338110,
+      "shopify": 17782786,
+      "shopee": 6666831
+    },
+    "gold_rows": {
+      "amazon": 153849901,
+      "walmart": 15562675,
+      "tiktok_shop": 33338110,
+      "shopify": 17782786,
+      "shopee": 6666831
+    },
+    "gold_invalid": 0,
+    "gold_duplicate_order_line_key": 0,
+    "amazon_scd2": {
+      "current": 106109637,
+      "history": 1062966,
+      "invalid": 0,
+      "duplicate": 0,
+      "multiple_current": 0,
+      "bad_fact": 0,
+      "missing_version": 0
+    },
+    "retry_note": "validate_walmart_silver lần 1 hỏng vì ổ gốc đầy (Spark worker work dir); dọn ổ rồi Clear, lần 2 PASS",
+    "evidence": [
+      "dp2-silver-summary-20261028.png",
+      "dp2-silver-gantt-20261028.png",
+      "dp2-validate-logs-20261028.png"
+    ]
+  },
+  "airflow_dp3_features": {
+    "dag_run": "manual__2026-10-28T00:05:21.167441+00:00",
+    "tasks_success": "2/2",
+    "duration": "01:11:48",
+    "build_min_approx": 8,
+    "validate_min_approx": 64,
+    "validate": {
+      "fact_rows": 227200303,
+      "feature_rows": 227200303,
+      "invalid": 0,
+      "duplicate_keys": 0,
+      "source_invalid": 0,
+      "source_duplicates": 0,
+      "missing": 0,
+      "extra": 0,
+      "wrong_event_time": 0
+    },
+    "note": "fact_rows = tổng Gold 5 Channel của dp2 (227.200.303)",
+    "evidence": [
+      "dp3-features-summary-20261028.png",
+      "dp3-features-gantt-20261028.png",
+      "dp3-validate-log-20261028.png"
+    ]
+  },
   "known_issue": "Lần chạy tay ba Channel ghi nhầm vào lakehouse.bronze.raw__orders (systemd-run thay ${ch} thành rỗng); không dùng bảng đó. Ba Channel lấy từ DAG dp1_bronze.",
   "eks": {
     "cluster": "platform-apps",

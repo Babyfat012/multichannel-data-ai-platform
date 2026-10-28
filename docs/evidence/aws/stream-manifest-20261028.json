@@ -1,0 +1,64 @@
+{
+  "where": "EC2 i-0a0f2f61b2ae193a2, docker run platform-generator:latest stream --config configs/default.yaml --sink kafka --bootstrap kafka:9092 --speed 0",
+  "elapsed_seconds": 41.0,
+  "cutoff": "2026-06-30T00:00:00+00:00",
+  "stream_end": "2026-07-30T00:00:00+00:00",
+  "speed": 0.0,
+  "topics": {
+    "tiktok_shop.order-webhooks": {
+      "rows": 93554,
+      "unique_keys": 92157,
+      "duplicate_rate": 0.014933,
+      "injected_duplicates": 1397,
+      "median_delay_minutes": 0.06,
+      "share_late_over_1h": 0.0,
+      "out_of_order_over_1h": 0
+    },
+    "amazon.order-notifications": {
+      "rows": 399410,
+      "unique_keys": 399410,
+      "duplicate_rate": 0.0,
+      "injected_duplicates": 0,
+      "median_delay_minutes": 5.27,
+      "share_late_over_1h": 0.049763,
+      "out_of_order_over_1h": 19729
+    }
+  },
+  "burst": {
+    "live_day": 195,
+    "multiplier_truth": 5.454,
+    "new_orders_per_hour_live": 148.5,
+    "new_orders_per_hour_normal": 25.2,
+    "measured_ratio": 5.89
+  },
+  "matches_local": "rows trùng docs/data-quality-report-stream.md (399.410 / 93.554, 1.397 trùng)",
+  "flink_jobs": {
+    "baseline": {
+      "job_id": "ffd9de8a94c5bf67179482bfe03d3b59",
+      "rows": 399410,
+      "local": 399410
+    },
+    "late_arrival": {
+      "job_id": "b172bcf2510b47e1cbcd532f3078a82d",
+      "rows": 10166,
+      "local": "9.143 (10-14) / 6.310 (10-13)",
+      "note": "phụ thuộc lịch phát watermark so với tốc độ đọc bounded, không cố định; luôn < 19.729 của generator"
+    },
+    "dedup_webhooks": {
+      "job_id": "7759571b25bd2091e697d0f1381f0556",
+      "rows": 92157,
+      "expected_unique_keys": 92157
+    },
+    "dedup_state_proof": {
+      "job_id": "f5b642f64b133e28ec0f57021f1eab22",
+      "rows": 92157
+    },
+    "windows": {
+      "job_id": "dad323a91493cdf365c5a3d3d4dd0adf",
+      "tumble_5m": 7555,
+      "hop_5m_1m": 37870,
+      "local": "7.555 / 37.870"
+    },
+    "output": "/mnt/platform-data/flink (EBS)"
+  }
+}
