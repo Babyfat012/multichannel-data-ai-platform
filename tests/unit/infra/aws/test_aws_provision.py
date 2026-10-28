@@ -118,7 +118,7 @@ def test_no_default_ssh_key_and_outputs_for_ansible():
     ports = block("output", "port_forward_command")
     assert "AWS-StartSSHSession" in ports
     assert "-i ~/.ssh/platform_aws" in ports
-    for port in (8080, 8081, 8181, 9002, 8089):
+    for port in (8080, 8081, 8181, 9002, 8089, 8082):
         assert f"-L 127.0.0.1:{port}:127.0.0.1:{port}" in ports
 
 
@@ -217,5 +217,8 @@ def test_stream_overlay_only_enables_kafka_flink_on_loopback():
     assert set(services) == {"kafka", "flink-jobmanager", "flink-taskmanager"}
     for svc in services.values():
         assert all(port.startswith("127.0.0.1:") for port in svc.get("ports", []))
+    # File gốc mở 0.0.0.0 cho Kafka và Flink UI: overlay phải ghi đè cả hai.
+    assert services["kafka"]["ports"] and services["flink-jobmanager"]["ports"]
     for name in ("flink-jobmanager", "flink-taskmanager"):
         assert "/mnt/platform-data/flink:/opt/flink/output" in services[name]["volumes"]
+
