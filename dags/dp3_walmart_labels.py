@@ -26,6 +26,12 @@ with DAG(
             "{{ var.value.platform_dp3_gold_source_table }}",
             "--run-id",
             "{{ run_id }}",
+            # Executor đọc trực tiếp hai đường này: local là bind mount, AWS là S3.
+            "--ground-truth",
+            "{{ var.value.get('platform_dp3_ground_truth', '/data/ground-truth') }}",
+            "--keys-path",
+            "{{ var.value.get('platform_dp3_walmart_keys', "
+            "'/data/ground-truth-bridge/walmart-keys.parquet') }}",
         ],
         conn_id="spark_default",
         packages="{{ var.value.platform_spark_packages }}",

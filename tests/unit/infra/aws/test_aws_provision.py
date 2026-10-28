@@ -223,6 +223,15 @@ def test_stream_overlay_only_enables_kafka_flink_on_loopback():
         assert "/mnt/platform-data/flink:/opt/flink/output" in services[name]["volumes"]
 
 
+def test_aws_overlay_points_walmart_labels_at_s3():
+    """dp3_walmart_labels trên AWS: executor không có /data local nên đáp án và khóa phải ở S3."""
+    env = yaml.load((ROOT / "docker-compose.aws.yml").read_text(), Loader=ComposeLoader)[
+        "services"
+    ]["airflow"]["environment"]
+    assert env["AIRFLOW_VAR_PLATFORM_DP3_GROUND_TRUTH"].startswith("s3a://")
+    assert env["AIRFLOW_VAR_PLATFORM_DP3_WALMART_KEYS"].startswith("s3a://")
+
+
 def test_docker_storage_moves_to_ebs_without_silent_empty_store():
     """Kho Docker và containerd bind sang EBS; systemd chờ mount; chép không --delete, giữ bản cũ."""
     tasks = yaml.safe_load((ANSIBLE / "roles/data_disk/tasks/main.yml").read_text())
