@@ -222,3 +222,34 @@ def test_stream_overlay_only_enables_kafka_flink_on_loopback():
     for name in ("flink-jobmanager", "flink-taskmanager"):
         assert "/mnt/platform-data/flink:/opt/flink/output" in services[name]["volumes"]
 
+
+def test_docker_storage_moves_to_ebs_without_silent_empty_store():
+    """Kho Docker và containerd bind sang EBS; systemd chờ mount; chép không --delete, giữ bản cũ."""
+    tasks = yaml.safe_load((ANSIBLE / "roles/data_disk/tasks/main.yml").read_text())
+    text = (ANSIBLE / "roles/data_disk/tasks/main.yml").read_text()
+    binds = [t for t in tasks if t.get("ansible.posix.mount", {}).get("fstype") == "none"]
+    assert len(binds) == 1 and binds[0]["loop"] == ["containerd", "docker"]
+    assert (
+        "x-systemd.requires-mounts-for=/mnt/platform-data"
+        in binds[0]["ansible.posix.mount"]["opts"]
+    )
+    assert "RequiresMountsFor=/var/lib/containerd /var/lib/docker" in text
+    move = next(t for t in tasks if "block" in t)
+    rsync = next(
+        t["ansible.builtin.command"]["argv"]
+        for t in move["block"]
+        if t.get("ansible.builtin.command", {}).get("argv", [""])[0] == "rsync"
+    )
+    assert "--delete" not in rsync and "-aHAXx" in rsync
+    commands = [
+        t["ansible.builtin.command"] for t in move["block"] if "ansible.builtin.command" in t
+    ]
+    mv = next(c for c in commands if c["argv"][0] == "mv")
+    assert mv["creates"].endswith(".pre-ebs")
+    # Thứ tự: mount EBS → dời kho → bind mount.
+    names = [t["name"] for t in tasks]
+    assert (
+        names.index("Ghi mount UUID và mount nếu chưa có")
+        < names.index(move["name"])
+        < names.index(binds[0]["name"])
+    )

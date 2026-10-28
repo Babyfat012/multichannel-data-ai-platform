@@ -61,3 +61,65 @@
     argv: [resize2fs, '{{ data_disk_path }}']
   register: disk_resize
   changed_when: "'Nothing to do' not in disk_resize.stderr"
+# Docker 29 dùng containerd image store: image ở /var/lib/containerd, container/volume ở /var/lib/docker.
+# Cả hai mặc định nằm ổ gốc 30 GB (đầy ngày 27 và 28/10). Bind mount hai thư mục sang EBS, giữ nguyên đường dẫn.
+- name: Kiểm kho Docker/containerd đã nằm trên EBS chưa
+  ansible.builtin.command:
+    argv: [findmnt, --noheadings, --output, SOURCE, '/var/lib/{{ item }}']
+  loop: [containerd, docker]
+  register: engine_mounts
+  changed_when: false
+  failed_when: false
+- name: Dời kho Docker/containerd sang EBS (một lần; dừng mọi container vài phút)
+  when: engine_mounts.results | selectattr('rc', 'ne', 0) | list | length > 0
+  block:
+    - name: Dừng Docker và containerd để chép nhất quán
+      ansible.builtin.systemd:
+        name: '{{ item }}'
+        state: stopped
+      loop: [docker.socket, docker, containerd]
+    - name: Chép sang EBS (giữ hardlink/xattr/owner; không --delete nên chạy lại an toàn)
+      ansible.builtin.command:
+        argv: [rsync, -aHAXx, --numeric-ids, '/var/lib/{{ item }}/', '/mnt/platform-data/{{ item }}/']
+      loop: [containerd, docker]
+      changed_when: true
+    - name: Giữ bản cũ để đối chiếu; người vận hành tự xoá sau khi kiểm
+      ansible.builtin.command:
+        argv: [mv, '/var/lib/{{ item }}', '/var/lib/{{ item }}.pre-ebs']
+        creates: '/var/lib/{{ item }}.pre-ebs'
+      loop: [containerd, docker]
+    - name: Tạo lại mountpoint rỗng
+      ansible.builtin.file:
+        path: '/var/lib/{{ item }}'
+        state: directory
+        mode: '0710'
+      loop: [containerd, docker]
+- name: Bind mount kho Docker/containerd từ EBS, chỉ sau khi EBS đã mount
+  ansible.posix.mount:
+    path: '/var/lib/{{ item }}'
+    src: '/mnt/platform-data/{{ item }}'
+    fstype: none
+    opts: bind,x-systemd.requires-mounts-for=/mnt/platform-data
+    state: mounted
+  loop: [containerd, docker]
+- name: Tạo thư mục drop-in systemd
+  ansible.builtin.file:
+    path: '/etc/systemd/system/{{ item }}.service.d'
+    state: directory
+    mode: '0755'
+  loop: [containerd, docker]
+- name: Chặn Docker/containerd khởi động khi EBS chưa gắn (nếu không sẽ tạo kho rỗng trên ổ gốc, im lặng)
+  ansible.builtin.copy:
+    dest: '/etc/systemd/system/{{ item }}.service.d/data-disk.conf'
+    content: |
+      [Unit]
+      RequiresMountsFor=/var/lib/containerd /var/lib/docker
+    mode: '0644'
+  loop: [containerd, docker]
+  register: engine_dropin
+- name: Nạp lại systemd và bật lại Docker
+  ansible.builtin.systemd:
+    name: '{{ item }}'
+    state: started
+    daemon_reload: '{{ engine_dropin is changed }}'
+  loop: [containerd, docker]
