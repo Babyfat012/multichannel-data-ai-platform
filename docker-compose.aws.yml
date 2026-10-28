@@ -97,7 +97,9 @@ services:
       SPARK_HOME: /home/airflow/.local/lib/python3.10/site-packages/pyspark
       PYSPARK_PYTHON: /usr/local/bin/python
       PYSPARK_DRIVER_PYTHON: /usr/local/bin/python
-      SPARK_WORKER_MEMORY: 3g
+      # Phải chừa trong mem_limit 3500m: JVM worker (~0,5 GB) + overhead mỗi executor (≥384 MB).
+      # 3g từng cho 2 executor 1536m/worker ⇒ Docker OOM-kill (exit 137, dp3_walmart_labels 2026-10-28).
+      SPARK_WORKER_MEMORY: 2560m
       SPARK_WORKER_CORES: "2"
       # Mỗi app chép ~400 MB jar vào $SPARK_HOME/work trong container (ổ gốc 29 GB); 2026-10-27 đầy ổ sau ~19 app.
       SPARK_WORKER_OPTS: -Dspark.worker.cleanup.enabled=true -Dspark.worker.cleanup.interval=600 -Dspark.worker.cleanup.appDataTtl=1800
@@ -125,7 +127,9 @@ services:
       SPARK_HOME: /home/airflow/.local/lib/python3.10/site-packages/pyspark
       PYSPARK_PYTHON: /usr/local/bin/python
       PYSPARK_DRIVER_PYTHON: /usr/local/bin/python
-      SPARK_WORKER_MEMORY: 3g
+      # Phải chừa trong mem_limit 3500m: JVM worker (~0,5 GB) + overhead mỗi executor (≥384 MB).
+      # 3g từng cho 2 executor 1536m/worker ⇒ Docker OOM-kill (exit 137, dp3_walmart_labels 2026-10-28).
+      SPARK_WORKER_MEMORY: 2560m
       SPARK_WORKER_CORES: "2"
       # Mỗi app chép ~400 MB jar vào $SPARK_HOME/work trong container (ổ gốc 29 GB); 2026-10-27 đầy ổ sau ~19 app.
       SPARK_WORKER_OPTS: -Dspark.worker.cleanup.enabled=true -Dspark.worker.cleanup.interval=600 -Dspark.worker.cleanup.appDataTtl=1800

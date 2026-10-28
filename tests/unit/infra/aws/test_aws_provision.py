@@ -276,3 +276,19 @@ def test_cdc_on_aws_enables_debezium_and_loads_dp1_cdc_variables():
     s3_branch = setup[setup.index("= s3 ]; then") :]
     assert "dp1_cdc" in s3_branch.split("done")[0]
     assert "spark-sql-kafka-0-10" in s3_branch and "PLATFORM_SPARK_PACKAGES_AWS" in s3_branch
+
+
+def _mb(value: str) -> int:
+    """'2560m' / '3g' -> MB."""
+    return int(value[:-1]) * (1024 if value.endswith("g") else 1)
+
+
+def test_spark_worker_promise_fits_container_limit():
+    """Worker không được hứa RAM vượt trần container: executor nhỏ nhất (1536m) xếp đầy + overhead + JVM worker."""
+    services = yaml.load((ROOT / "docker-compose.aws.yml").read_text(), Loader=ComposeLoader)[
+        "services"
+    ]
+    for name in ("spark-worker-1", "spark-worker-2"):
+        worker = _mb(services[name]["environment"]["SPARK_WORKER_MEMORY"])
+        executors = worker // 1536
+        assert worker + executors * 384 + 512 <= _mb(services[name]["mem_limit"]), name
