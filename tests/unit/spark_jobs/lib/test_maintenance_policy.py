@@ -191,6 +191,13 @@ def test_sql_where_is_passed_as_one_escaped_argument():
         spec.loader.exec_module(module)
     assert module.literal("day = '2026-01-01'") == "'day = \\'2026-01-01\\''"
     assert module.identifier("local.demo.orders") == "`local`.`demo`.`orders`"
+    orphans = module.action_sql(
+        None,
+        "lakehouse.bronze.orders",
+        {"kind": "remove_orphans", "older_than": "2026-10-25T00:00:00+00:00", "dry_run": True},
+    )
+    # S3 trên AWS: Hadoop FileSystem không đọc được s3://, phải liệt kê qua FileIO.
+    assert "prefix_listing => true" in orphans and "dry_run => true" in orphans
 
 
 def test_expiring_reference_retention_is_rejected_before_deletion():

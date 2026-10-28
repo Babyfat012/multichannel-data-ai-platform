@@ -50,6 +50,11 @@ if [ "${PLATFORM_STORAGE:-minio}" = s3 ]; then
   airflow_cmd variables set platform_cdc_spark_packages \
     "${PLATFORM_SPARK_PACKAGES_AWS:?Cần package AWS},org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3"
   airflow_cmd variables set platform_spark_packages_aws "${PLATFORM_SPARK_PACKAGES_AWS:?Cần package AWS}"
+  # Maintenance trên AWS: bảng thật thay bảng demo (không tồn tại trên EC2); chạy lại setup vẫn giữ.
+  docker compose --profile airflow exec -T airflow python -c \
+    'import sys; from airflow.models import Variable; Variable.set("platform_maintenance_config", sys.stdin.read())' \
+    < configs/iceberg_maintenance_aws.json
+  airflow_cmd variables set platform_maintenance_tables '["lakehouse.bronze.raw_shopee_orders_dp1"]'
   airflow_cmd variables set platform_order_lifecycle_source_root "s3a://${RAW_BUCKET:?}/order_lifecycle/${PLATFORM_DATASET_NAME:-fixture}"
   airflow_cmd variables set platform_order_lifecycle_cutoff "${PLATFORM_ORDER_LIFECYCLE_CUTOFF:-2026-06-01T00:00:00.000000Z}"
   airflow_cmd variables set platform_order_lifecycle_driver_memory '2g'

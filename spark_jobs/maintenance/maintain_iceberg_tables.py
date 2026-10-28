@@ -228,10 +228,12 @@ def action_sql(spark, table, action):
             f"retain_last => {action['retain_last']})"
         )
     if kind == "remove_orphans":
+        # prefix_listing: liệt kê qua FileIO của bảng (S3FileIO/HadoopFileIO), không qua Hadoop
+        # FileSystem — Hadoop không có FileSystem cho scheme s3:// mà Lakekeeper trên AWS trả về.
         return (
             f"CALL {system}.remove_orphan_files(table => {literal(short)}, "
             f"older_than => {literal(datetime.fromisoformat(action['older_than']))}, "
-            f"dry_run => {literal(action['dry_run'])})"
+            f"dry_run => {literal(action['dry_run'])}, prefix_listing => true)"
         )
     raise ValueError(f"Hành động không biết: {kind} trên {name}")
 

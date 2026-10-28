@@ -158,7 +158,8 @@ elif "cp" in args:
     ):
         (project / "scripts" / script).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(ROOT / "scripts" / script, project / "scripts" / script)
-    shutil.copy(ROOT / "configs/iceberg_maintenance.json", project / "configs")
+    for config in ("iceberg_maintenance.json", "iceberg_maintenance_aws.json"):
+        shutil.copy(ROOT / "configs" / config, project / "configs")
     env["FAKE_PROJECT"] = str(project)
     yield env, log, run_id
 

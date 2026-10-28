@@ -292,3 +292,21 @@ def test_spark_worker_promise_fits_container_limit():
         worker = _mb(services[name]["environment"]["SPARK_WORKER_MEMORY"])
         executors = worker // 1536
         assert worker + executors * 384 + 512 <= _mb(services[name]["mem_limit"]), name
+
+
+def test_aws_maintenance_targets_a_configured_real_table():
+    """Nhánh S3 thay bảng demo: mọi bảng trong platform_maintenance_tables phải có chính sách trong file AWS."""
+    import json
+
+    from spark_jobs.lib.maintenance_policy import validated_config
+
+    setup = (ROOT / "scripts/setup/setup_airflow.sh").read_text()
+    s3_branch = setup[setup.index("= s3 ]; then") :].split("\nfi\n")[0]
+    assert "< configs/iceberg_maintenance_aws.json" in s3_branch
+    tables = json.loads(re.search(r"platform_maintenance_tables '(\[.*?\])'", s3_branch).group(1))
+    policies = json.loads((ROOT / "configs/iceberg_maintenance_aws.json").read_text())["tables"]
+    assert tables and set(tables) <= set(policies)
+    for name in tables:
+        assert not name.startswith("lakehouse.demo.")
+        config = validated_config(policies[name])
+        assert config["orphans_dry_run"] is True and config["zorder_columns"] == []
