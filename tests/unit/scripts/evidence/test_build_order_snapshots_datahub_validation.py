@@ -170,3 +170,40 @@ def test_legacy_manifest_still_publishable():
     for item in manifest["checks"]:
         publisher.check_passed(item)
         assert not publisher.assertion_urn(item).endswith("-v2")
+
+
+def test_publisher_aws_only_draws_dags_that_ran_with_s3_sources():
+    """AWS chạy 3 DAG: không vẽ CDC/nhãn Walmart, nguồn file là S3 chứ không phải /data local."""
+    root = "s3a://platform-raw/order_snapshots/source-exports"
+    jobs = publisher.job_map(root, ("dp1_bronze", "dp2_silver", "dp3_features"))
+    names = publisher.datasets_of(jobs)
+    assert set(jobs) == {"dp1_bronze", "dp2_silver", "dp3_features"}
+    assert publisher.CDC not in names and publisher.LABELS not in names
+    assert f"{root}/channel=amazon/dataset=orders" in names
+    assert not any(n.startswith("/data/") for n in names)
+    assert publisher.platform_of(f"{root}/channel=shopee/dataset=orders") == "s3"
+    assert publisher.platform_of(publisher.RAW_WALMART) == "postgres"
+
+
+def test_publisher_default_keeps_local_lineage():
+    """Không truyền tuỳ chọn: giữ nguyên năm DAG và nguồn local như bằng chứng cũ."""
+    names = publisher.datasets_of(publisher.job_map())
+    assert len(publisher.job_map()) == 5
+    assert publisher.RAW_AMAZON in names and publisher.CDC in names
+
+
+def test_builder_dags_only_reads_selected_runs(tmp_path, monkeypatch):
+    """--dags dp3_features chỉ đọc log DAG đó; không đòi log của DAG chưa chạy."""
+    task = tmp_path / "dag_id=dp3_features/run_id=r1/task_id=validate_return_features"
+    task.mkdir(parents=True)
+    log = f"{FEATURE_V2}\nMarking task as SUCCESS. dag_id=dp3_features, end_date=20261028T011708\n"
+    (task / "attempt=1.log").write_text(log)
+    out = tmp_path / "out.json"
+    monkeypatch.setattr(
+        "sys.argv",
+        ["x", "--logs-root", str(tmp_path), "--output", str(out),
+         "--run", "dp3_features=r1", "--dags", "dp3_features"],
+    )
+    builder.main()
+    checks = __import__("json").loads(out.read_text())["checks"]
+    assert [c["task_id"] for c in checks] == ["validate_return_features"]

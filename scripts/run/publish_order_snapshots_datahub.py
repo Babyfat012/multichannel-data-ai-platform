@@ -51,18 +51,25 @@ SOURCE_DATASETS = {
 }
 
 
-def job_map() -> dict[str, dict[str, tuple[list[str], list[str]]]]:
-    """Airflow task -> bảng đọc/ghi thật theo DAG của dự án."""
+def raw_sources(raw_root: str | None) -> dict[str, str]:
+    """Đường nguồn file theo Channel; ``raw_root`` (vd. s3a://bucket/.../source-exports) thay bộ local."""
+    if raw_root is None:
+        return {"amazon": RAW_AMAZON, **RAW_FILES}
+    return {
+        c: f"{raw_root.rstrip('/')}/channel={c}/dataset=orders"
+        for c in ("amazon", "tiktok_shop", "shopify", "shopee")
+    }
+
+
+def job_map(
+    raw_root: str | None = None, dags: tuple[str, ...] | None = None
+) -> dict[str, dict[str, tuple[list[str], list[str]]]]:
+    """Airflow task -> bảng đọc/ghi thật theo DAG của dự án; chỉ giữ ``dags`` nếu có."""
+    files = raw_sources(raw_root)
     dp1: dict[str, tuple[list[str], list[str]]] = {}
     dp2: dict[str, tuple[list[str], list[str]]] = {}
     for channel in CHANNELS:
-        source = (
-            RAW_AMAZON
-            if channel == "amazon"
-            else RAW_WALMART
-            if channel == "walmart"
-            else RAW_FILES[channel]
-        )
+        source = RAW_WALMART if channel == "walmart" else files[channel]
         dp1[f"ingest_{channel}"] = ([source], [BRONZE[channel]])
         dp1[f"validate_{channel}"] = ([BRONZE[channel]], [])
         dp2[f"ingest_{channel}_silver"] = ([BRONZE[channel]], [SILVER[channel]])
@@ -71,7 +78,7 @@ def job_map() -> dict[str, dict[str, tuple[list[str], list[str]]]]:
     dp2["build_amazon_order_dim"] = ([BRONZE["amazon"]], [DIM])
     dp2["validate_amazon_order_dim"] = ([DIM, FACT], [])
     dp2["validate_gold_order_lines"] = ([FACT], [])
-    return {
+    jobs = {
         "dp1_bronze": dp1,
         "dp1_cdc": {
             "ingest_walmart_cdc": ([KAFKA_WALMART_CDC], [CDC]),
@@ -86,6 +93,20 @@ def job_map() -> dict[str, dict[str, tuple[list[str], list[str]]]]:
             "build_and_validate_walmart_labels": ([FACT], [LABELS]),
         },
     }
+    return {dag: tasks for dag, tasks in jobs.items() if dags is None or dag in dags}
+
+
+def datasets_of(jobs: dict[str, dict[str, tuple[list[str], list[str]]]]) -> list[str]:
+    """Bảng/nguồn mà các job đã chọn đọc hoặc ghi, giữ thứ tự xuất hiện."""
+    names = (n for tasks in jobs.values() for io in tasks.values() for side in io for n in side)
+    return list(dict.fromkeys(names))
+
+
+def platform_of(name: str) -> str:
+    """Nền tảng DataHub của một dataset theo tiền tố/tên của nó."""
+    if name.startswith(("s3a://", "s3://")):
+        return "s3"
+    return SOURCE_DATASETS.get(name, "iceberg")
 
 
 def description(name: str, platform: str) -> str:
@@ -122,7 +143,18 @@ def main() -> None:
     parser.add_argument(
         "--evidence", type=Path, default=Path("docs/evidence/datahub-validation.json")
     )
+    parser.add_argument(
+        "--raw-root",
+        help="Gốc nguồn file thật, vd. s3a://<raw-bucket>/order_snapshots/source-exports (AWS)",
+    )
+    parser.add_argument(
+        "--dags", nargs="+", choices=sorted(job_map()), help="Chỉ publish các DAG đã chạy thật"
+    )
     args = parser.parse_args()
+    jobs = job_map(args.raw_root, tuple(args.dags) if args.dags else None)
+    # Không chọn DAG: giữ cả bảng lịch sử không còn job ghi (CDC v1) như trước.
+    names = datasets_of(jobs) + ([] if args.dags else list(DATASETS))
+    names = list(dict.fromkeys(names))
     evidence = json.loads(args.evidence.read_text())
 
     # Import tại điểm chạy để file vẫn đọc được khi client chưa được cài.
@@ -136,10 +168,10 @@ def main() -> None:
 
     def urn(name: str) -> DatasetUrn:
         """Resolve a dataset URN using its actual storage platform."""
-        return DatasetUrn(platform=SOURCE_DATASETS.get(name, "iceberg"), name=name, env="PROD")
+        return DatasetUrn(platform=platform_of(name), name=name, env="PROD")
 
-    for name in (*SOURCE_DATASETS, *DATASETS):
-        platform = SOURCE_DATASETS.get(name, "iceberg")
+    for name in names:
+        platform = platform_of(name)
         client.entities.upsert(
             Dataset(
                 platform=platform,
@@ -148,7 +180,7 @@ def main() -> None:
             )
         )
 
-    for dag_id, tasks in job_map().items():
+    for dag_id, tasks in jobs.items():
         flow = DataFlow(
             platform="airflow", name=dag_id, description=f"PLATFORM Airflow DAG {dag_id}"
         )
@@ -168,6 +200,8 @@ def main() -> None:
 
     for item in evidence["checks"]:
         check_passed(item)
+        if item["dataset"] not in names:
+            raise ValueError(f"Assertion trên bảng ngoài các DAG đã chọn: {item['dataset']}")
         dataset = item["dataset"]
         metrics = item["metrics"]
         urn_text = assertion_urn(item)
@@ -190,8 +224,8 @@ def main() -> None:
             ],
         )
     print(
-        f"DataHub: {len(SOURCE_DATASETS) + len(DATASETS)} datasets, "
-        f"{sum(map(len, job_map().values()))} jobs, "
+        f"DataHub: {len(names)} datasets, "
+        f"{sum(map(len, jobs.values()))} jobs, "
         f"{len(evidence['checks'])} kết quả Validate"
     )
 

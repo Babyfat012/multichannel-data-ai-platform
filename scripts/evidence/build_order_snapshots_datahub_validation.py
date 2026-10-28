@@ -245,6 +245,13 @@ def main() -> None:
         default=LEGACY_CDC_TABLE,
         help="Bảng CDC mà run dp1_cdc đã ghi (Airflow Variable platform_dp1_cdc_table)",
     )
+    parser.add_argument(
+        "--dags",
+        nargs="+",
+        choices=sorted(RUNS),
+        default=sorted(RUNS),
+        help="Chỉ đọc các DAG đã chạy thật trên môi trường này (mặc định: cả năm)",
+    )
     args = parser.parse_args()
     runs = parse_runs(args.run)
     tasks = (
@@ -279,7 +286,7 @@ def main() -> None:
         ]
     )
     checks = []
-    for dag, task, dataset in tasks:
+    for dag, task, dataset in (t for t in tasks if t[0] in args.dags):
         log, source_log, completed_at = success_log(args.logs_root, dag, task, runs[dag])
         metrics, rule, log_format = metrics_for(dag, task, log)
         if dag == "dp1_cdc":
