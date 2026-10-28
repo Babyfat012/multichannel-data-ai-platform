@@ -35,6 +35,8 @@ PROFILES = {
         },
         OUTPUT / "v2",
     ),
+    # DataHub trên EC2 (qua tunnel 9002), publish từ log DAG v1 chạy 100 GB ngày 27–28/10.
+    "aws": (DATASETS, ROOT / "docs" / "evidence" / "aws" / "datahub"),
 }
 
 

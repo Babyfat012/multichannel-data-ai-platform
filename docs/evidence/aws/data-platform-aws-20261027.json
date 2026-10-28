@@ -128,6 +128,20 @@
       "dp3-validate-log-20261028.png"
     ]
   },
+  "airflow_dp3_walmart_labels": {
+    "dag_run": "manual__2026-10-28T04:51:30.902098+00:00",
+    "attempt": 2,
+    "bridge_keys_rows": 15562675,
+    "labeled_rows": 12165007,
+    "duplicate": 0,
+    "invalid": 0,
+    "gold_walmart_rows": 15562675,
+    "note": "Attempt 1 OOM (exit 137, CONSTRAINT_MEMCG) vì SPARK_WORKER_MEMORY 3g cho 2 executor 1536m/worker vượt mem_limit 3500m; hạ 2560m rồi chạy lại PASS. Dòng thiếu nhãn là Order Line chưa giao (không có delivered_at nên generator không sinh nhãn).",
+    "source": {
+      "ground_truth": "s3a://platform-665116832975-raw/order_snapshots/ground-truth",
+      "keys": "s3a://platform-665116832975-raw/order_snapshots/ground-truth-bridge/walmart-keys.parquet"
+    }
+  },
   "known_issue": "Lần chạy tay ba Channel ghi nhầm vào lakehouse.bronze.raw__orders (systemd-run thay ${ch} thành rỗng); không dùng bảng đó. Ba Channel lấy từ DAG dp1_bronze.",
   "eks": {
     "cluster": "platform-apps",
@@ -155,5 +169,50 @@
       "platform-mlflow": "sha256:e79bf1bf2de5813a1f6f05784d4d62c4aadb9d2c685456146c2cdcf23bfec267"
     },
     "note": "Digest khớp image build trên laptop (docker build -q); entry không tag là manifest nền tảng và attestation của buildx."
+  },
+  "airflow_dp1_cdc": {
+    "dag_run": "manual__2026-10-28T10:51:33.422898+00:00",
+    "table": "lakehouse.bronze.raw_walmart_cdc_v2",
+    "kafka_events": 3,
+    "bronze_rows": 3,
+    "unique_offsets": 3,
+    "missing": 0,
+    "extra": 0,
+    "bad_payload": 0,
+    "errors": 0,
+    "probe": "cdc-probe-20261028.json",
+    "debezium": "quay.io/debezium/connect:3.4 (connector 3.4.3.Final), snapshot.mode=no_data, slot platform_walmart_orders",
+    "note": "3 sự kiện c/u/d do probe tạo rồi xoá, bảng nguồn trở về như cũ. walmart.orders không có index purchase_order_id nên UPDATE/DELETE probe seq scan vài phút (gap #15); số ms đo sau commit nên không bị ảnh hưởng."
+  },
+  "airflow_maintenance_iceberg": {
+    "dag_run": "scheduled__2026-10-27T00:00:00+00:00",
+    "tasks_success": "3/3",
+    "table": "lakehouse.bronze.raw_shopee_orders_dp1",
+    "config": "configs/iceberg_maintenance_aws.json",
+    "receipt": "/mnt/platform-data/airflow/logs/iceberg-maintenance/20261027T000000/execute.json",
+    "status": "success",
+    "no_op": true,
+    "actions": [
+      {
+        "kind": "remove_orphans",
+        "dry_run": true,
+        "older_than": "2026-10-25T15:25:09.588389+00:00"
+      }
+    ],
+    "before": {
+      "rows": 4689957,
+      "data_files": 180,
+      "total_bytes": 461051515,
+      "snapshots": 1,
+      "fingerprint": "-2551885948954549477803"
+    },
+    "after": {
+      "rows": 4689957,
+      "data_files": 180,
+      "total_bytes": 461051515,
+      "snapshots": 1,
+      "fingerprint": "-2551885948954549477803"
+    },
+    "note": "1 file/partition ngày (180 ngày, trung bình ~2,6 MB/file) nên không có gì để gộp; compaction no-op đúng dự đoán. Gap #16: partition theo ngày cho kênh nhỏ."
   }
 }

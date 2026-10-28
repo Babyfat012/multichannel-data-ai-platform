@@ -1,0 +1,10 @@
+{
+  "probe_id": "CDC-DEMO-fb4b96588a6d",
+  "topic": "platform_cdc.walmart.orders",
+  "events": [
+    {"op": "c", "partition": 0, "offset": 0, "source_lsn": 15038431464, "event_ts_ms": 1793184217591, "has_before": false, "has_after": true, "committed_at_utc": "2026-10-28T10:43:37.205742+00:00", "commit_to_kafka_ms": 730.7},
+    {"op": "u", "partition": 0, "offset": 1, "source_lsn": 15038441200, "event_ts_ms": 1793184343991, "has_before": true, "has_after": true, "committed_at_utc": "2026-10-28T10:45:43.739001+00:00", "commit_to_kafka_ms": 452.1},
+    {"op": "d", "partition": 0, "offset": 2, "source_lsn": 15038746984, "event_ts_ms": 1793184456732, "has_before": true, "has_after": false, "committed_at_utc": "2026-10-28T10:47:36.632091+00:00", "commit_to_kafka_ms": 295.3}
+  ],
+  "source_rows_remaining": 0
+}
