@@ -81,12 +81,30 @@
   register: airflow_image
   changed_when: false
   failed_when: false
+# Code được mount vào container, image chỉ chứa Java + thư viện: build lại khi Dockerfile đổi, không phải khi code đổi.
+- name: Đọc checksum Dockerfile airflow
+  ansible.builtin.stat:
+    path: '{{ app_dir }}/docker/Dockerfile.airflow'
+  register: airflow_dockerfile
+- name: So checksum với lần build trước
+  ansible.builtin.copy:
+    content: '{{ airflow_dockerfile.stat.checksum }}'
+    dest: /mnt/platform-data/airflow/.dockerfile.sha1
+    mode: '0644'
+  check_mode: true
+  register: airflow_dockerfile_stamp
 - name: Build image driver và executor cùng Python 3.10
   ansible.builtin.command: docker compose --profile airflow build airflow
   args:
     chdir: '{{ app_dir }}'
-  when: app_sync.changed or airflow_image.rc != 0
+  when: airflow_dockerfile_stamp.changed or airflow_image.rc != 0
   changed_when: true
+# Ghi dấu SAU khi build thành công: build lỗi thì lần sau vẫn build lại.
+- name: Ghi checksum Dockerfile đã build
+  ansible.builtin.copy:
+    content: '{{ airflow_dockerfile.stat.checksum }}'
+    dest: /mnt/platform-data/airflow/.dockerfile.sha1
+    mode: '0644'
 - name: Tạo khóa Fernet một lần trước khi Airflow khởi động
   ansible.builtin.command:
     argv:
