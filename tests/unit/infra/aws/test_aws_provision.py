@@ -232,6 +232,22 @@ def test_aws_overlay_points_return_labels_at_s3():
     assert env["AIRFLOW_VAR_PLATFORM_DP3_WALMART_KEYS"].startswith("s3a://")
 
 
+def test_aws_feast_uses_s3_iam_and_eks_redis():
+    """Feast trên AWS: kho S3 thật + Redis EKS, không còn MinIO/kind; key MinIO chỉ ở nhánh local."""
+    env = yaml.load((ROOT / "docker-compose.aws.yml").read_text(), Loader=ComposeLoader)[
+        "services"
+    ]["airflow"]["environment"]
+    assert env["AIRFLOW_VAR_PLATFORM_FEAST_ROOT"] == "s3://${LAKEHOUSE_BUCKET}/feature-store"
+    assert env["AIRFLOW_VAR_PLATFORM_FEAST_REDIS"] == "${PLATFORM_FEAST_REDIS:-}"
+    assert env["AIRFLOW_VAR_PLATFORM_ML_CUTOFF"] == "2026-06-30T00:00:00Z"
+    assert env["PLATFORM_STORAGE"] == "s3"
+    template = (ANSIBLE / "roles/app/templates/env.j2").read_text()
+    assert "PLATFORM_FEAST_REDIS={{ feast_redis | default('10.42.0.121:30379')" in template
+    dag = (ROOT / "dags/ml_feature_materialize.py").read_text()
+    branch = dag.index('if os.environ.get("PLATFORM_STORAGE", "minio") != "s3":')
+    assert branch < dag.index('get_connection("platform_minio")') < dag.index("env |= {")
+
+
 def test_docker_storage_moves_to_ebs_without_silent_empty_store():
     """Kho Docker và containerd bind sang EBS; systemd chờ mount; chép không --delete, giữ bản cũ."""
     tasks = yaml.safe_load((ANSIBLE / "roles/data_disk/tasks/main.yml").read_text())

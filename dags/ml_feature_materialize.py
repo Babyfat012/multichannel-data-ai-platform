@@ -35,17 +35,24 @@ CONF = {
 
 def run_feast(*args):
     """Chạy CLI Feast trên bản sao repo (mount read-only), credential lấy lúc chạy."""
-    minio = BaseHook.get_connection("platform_minio")
     root = Variable.get("platform_feast_root")
-    env = {
-        **os.environ,
-        "AWS_ACCESS_KEY_ID": minio.login,
-        "AWS_SECRET_ACCESS_KEY": minio.password,
-        "FEAST_S3_ENDPOINT_URL": Variable.get("platform_minio_internal_endpoint"),
+    redis = Variable.get("platform_feast_redis")
+    if not redis:
+        raise ValueError("platform_feast_redis rỗng: chưa đặt địa chỉ Redis online")
+    env = {**os.environ}
+    # AWS: S3 thật qua IAM role của EC2, không key, không endpoint riêng. Local: MinIO.
+    if os.environ.get("PLATFORM_STORAGE", "minio") != "s3":
+        minio = BaseHook.get_connection("platform_minio")
+        env.update(
+            AWS_ACCESS_KEY_ID=minio.login,
+            AWS_SECRET_ACCESS_KEY=minio.password,
+            FEAST_S3_ENDPOINT_URL=Variable.get("platform_minio_internal_endpoint"),
+        )
+    env |= {
         "FEAST_REGISTRY": f"{root}/registry.db",
         "FEAST_SKU_DAILY_PATH": f"{root}/sku_daily",
         "FEAST_SKU_RETURN_24H_PATH": f"{root}/sku_return_24h.parquet",
-        "FEAST_REDIS": Variable.get("platform_feast_redis"),
+        "FEAST_REDIS": redis,
     }
     with tempfile.TemporaryDirectory() as tmp:
         repo = shutil.copytree(REPO, f"{tmp}/repo")
