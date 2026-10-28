@@ -214,7 +214,7 @@ def test_stream_overlay_only_enables_kafka_flink_on_loopback():
     services = yaml.load(
         (ROOT / "docker-compose.aws-stream.yml").read_text(), Loader=ComposeLoader
     )["services"]
-    assert set(services) == {"kafka", "flink-jobmanager", "flink-taskmanager"}
+    assert set(services) == {"kafka", "flink-jobmanager", "flink-taskmanager", "debezium-connect"}
     for svc in services.values():
         assert all(port.startswith("127.0.0.1:") for port in svc.get("ports", []))
     # File gốc mở 0.0.0.0 cho Kafka và Flink UI: overlay phải ghi đè cả hai.
@@ -262,3 +262,17 @@ def test_docker_storage_moves_to_ebs_without_silent_empty_store():
         < names.index(move["name"])
         < names.index(binds[0]["name"])
     )
+
+
+def test_cdc_on_aws_enables_debezium_and_loads_dp1_cdc_variables():
+    """dp1_cdc trên EC2: Kafka thuộc cả profile cdc, Debezium bật ở loopback, Airflow nạp Variable CDC."""
+    services = yaml.load(
+        (ROOT / "docker-compose.aws-stream.yml").read_text(), Loader=ComposeLoader
+    )["services"]
+    assert "cdc" in services["kafka"]["profiles"]
+    assert services["debezium-connect"]["profiles"] == ["cdc"]
+    assert services["debezium-connect"]["scale"] == 1
+    setup = (ROOT / "scripts/setup/setup_airflow.sh").read_text()
+    s3_branch = setup[setup.index("= s3 ]; then") :]
+    assert "dp1_cdc" in s3_branch.split("done")[0]
+    assert "spark-sql-kafka-0-10" in s3_branch and "PLATFORM_SPARK_PACKAGES_AWS" in s3_branch

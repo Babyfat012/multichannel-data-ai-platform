@@ -151,6 +151,7 @@ elif "cp" in args:
         "run/run_aws_measurements.sh",
         "setup/setup_airflow.sh",
         "setup/setup_dp1_file_channels.sh",
+        "setup/setup_dp1_cdc.sh",
         "setup/setup_dp2_silver.sh",
         "setup/setup_dp2_file_channels.sh",
         "setup/setup_dp3_features.sh",
