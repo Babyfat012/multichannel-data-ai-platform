@@ -437,6 +437,7 @@ KSERVE = "http://kserve.test/v1/models/return-risk:predict"
 ORDER_LINE = {
     "seller_sku": "sku-00002",
     "channel": "tiktok_shop",
+    "country": "GB",
     "ordered_basis_qty": 3,
     "ordered_product_net_minor": 30000,
 }
@@ -478,13 +479,15 @@ def test_predict_sends_v1_instance(predict_client):
     url, raw = sent[0]
     assert url == KSERVE
     instance = json.loads(raw)["instances"][0]
-    assert instance == ORDER_LINE | {"account_id": "account-tiktok_shop-1"}
+    assert instance == ORDER_LINE
 
 
-def test_predict_keeps_given_account(predict_client):
+def test_predict_rejects_missing_country(predict_client):
+    """Không tự điền feature: thiếu country thì 422, không gọi model."""
     client, sent = predict_client
-    client.post("/predict", json=ORDER_LINE | {"account_id": "acc-9"})
-    assert json.loads(sent[0][1])["instances"][0]["account_id"] == "acc-9"
+    body = {k: v for k, v in ORDER_LINE.items() if k != "country"}
+    assert client.post("/predict", json=body).status_code == 422
+    assert not sent
 
 
 def test_predict_not_configured(client, monkeypatch):

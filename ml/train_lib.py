@@ -14,7 +14,7 @@ FEAST_FEATURES = [
     "sku_return_daily:return_or_refund_rate_90d",
     "sku_return_24h:approved_returns_24h",
 ]
-CATEGORICAL = ["channel", "account_id"]
+CATEGORICAL = ["channel", "country"]
 NUMERIC = [
     "ordered_basis_qty",
     "ordered_product_net_minor",

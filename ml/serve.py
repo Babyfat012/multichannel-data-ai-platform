@@ -23,7 +23,7 @@ FEAST_SECONDS = Histogram("return_risk_feast_lookup_seconds", "Thời gian đọ
 ORDER_FIELDS = [
     "seller_sku",
     "channel",
-    "account_id",
+    "country",
     "ordered_basis_qty",
     "ordered_product_net_minor",
 ]

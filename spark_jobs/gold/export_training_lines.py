@@ -1,66 +1,55 @@
-"""Gold v2 → Parquet tập train: mỗi Order Line đã có nhãn + thuộc tính biết lúc đặt đơn.
+"""Gold A → Parquet tập train: Order Line có nhãn (biết trước cutoff) + thuộc tính lúc đặt đơn.
 
 Đây là "entity dataframe" cho Feast: KFP ghép thêm feature SKU bằng PIT join tại `event_timestamp`
-(= lúc đặt). Chỉ lấy line `state = labeled` (đã giao và đủ 30 ngày, đúng Q38). Không mang cột
-biết sau khi đặt (giao, hủy, trả, hoàn) để tránh leakage.
+(= lúc đặt). Nhãn lấy từ `fact_return_labels_dp3` (năm Channel); chỉ giữ nhãn có
+`label_available_at <= cutoff`. Không mang cột biết sau khi đặt để tránh leakage. Lấy mẫu
+`--sample-per-mille` theo hash `order_line_key`: chạy lại ra đúng tập cũ, rải đều theo thời gian.
 """
 
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 
 from pyspark.sql import functions as F
 
 from spark_jobs.lib.iceberg_session import CATALOG, build_spark
-
-# Thuộc tính lúc đặt đơn; mọi cột khác của fact (delivered_qty, approved_return_qty...) là tương lai.
-ORDER_TIME_COLUMNS = (
-    "channel",
-    "account_id",
-    "currency",
-    "ordered_basis_qty",
-    "ordered_product_net_minor",
-)
+from spark_jobs.lib.order_snapshot_ml import configure_output, training_rows
 
 
 def main(argv=None):
-    """Ghép nhãn generation hiện tại với fact, ghi đè Parquet và in phân bố nhãn."""
+    """Ghép nhãn với fact, ghi đè Parquet và in phân bố nhãn."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--output", required=True, help="vd s3a://platform/feature-store/training_lines"
     )
+    parser.add_argument("--cutoff", required=True)
+    parser.add_argument("--fact-table", default="fact_order_lines_dp2")
+    parser.add_argument("--labels-table", default="fact_return_labels_dp3")
+    # 10‰ = 1%: năm Channel ~ trăm triệu line có nhãn, pod train trên EKS chỉ ~8 GB RAM.
+    parser.add_argument("--sample-per-mille", type=int, default=10)
     args = parser.parse_args(argv)
-    spark = build_spark("export-training-lines", shuffle_partitions=4)
+    if not 0 < args.sample_per_mille <= 1000:
+        parser.error("--sample-per-mille phải trong (0, 1000]")
+    spark = build_spark("export-training-lines", shuffle_partitions=64)
     try:
-        if args.output.startswith("s3a://"):
-            hadoop = spark.sparkContext._jsc.hadoopConfiguration()
-            hadoop.set("fs.s3a.endpoint", os.environ["MINIO_INTERNAL_ENDPOINT"])
-            hadoop.set("fs.s3a.path.style.access", "true")
-            hadoop.set("fs.s3a.access.key", os.environ["AWS_ACCESS_KEY_ID"])
-            hadoop.set("fs.s3a.secret.key", os.environ["AWS_SECRET_ACCESS_KEY"])
-        fact = spark.table(f"{CATALOG}.gold.lifecycle_fact_order_lines")
-        generation = fact.select("generation_id").distinct().collect()
-        if len(generation) != 1:
-            raise ValueError(f"cần đúng 1 generation trong fact, có {generation}")
-        labels = (
-            spark.table(f"{CATALOG}.gold.lifecycle_label_return")
-            .filter(F.col("generation_id") == generation[0][0])
-            .filter(F.col("state") == "labeled")
-            .select("dataset_version", "line_id", "label", "cohort_date", "generation_id")
-        )
-        rows = (
-            fact.select(
-                "dataset_version", "line_id", "seller_sku", "created_at", *ORDER_TIME_COLUMNS
-            )
-            .join(labels, ["dataset_version", "line_id"])
-            .withColumn("event_timestamp", F.col("created_at"))
-        )
+        configure_output(spark, args.output)
+        labels = spark.table(f"{CATALOG}.gold.{args.labels_table}")
+        runs = labels.select("run_id").distinct().collect()
+        if len(runs) != 1:
+            raise ValueError(f"cần đúng 1 run_id trong bảng nhãn, có {runs}")
+        fact = spark.table(f"{CATALOG}.gold.{args.fact_table}")
+        rows = training_rows(fact, labels, args.cutoff, args.sample_per_mille)
         rows.coalesce(1).write.mode("overwrite").parquet(args.output)
         written = spark.read.parquet(args.output)
-        counts = {r["label"]: r["count"] for r in written.groupBy("label").count().collect()}
+        counts = {
+            (r["channel"], r["label"]): r["count"]
+            for r in written.groupBy("channel", "label").count().collect()
+        }
+        bad = written.filter(F.col("ordered_product_net_minor").isNull()).limit(1).count()
         print(f"wrote {written.count()} rows to {args.output}; label counts {counts}")
+        if not counts or bad:
+            raise ValueError(f"Tập train rỗng hoặc có tiền NULL (tiền tệ lạ): bad={bad}")
         return 0
     finally:
         spark.stop()

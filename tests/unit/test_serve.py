@@ -60,7 +60,7 @@ def model(history):
 
 ORDER = {
     "channel": "amazon",
-    "account_id": "a",
+    "country": "a",
     "ordered_basis_qty": 3,
     "ordered_product_net_minor": 30000,
 }
@@ -88,7 +88,7 @@ def test_missing_order_field_is_rejected():
                 "instances": [
                     {
                         "seller_sku": "sku-1",
-                        "account_id": "a",
+                        "country": "a",
                         "ordered_basis_qty": 1,
                         "ordered_product_net_minor": 1,
                     }

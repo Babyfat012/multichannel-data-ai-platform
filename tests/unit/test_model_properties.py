@@ -16,7 +16,7 @@ CHANNELS = ["amazon", "walmart", "shopify", "tiktok_shop", "shopee"]
 order = st.fixed_dictionaries(
     {
         "channel": st.sampled_from(CHANNELS),
-        "account_id": st.sampled_from(["a", "b", "c"]),
+        "country": st.sampled_from(["a", "b", "c"]),
         "ordered_basis_qty": st.integers(0, 50),
         "ordered_product_net_minor": st.integers(0, 10_000_000),
         "labeled_count_90d": st.one_of(st.none(), st.integers(0, 500)),
@@ -32,7 +32,7 @@ def training_frame(n=300, seed=0):
     frame = pd.DataFrame(
         {
             "channel": rng.choice(CHANNELS, n),
-            "account_id": rng.choice(["a", "b", "c"], n),
+            "country": rng.choice(["a", "b", "c"], n),
             "ordered_basis_qty": rng.integers(1, 5, n),
             "ordered_product_net_minor": rng.integers(1000, 50000, n),
             "labeled_count_90d": rng.integers(0, 100, n),

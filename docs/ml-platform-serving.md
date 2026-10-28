@@ -9,7 +9,7 @@ KServe serve model vừa train, **model-inside-image**; có pod KServe + YAML +
 `POST http://return-risk-predictor.ml-serving.svc.cluster.local/v1/models/return-risk:predict`
 
 ```json
-{"instances": [{"seller_sku": "sku-00002", "channel": "tiktok_shop", "account_id": "account-tiktok_shop-1",
+{"instances": [{"seller_sku": "sku-00002", "channel": "tiktok_shop", "country": "GB",
                 "ordered_basis_qty": 3, "ordered_product_net_minor": 30000}]}
 ```
 

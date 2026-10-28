@@ -83,7 +83,8 @@ class PredictRequest(BaseModel):
 
     seller_sku: SellerSku
     channel: Literal["amazon", "walmart", "shopify", "tiktok_shop", "shopee"]
-    account_id: str = Field(default="", pattern=r"^[A-Za-z0-9_.-]{0,64}$")
+    # Nước giao hàng (ISO-2): có trong file gốc của cả năm Channel; bắt buộc, không tự điền.
+    country: str = Field(pattern=r"^[A-Z]{2}$")
     ordered_basis_qty: int = Field(ge=1, le=1000)
     ordered_product_net_minor: int = Field(ge=0, le=1_000_000_000)
 
@@ -158,8 +159,6 @@ async def predict(http, url, body):
     if not url:
         raise HTTPException(503, "model not configured")
     instance = body.model_dump()
-    if not instance["account_id"]:
-        instance["account_id"] = f"account-{body.channel}-1"
     try:
         response = await http.post(url, json={"instances": [instance]}, timeout=10)
         response.raise_for_status()
@@ -255,18 +254,19 @@ def create_app(store_factory=load_store, rag_factory=load_rag, http_factory=http
         channel: str,
         ordered_basis_qty: int,
         ordered_product_net_minor: int,
-        account_id: str = "",
+        country: str,
     ) -> Prediction:
         """Điểm rủi ro Return (0–1, càng cao càng rủi ro, để xếp hạng) của một Order Line mới.
 
-        channel: amazon|walmart|shopify|tiktok_shop|shopee; ordered_product_net_minor: giá trị hàng theo
+        channel: amazon|walmart|shopify|tiktok_shop|shopee; country: nước giao hàng ISO-2 (vd US);
+        ordered_product_net_minor: giá trị hàng theo
         đơn vị nhỏ nhất (cent). abstain=true khi SKU chưa đủ lịch sử nhãn.
         """
         try:
             body = PredictRequest(
                 seller_sku=seller_sku,
                 channel=channel,
-                account_id=account_id,
+                country=country,
                 ordered_basis_qty=ordered_basis_qty,
                 ordered_product_net_minor=ordered_product_net_minor,
             )
