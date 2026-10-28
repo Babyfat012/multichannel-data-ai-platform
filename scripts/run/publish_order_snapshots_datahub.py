@@ -18,12 +18,15 @@ SILVER = {c: f"lakehouse.silver.stg_{c}_order_lines_dp2" for c in CHANNELS}
 FACT = "lakehouse.gold.fact_order_lines_dp2"
 DIM = "lakehouse.gold.dim_amazon_order_dp2"
 FEATURE = "lakehouse.gold.feat_order_line_return_dp3"
-LABELS = "lakehouse.gold.fact_walmart_return_labels_dp3"
+LABELS = "lakehouse.gold.fact_return_labels_dp3"
+# Bảng nhãn chỉ-Walmart (DAG dp3_walmart_labels cũ) giữ trên DataHub như bằng chứng lịch sử;
+# DAG dp3_return_labels nay ghi một bảng nhãn cho cả năm Channel.
+LABELS_LEGACY = "lakehouse.gold.fact_walmart_return_labels_dp3"
 # DAG dp1_cdc hiện ghi bảng v2 (có source_epoch). Bảng v1 giữ trên DataHub như bằng chứng
 # lịch sử của run 2026-10-13; không còn job nào ghi vào nó.
 CDC = "lakehouse.bronze.raw_walmart_cdc_v2"
 CDC_LEGACY = "lakehouse.bronze.raw_walmart_cdc"
-DATASETS = (*BRONZE.values(), *SILVER.values(), FACT, DIM, FEATURE, LABELS, CDC, CDC_LEGACY)
+DATASETS = (*BRONZE.values(), *SILVER.values(), FACT, DIM, FEATURE, LABELS, LABELS_LEGACY, CDC, CDC_LEGACY)
 FAILURE_PREFIXES = (
     "invalid",
     "duplicate",
@@ -89,8 +92,8 @@ def job_map(
             "build_return_features": ([FACT], [FEATURE]),
             "validate_return_features": ([FEATURE], []),
         },
-        "dp3_walmart_labels": {
-            "build_and_validate_walmart_labels": ([FACT], [LABELS]),
+        "dp3_return_labels": {
+            "build_and_validate_return_labels": ([FACT], [LABELS]),
         },
     }
     return {dag: tasks for dag, tasks in jobs.items() if dags is None or dag in dags}
@@ -113,6 +116,8 @@ def description(name: str, platform: str) -> str:
     """Mô tả dataset; bảng CDC v1 ghi rõ là bản lịch sử."""
     if name == CDC_LEGACY:
         return f"PLATFORM {platform}: {name} (legacy CDC v1, bằng chứng run 2026-10-13; DAG hiện ghi {CDC})"
+    if name == LABELS_LEGACY:
+        return f"PLATFORM {platform}: {name} (legacy nhãn chỉ Walmart; DAG hiện ghi {LABELS})"
     return f"PLATFORM {platform}: {name}"
 
 

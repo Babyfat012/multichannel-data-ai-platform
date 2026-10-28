@@ -98,7 +98,7 @@ def main() -> None:
             "dp2_silver",
             "dp1_cdc",
             "dp3_features",
-            "dp3_walmart_labels",
+            "dp3_return_labels",
             "platform_runtime_config_check",
         ),
         help="DAG cần chụp; bỏ trống để chụp DP1/DP2 mặc định",

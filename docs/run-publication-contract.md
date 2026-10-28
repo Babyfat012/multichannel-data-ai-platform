@@ -127,7 +127,7 @@ cùng manifest, attempt khác và namespace khác. Snapshot/file mất hoặc di
 không khớp: fail `INPUT_UNAVAILABLE`/`INPUT_CONFLICT`, không fallback latest.
 
 DAG [DP2](../dags/dp2_silver.py), [DP3](../dags/dp3_features.py) và
-[label bridge](../dags/dp3_walmart_labels.py) hiện truyền table names/run ID;
+[label bridge](../dags/dp3_return_labels.py) hiện truyền table names/run ID;
 chưa có interface này. `max_active_runs=1` của từng DAG không tạo snapshot
 đa bảng hoặc khóa giữa các DAG. Iceberg hỗ trợ đọc snapshot riêng từng bảng,
 không tự tạo snapshot liên bảng.

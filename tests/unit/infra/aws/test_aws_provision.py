@@ -223,8 +223,8 @@ def test_stream_overlay_only_enables_kafka_flink_on_loopback():
         assert "/mnt/platform-data/flink:/opt/flink/output" in services[name]["volumes"]
 
 
-def test_aws_overlay_points_walmart_labels_at_s3():
-    """dp3_walmart_labels trên AWS: executor không có /data local nên đáp án và khóa phải ở S3."""
+def test_aws_overlay_points_return_labels_at_s3():
+    """dp3_return_labels trên AWS: executor không có /data local nên đáp án và khóa phải ở S3."""
     env = yaml.load((ROOT / "docker-compose.aws.yml").read_text(), Loader=ComposeLoader)[
         "services"
     ]["airflow"]["environment"]

@@ -173,7 +173,7 @@ def test_legacy_manifest_still_publishable():
 
 
 def test_publisher_aws_only_draws_dags_that_ran_with_s3_sources():
-    """AWS chạy 3 DAG: không vẽ CDC/nhãn Walmart, nguồn file là S3 chứ không phải /data local."""
+    """AWS chạy 3 DAG: không vẽ CDC/nhãn, nguồn file là S3 chứ không phải /data local."""
     root = "s3a://platform-raw/order_snapshots/source-exports"
     jobs = publisher.job_map(root, ("dp1_bronze", "dp2_silver", "dp3_features"))
     names = publisher.datasets_of(jobs)

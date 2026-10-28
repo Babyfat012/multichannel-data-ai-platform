@@ -1,4 +1,4 @@
-"""Tập nhãn Walmart riêng cho huấn luyện, dùng bridge ba mã gốc."""
+"""Tập nhãn trả hàng năm Channel riêng cho huấn luyện, nối Gold qua sổ khóa ground truth."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from airflow import DAG
 from platform_spark_operator import PlatformSparkSubmitOperator as SparkSubmitOperator
 
 with DAG(
-    dag_id="dp3_walmart_labels",
-    description="Nối nhãn Walmart với Gold fact qua ba mã Order Line",
+    dag_id="dp3_return_labels",
+    description="Nối nhãn năm Channel với Gold fact vào một bảng nhãn",
     start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
     schedule=None,
     catchup=False,
@@ -19,8 +19,8 @@ with DAG(
     tags=["platform", "dp3", "labels"],
 ) as dag:
     SparkSubmitOperator(
-        task_id="build_and_validate_walmart_labels",
-        application="/opt/spark_jobs/gold/build_walmart_order_snapshot_labels.py",
+        task_id="build_and_validate_return_labels",
+        application="/opt/spark_jobs/gold/build_order_snapshot_return_labels.py",
         application_args=[
             "--fact-table",
             "{{ var.value.platform_dp3_gold_source_table }}",

@@ -161,7 +161,7 @@ services:
       AIRFLOW_VAR_PLATFORM_DP1_AMAZON_SOURCE: s3a://${RAW_BUCKET}/order_snapshots/source-exports/channel=amazon/dataset=orders
       AIRFLOW_VAR_PLATFORM_DP1_EXTRA_SOURCE_ROOT: s3a://${RAW_BUCKET}/order_snapshots/source-exports
       AIRFLOW_VAR_PLATFORM_DP1_AMAZON_WINDOW_DAYS: "0"
-      # dp3_walmart_labels: đáp án nhãn và khóa nối nằm trên S3 (executor không có /data local).
+      # dp3_return_labels: đáp án nhãn, sổ khóa 4 kênh và khóa nối nằm trên S3 (executor không có /data local).
       AIRFLOW_VAR_PLATFORM_DP3_GROUND_TRUTH: s3a://${RAW_BUCKET}/order_snapshots/ground-truth
       AIRFLOW_VAR_PLATFORM_DP3_WALMART_KEYS: s3a://${RAW_BUCKET}/order_snapshots/ground-truth-bridge/walmart-keys.parquet
       # Task Walmart của DAG v1 đọc PostgreSQL qua JDBC ngay trong driver Airflow.

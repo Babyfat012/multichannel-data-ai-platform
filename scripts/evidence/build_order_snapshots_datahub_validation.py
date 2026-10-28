@@ -24,7 +24,8 @@ RUNS = {
     "dp1_cdc": "manual__2026-10-13T22:34:22+00:00",
     "dp2_silver": "manual__2026-10-14T03:53:52+00:00",
     "dp3_features": "manual__2026-10-14T04:11:15+00:00",
-    "dp3_walmart_labels": "manual__2026-10-14T04:15:18+00:00",
+    # Chưa có run mặc định (bản Walmart-only cũ chạy 2026-10-14): truyền --run dp3_return_labels=...
+    "dp3_return_labels": "",
 }
 CHANNELS = ("amazon", "walmart", "tiktok_shop", "shopify", "shopee")
 LEGACY_CDC_TABLE = "lakehouse.bronze.raw_walmart_cdc"
@@ -189,15 +190,15 @@ def metrics_for(dag: str, task: str, log: str) -> tuple[dict[str, int], str, str
         metrics, rule, log_format = feature_metrics(log)
         if metrics["source_rows"] != metrics["dataset_rows"]:
             raise ValueError("Feature row mismatch")
-    elif task == "build_and_validate_walmart_labels":
+    elif task == "build_and_validate_return_labels":
         metrics = {
-            "dataset_rows": number(r"Bridge Walmart: rows=([\d,]+)", log),
-            "duplicate_keys": number(r"Bridge Walmart: rows=[\d,]+, duplicate=([\d,]+)", log),
+            "dataset_rows": number(r"Bridge nhãn: rows=([\d,]+)", log),
+            "duplicate_keys": number(r"Bridge nhãn: rows=[\d,]+, duplicate=([\d,]+)", log),
             "invalid_rows": number(
-                r"Bridge Walmart: rows=[\d,]+, duplicate=[\d,]+, invalid=([\d,]+)", log
+                r"Bridge nhãn: rows=[\d,]+, duplicate=[\d,]+, invalid=([\d,]+)", log
             ),
         }
-        rule = "Bridge nhãn Walmart có dòng; không lỗi và không trùng khóa"
+        rule = "Bridge nhãn năm Channel có dòng ở mọi kênh; không lỗi và không trùng khóa"
     else:
         raise ValueError(f"Unknown validation task: {dag}.{task}")
     if metrics.get("dataset_rows", 0) <= 0 or any(
@@ -279,9 +280,9 @@ def main() -> None:
         ]
         + [
             (
-                "dp3_walmart_labels",
-                "build_and_validate_walmart_labels",
-                "lakehouse.gold.fact_walmart_return_labels_dp3",
+                "dp3_return_labels",
+                "build_and_validate_return_labels",
+                "lakehouse.gold.fact_return_labels_dp3",
             )
         ]
     )
