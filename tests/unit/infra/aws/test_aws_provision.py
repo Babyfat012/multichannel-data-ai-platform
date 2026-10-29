@@ -326,3 +326,23 @@ def test_aws_maintenance_targets_a_configured_real_table():
         assert not name.startswith("lakehouse.demo.")
         config = validated_config(policies[name])
         assert config["orphans_dry_run"] is True and config["zorder_columns"] == []
+
+
+def test_docker_log_size_is_capped_before_containers_start():
+    """Mỗi container giữ tối đa 300 MB log; áp trước role tạo container, đổi thì restart Docker."""
+    import json
+
+    tasks = yaml.safe_load((ANSIBLE / "roles/base/tasks/main.yml").read_text())
+    daemon = next(
+        t
+        for t in tasks
+        if t.get("ansible.builtin.copy", {}).get("dest") == "/etc/docker/daemon.json"
+    )
+    options = json.loads(daemon["ansible.builtin.copy"]["content"])
+    assert options == {"log-driver": "json-file", "log-opts": {"max-size": "100m", "max-file": "3"}}
+    restart = next(
+        t for t in tasks if t.get("ansible.builtin.service", {}).get("state") == "restarted"
+    )
+    assert restart["when"] == f"{daemon['register']}.changed"
+    roles = [r["role"] for r in yaml.safe_load((ANSIBLE / "site.yml").read_text())[0]["roles"]]
+    assert roles.index("base") < roles.index("app") < roles.index("datahub")

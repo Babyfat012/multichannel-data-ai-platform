@@ -32,6 +32,20 @@
   ansible.builtin.command: snap install aws-cli --classic
   args:
     creates: /snap/bin/aws
+# Docker mặc định không giới hạn json-log: 28/10 datahub-gms ghi 35 GB khi Kafka DataHub chết, góp phần
+# làm đầy EBS. Chỉ áp cho container tạo mới; app/datahub role sau đó compose up tạo lại.
+- name: Giới hạn log mỗi container 100 MB × 3 file
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    mode: '0644'
+    content: |
+      {"log-driver": "json-file", "log-opts": {"max-size": "100m", "max-file": "3"}}
+  register: docker_daemon
+- name: Khởi động lại Docker khi đổi cấu hình log
+  ansible.builtin.service:
+    name: docker
+    state: restarted
+  when: docker_daemon.changed
 - name: Bật Docker trên VM đích
   ansible.builtin.service:
     name: docker
