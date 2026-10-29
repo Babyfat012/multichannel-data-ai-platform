@@ -9,8 +9,28 @@ import os
 from kfp import dsl, kubernetes
 
 IMAGE = f"{os.environ.get('REGISTRY', 'localhost:5001')}/platform-train:{os.environ.get('TAG', '0.1.0')}"
-# Credential MinIO cho Feast đọc kho offline; Secret tạo từ .env lúc submit, không nằm trong YAML.
-SECRET = "platform-minio"
+# Đích chọn lúc biên dịch. aws: S3 thật qua Pod Identity của kubeflow/pipeline-runner (không key),
+# MLflow trên EC2 qua IP riêng. kind: MinIO, credential từ Secret tạo lúc submit (không nằm trong YAML).
+TARGET = os.environ.get("PIPELINE_TARGET", "kind")
+SECRET = "platform-minio" if TARGET == "kind" else None
+if TARGET == "aws":
+    FEAST_ROOT = f"s3://{os.environ['LAKEHOUSE_BUCKET']}/feature-store"
+    TRACKING_URI = os.environ["MLFLOW_TRACKING_URI"]
+    S3_ENV = {"AWS_REGION": os.environ.get("AWS_REGION", "ap-southeast-2")}
+else:
+    FEAST_ROOT = "s3://platform/feature-store"
+    TRACKING_URI = "http://mlflow:5000"
+    S3_ENV = {
+        "FEAST_S3_ENDPOINT_URL": "http://minio:9000",
+        "AWS_ENDPOINT_URL_S3": "http://minio:9000",
+    }
+FEAST_ENV = {
+    "FEAST_REGISTRY": f"{FEAST_ROOT}/registry.db",
+    "FEAST_SKU_DAILY_PATH": f"{FEAST_ROOT}/sku_daily",
+    "FEAST_SKU_RETURN_24H_PATH": f"{FEAST_ROOT}/sku_return_24h.parquet",
+    "FEAST_REDIS": "redis.feature-store.svc.cluster.local:6379",
+    **S3_ENV,
+}
 
 
 @dsl.component(base_image=IMAGE)
@@ -25,7 +45,14 @@ def load_features(entity_path: str, features: dsl.Output[dsl.Dataset]):
     fs = s3fs.S3FileSystem()
     entity = pd.read_parquet(entity_path.removeprefix("s3://"), filesystem=fs)
     store = FeatureStore("/opt/feature_repo")
-    frame = store.get_historical_features(entity_df=entity, features=FEAST_FEATURES).to_df()
+    # Kho offline file của Feast nối mỗi line với MỌI ảnh chụp ngày của SKU rồi mới lọc PIT:
+    # 360k line × ~180 ngày ≈ 65 tr dòng trung gian ⇒ OOM. Gọi theo lô, kết quả y hệt một lần.
+    # ponytail: lô 20k cố định; dữ liệu lớn hơn thì dùng offline store Spark (gap #22).
+    chunks = [entity.iloc[i : i + 20_000] for i in range(0, len(entity), 20_000)]
+    frame = pd.concat(
+        store.get_historical_features(entity_df=chunk, features=FEAST_FEATURES).to_df()
+        for chunk in chunks
+    )
     frame.to_parquet(features.path)
     print(f"{len(frame)} dòng, cột {list(frame.columns)}")
 
@@ -158,9 +185,9 @@ def register(
 
 @dsl.pipeline(name="return-risk-training", description="Feast offline → LightGBM → MLflow")
 def return_risk_training(
-    entity_path: str = "s3://platform/feature-store/training_lines",
+    entity_path: str = f"{FEAST_ROOT}/training_lines",
     test_days: int = 10,
-    tracking_uri: str = "http://mlflow:5000",
+    tracking_uri: str = TRACKING_URI,
     model_name: str = "return-risk",
 ):
     """Năm bước; mỗi bước nhận đúng artifact của bước trước."""
@@ -181,14 +208,21 @@ def return_risk_training(
         tracking_uri=tracking_uri,
         model_name=model_name,
     )
+    # Khai RAM để thiếu thì lỗi rõ ở pod, không bóp cả node: load giữ entity + feature PIT trong pandas.
+    loaded.set_memory_request("2G").set_memory_limit("4G")
+    for task in (parts, trained, scored, reg):
+        task.set_memory_request("1G").set_memory_limit("3G")
     for task in (loaded, parts, trained, scored, reg):
         task.set_caching_options(False)
         kubernetes.set_image_pull_policy(task, "IfNotPresent")
-        kubernetes.use_secret_as_env(
-            task,
-            secret_name=SECRET,
-            secret_key_to_env={
-                "AWS_ACCESS_KEY_ID": "AWS_ACCESS_KEY_ID",
-                "AWS_SECRET_ACCESS_KEY": "AWS_SECRET_ACCESS_KEY",
-            },
-        )
+        for name, value in FEAST_ENV.items():
+            task.set_env_variable(name, value)
+        if SECRET:
+            kubernetes.use_secret_as_env(
+                task,
+                secret_name=SECRET,
+                secret_key_to_env={
+                    "AWS_ACCESS_KEY_ID": "AWS_ACCESS_KEY_ID",
+                    "AWS_SECRET_ACCESS_KEY": "AWS_SECRET_ACCESS_KEY",
+                },
+            )

@@ -97,7 +97,15 @@ with DAG(
     export_training = PlatformSparkSubmitOperator(
         task_id="export_training_lines",
         application="/opt/spark_jobs/gold/export_training_lines.py",
-        application_args=["--cutoff", CUTOFF, "--output", SPARK_ROOT + "/training_lines"],
+        application_args=[
+            "--cutoff",
+            CUTOFF,
+            "--output",
+            SPARK_ROOT + "/training_lines",
+            # 2‰ ≈ 360k line: Feast PIT join offline chạy pandas trong MỘT pod KFP; 1% (1,8 tr) OOM node 8 GB.
+            "--sample-per-mille",
+            "2",
+        ],
         conn_id="spark_default",
         packages="{{ var.value.platform_spark_packages }},org.apache.hadoop:hadoop-aws:3.3.4",
         driver_memory="1g",

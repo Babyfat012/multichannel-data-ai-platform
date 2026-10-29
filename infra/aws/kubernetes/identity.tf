@@ -1,8 +1,9 @@
 # Pod Identity tách quyền ứng dụng khỏi role node; không tạo AWS access key tĩnh.
 data "aws_iam_policy_document" "pod_trust" {
   for_each = {
-    ebs            = { namespace = "kube-system", service_account = "ebs-csi-controller-sa" }
-    feature_reader = { namespace = "feature-store", service_account = "feature-api" }
+    ebs             = { namespace = "kube-system", service_account = "ebs-csi-controller-sa" }
+    feature_reader  = { namespace = "feature-store", service_account = "feature-api" }
+    pipeline_reader = { namespace = "kubeflow", service_account = "pipeline-runner" }
   }
   statement {
     actions = ["sts:AssumeRole", "sts:TagSession"]
@@ -79,5 +80,26 @@ resource "aws_eks_pod_identity_association" "feature_api" {
   namespace       = "feature-store"
   service_account = "feature-api"
   role_arn        = aws_iam_role.feature_reader.arn
+  depends_on      = [aws_eks_addon.pod_identity]
+}
+
+# Bước KFP (load_features) đọc training_lines + kho offline Feast; cùng quyền chỉ-đọc feature-store/*.
+# Ghi model đi qua MLflow server trên EC2 (proxy artifact), nên pod không cần quyền ghi S3.
+resource "aws_iam_role" "pipeline_reader" {
+  name               = "${var.name_prefix}-pipeline-reader"
+  assume_role_policy = data.aws_iam_policy_document.pod_trust["pipeline_reader"].json
+}
+
+resource "aws_iam_role_policy" "pipeline_reader" {
+  name   = "feature-store-read"
+  role   = aws_iam_role.pipeline_reader.id
+  policy = data.aws_iam_policy_document.feature_reader.json
+}
+
+resource "aws_eks_pod_identity_association" "pipeline_runner" {
+  cluster_name    = aws_eks_cluster.apps.name
+  namespace       = "kubeflow"
+  service_account = "pipeline-runner"
+  role_arn        = aws_iam_role.pipeline_reader.arn
   depends_on      = [aws_eks_addon.pod_identity]
 }

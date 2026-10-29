@@ -381,3 +381,32 @@ def test_mlflow_on_aws_uses_s3_iam_and_private_listener():
     )
     tasks = (ANSIBLE / "roles/app/tasks/main.yml").read_text()
     assert "docker compose --profile ml up -d --wait --wait-timeout 180 mlflow" in tasks
+
+
+def test_kfp_on_eks_reads_s3_by_pod_identity_without_minio():
+    """Image train không ghi cứng MinIO; pipeline-runner chỉ đọc feature-store/*; bản aws bỏ Secret."""
+    dockerfile = (ROOT / "docker/Dockerfile.train").read_text()
+    assert "minio:9000" not in dockerfile and "s3://platform/" not in dockerfile
+    identity = (ROOT / "infra/aws/kubernetes/identity.tf").read_text()
+    assert (
+        'pipeline_reader = { namespace = "kubeflow", service_account = "pipeline-runner" }'
+        in identity
+    )
+    block = identity[identity.index('resource "aws_iam_role_policy" "pipeline_reader"') :]
+    assert "data.aws_iam_policy_document.feature_reader.json" in block.split("}")[0]
+    reader = identity[identity.index('data "aws_iam_policy_document" "feature_reader"') :]
+    reader = reader[: reader.index('resource "aws_iam_role_policy" "feature_reader"')]
+    assert '"s3:GetObject"' in reader and "Put" not in reader and "Delete" not in reader
+    pipeline = (ROOT / "ml/training_pipeline.py").read_text()
+    assert 'SECRET = "platform-minio" if TARGET == "kind" else None' in pipeline
+    script = (ROOT / "scripts/run/run_training_pipeline.sh").read_text()
+    assert 'if [[ "$PIPELINE_TARGET" == aws ]]' in script and "REGISTRY phải là ECR" in script
+
+
+def test_training_sample_and_kfp_memory_fit_eks_nodes():
+    """Tập train 2‰ (1% từng OOM node 8 GB); mọi bước KFP khai RAM, load nhiều nhất."""
+    dag = (ROOT / "dags/ml_feature_materialize.py").read_text()
+    assert '"--sample-per-mille",\n            "2",' in dag
+    pipeline = (ROOT / "ml/training_pipeline.py").read_text()
+    assert 'loaded.set_memory_request("2G").set_memory_limit("4G")' in pipeline
+    assert 'task.set_memory_request("1G").set_memory_limit("3G")' in pipeline
