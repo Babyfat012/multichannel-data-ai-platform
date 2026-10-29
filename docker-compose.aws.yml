@@ -241,3 +241,12 @@ services:
     ports: !override
       - "127.0.0.1:${MLFLOW_PORT:-5050}:5000"
       - "${PLATFORM_PRIVATE_IP:?PLATFORM_PRIVATE_IP_required}:${MLFLOW_PORT:-5050}:5000"
+  # Vault trên EC2 (secret tập trung: mật khẩu UI, token…). Chỉ loopback, script ở laptop đi qua tunnel
+  # 8200; dữ liệu trên EBS để stop/start EC2 không mất (cổng 8200 có sẵn trong data_service_ports).
+  vault:
+    cpus: "0.25"
+    mem_limit: 256m
+    ports: !override
+      - "127.0.0.1:${VAULT_PORT:-8200}:8200"
+    volumes: !override
+      - /mnt/platform-data/vault:/vault/file

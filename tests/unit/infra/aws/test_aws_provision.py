@@ -468,3 +468,25 @@ def test_code_only_sync_tag_covers_bind_mounted_code():
     ]["airflow"]["volumes"]
     for code in ("./dags:", "./spark_jobs:", "./scripts:", "./feature_repo:"):
         assert any(v.startswith(code) for v in volumes), code
+
+
+def test_wave2_vault_ingress_and_letsencrypt_for_eks():
+    """Vault EC2 loopback + EBS; ingress NLB public; Let's Encrypt HTTP-01; mọi route dùng chung issuer."""
+    vault = yaml.load((ROOT / "docker-compose.aws.yml").read_text(), Loader=ComposeLoader)[
+        "services"
+    ]["vault"]
+    assert vault["ports"] == ["127.0.0.1:${VAULT_PORT:-8200}:8200"]
+    assert vault["volumes"] == ["/mnt/platform-data/vault:/vault/file"]
+    service = yaml.safe_load(
+        (ROOT / "infra/k8s/ingress/nginx-ingress-eks-values.yaml").read_text()
+    )["controller"]["service"]
+    assert service["type"] == "LoadBalancer"
+    assert service["annotations"]["service.beta.kubernetes.io/aws-load-balancer-type"] == "nlb"
+    issuer = yaml.safe_load((ROOT / "infra/k8s/ingress/issuer-letsencrypt-http01.yaml").read_text())
+    assert issuer["spec"]["acme"]["server"].startswith("https://acme-v02.")
+    assert issuer["spec"]["acme"]["solvers"] == [
+        {"http01": {"ingress": {"ingressClassName": "nginx"}}}
+    ]
+    script = (ROOT / "scripts/setup/setup_ingress.sh").read_text()
+    assert script.count('-e "s/cluster-issuer: platform-local-ca/cluster-issuer: $issuer/"') == 2
+    assert ': "${LE_EMAIL:?' in script and "ROOT=${VAULT_TOKEN:-" in script
