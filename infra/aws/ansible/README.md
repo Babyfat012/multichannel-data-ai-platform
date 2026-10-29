@@ -19,6 +19,8 @@ cp inventory.example.ini inventory.ini                 # instance_id, region
 cp group_vars/all.example.yml group_vars/all.yml       # output Terraform + secret
 ansible-vault encrypt group_vars/all.yml
 ansible-playbook -i inventory.ini site.yml --ask-vault-pass
+# Chỉ đổi dags/, spark_jobs/, scripts/, trino/ (bind mount): đồng bộ code, ~1 phút, không restart
+ansible-playbook -i inventory.ini site.yml --ask-vault-pass --tags code
 # Tùy chọn: sinh nguồn và đẩy lên S3, rồi smoke ghi đọc Iceberg
 ansible-playbook -i inventory.ini site.yml --ask-vault-pass --tags source_data
 ansible-playbook -i inventory.ini site.yml --ask-vault-pass --tags smoke

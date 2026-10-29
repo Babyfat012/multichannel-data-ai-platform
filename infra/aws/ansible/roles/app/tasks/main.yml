@@ -56,6 +56,9 @@
       - '--exclude=infra/aws/kubernetes/'
       - '--exclude=.archive/'
   register: app_sync
+  # --tags code: chỉ đồng bộ code (dags/, spark_jobs/, scripts/, trino/ được bind mount nên không cần
+  # restart). Đổi compose/.env/Dockerfile thì vẫn chạy cả playbook.
+  tags: [code]
 - name: Tạo các thư mục persistent cho Spark
   ansible.builtin.file:
     path: '/mnt/platform-data/{{ item }}'

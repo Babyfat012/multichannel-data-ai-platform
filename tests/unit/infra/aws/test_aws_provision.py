@@ -456,3 +456,15 @@ def test_trino_on_aws_uses_iam_catalog_on_loopback_only_when_measuring():
     lake = (ROOT / "trino/catalog-aws/lakehouse.properties").read_text()
     assert "aws-access-key" not in lake and "minio" not in lake and "s3.endpoint" not in lake
     assert "iceberg.rest-catalog.warehouse=${ENV:WAREHOUSE_NAME}" in lake
+
+
+def test_code_only_sync_tag_covers_bind_mounted_code():
+    """--tags code chỉ chạy rsync; các thư mục code nó mang lên đều là bind mount của Airflow."""
+    tasks = yaml.safe_load((ANSIBLE / "roles/app/tasks/main.yml").read_text())
+    tagged = [t["name"] for t in tasks if "code" in t.get("tags", [])]
+    assert tagged == ["Đồng bộ repo bằng rsync, loại secret và thư mục phát sinh"]
+    volumes = yaml.load((ROOT / "docker-compose.aws.yml").read_text(), Loader=ComposeLoader)[
+        "services"
+    ]["airflow"]["volumes"]
+    for code in ("./dags:", "./spark_jobs:", "./scripts:", "./feature_repo:"):
+        assert any(v.startswith(code) for v in volumes), code
