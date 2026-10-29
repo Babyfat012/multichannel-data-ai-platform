@@ -21,6 +21,7 @@ os.environ.setdefault("SPARK_LOCAL_HOSTNAME", "localhost")
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
 
 from spark_jobs.lib.order_snapshot_ml import sku_daily_features, training_rows
 
@@ -78,7 +79,7 @@ def main():
             FACT,
             "order_line_key string, seller_sku string, created_at timestamp, channel string, "
             "country string, currency string, quantity int, line_net_amount decimal(14,2)",
-        )
+        ).withColumn("run_id", F.lit("fact-run"))  # Gold thật có run_id riêng: bắt join mơ hồ
         labels = spark.createDataFrame(
             LABELS, "order_line_key string, label int, label_available_at timestamp, run_id string"
         )

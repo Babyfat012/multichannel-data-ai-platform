@@ -44,7 +44,9 @@ def training_rows(fact: DataFrame, labels: DataFrame, cutoff, per_mille: int) ->
     """Line có nhãn biết trước cutoff + thuộc tính lúc đặt; giữ `per_mille`/1000 theo hash khóa."""
     sampled = fact.filter(F.pmod(F.xxhash64("order_line_key"), F.lit(1000)) < per_mille)
     known = labels.filter(F.col("label_available_at") <= F.lit(cutoff).cast("timestamp"))
-    return sampled.join(known.select("order_line_key", "label", "run_id"), "order_line_key").select(
+    # Fact Gold cũng có cột run_id (run dựng fact): đổi tên run nhãn trước khi join cho khỏi mơ hồ.
+    label_run = known.select("order_line_key", "label", F.col("run_id").alias("label_run_id"))
+    return sampled.join(label_run, "order_line_key").select(
         F.lit(DATASET_VERSION).alias("dataset_version"),
         F.col("order_line_key").alias("line_id"),
         "seller_sku",
@@ -56,7 +58,7 @@ def training_rows(fact: DataFrame, labels: DataFrame, cutoff, per_mille: int) ->
         F.col("quantity").alias("ordered_basis_qty"),
         minor_units(F.col("line_net_amount"), F.col("currency")).alias("ordered_product_net_minor"),
         "label",
-        F.col("run_id").alias("generation_id"),
+        F.col("label_run_id").alias("generation_id"),
     )
 
 
