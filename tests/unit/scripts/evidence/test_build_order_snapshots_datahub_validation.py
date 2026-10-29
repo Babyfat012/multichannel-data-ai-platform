@@ -186,9 +186,9 @@ def test_publisher_aws_only_draws_dags_that_ran_with_s3_sources():
 
 
 def test_publisher_default_keeps_local_lineage():
-    """Không truyền tuỳ chọn: giữ nguyên năm DAG và nguồn local như bằng chứng cũ."""
+    """Không truyền tuỳ chọn: đủ sáu DAG (dp1 → dp4) và nguồn local như bằng chứng cũ."""
     names = publisher.datasets_of(publisher.job_map())
-    assert len(publisher.job_map()) == 5
+    assert len(publisher.job_map()) == 6
     assert publisher.RAW_AMAZON in names and publisher.CDC in names
 
 
@@ -201,9 +201,50 @@ def test_builder_dags_only_reads_selected_runs(tmp_path, monkeypatch):
     out = tmp_path / "out.json"
     monkeypatch.setattr(
         "sys.argv",
-        ["x", "--logs-root", str(tmp_path), "--output", str(out),
-         "--run", "dp3_features=r1", "--dags", "dp3_features"],
+        [
+            "x",
+            "--logs-root",
+            str(tmp_path),
+            "--output",
+            str(out),
+            "--run",
+            "dp3_features=r1",
+            "--dags",
+            "dp3_features",
+        ],
     )
     builder.main()
     checks = __import__("json").loads(out.read_text())["checks"]
     assert [c["task_id"] for c in checks] == ["validate_return_features"]
+
+
+WAREHOUSE_LOG = (
+    "Warehouse warehouse.fact_order_lines_30d_dp2 [2026-05-31 00:00:00 → 2026-06-30 00:00:00): "
+    "gold={'amazon': 5, 'walmart': 2, 'tiktok_shop': 1, 'shopify': 1, 'shopee': 1} "
+    "postgres={'amazon': 5, 'walmart': 2, 'tiktok_shop': 1, 'shopify': 1, 'shopee': 1}\n"
+    "Warehouse đã ghi + index seller_sku: warehouse.fact_order_lines_30d_dp2; rows=10\n"
+)
+
+
+def test_warehouse_check_counts_per_channel_and_lineage_on_postgres():
+    """dp4: assertion từ dòng đối soát; kênh lệch thì chặn; lineage FACT → bảng PostgreSQL."""
+    metrics, _, _ = builder.metrics_for(
+        "dp4_warehouse", "export_and_index_warehouse", WAREHOUSE_LOG
+    )
+    assert metrics == {
+        "dataset_rows": 10,
+        "source_rows": 10,
+        "bad_channel_counts": 0,
+        "missing_channels": 0,
+    }
+    with pytest.raises(ValueError):
+        builder.metrics_for(
+            "dp4_warehouse",
+            "export_and_index_warehouse",
+            WAREHOUSE_LOG.replace("postgres={'amazon': 5", "postgres={'amazon': 4"),
+        )
+    jobs = publisher.job_map(None, ("dp4_warehouse",))
+    assert jobs == {
+        "dp4_warehouse": {"export_and_index_warehouse": ([publisher.FACT], [publisher.WAREHOUSE])}
+    }
+    assert publisher.platform_of(publisher.WAREHOUSE) == "postgres"

@@ -26,7 +26,20 @@ LABELS_LEGACY = "lakehouse.gold.fact_walmart_return_labels_dp3"
 # lịch sử của run 2026-10-13; không còn job nào ghi vào nó.
 CDC = "lakehouse.bronze.raw_walmart_cdc_v2"
 CDC_LEGACY = "lakehouse.bronze.raw_walmart_cdc"
-DATASETS = (*BRONZE.values(), *SILVER.values(), FACT, DIM, FEATURE, LABELS, LABELS_LEGACY, CDC, CDC_LEGACY)
+# DP4: 30 ngày Gold năm Channel trên PostgreSQL EC2 (warehouse phục vụ tra theo SKU, có index).
+WAREHOUSE = "warehouse.fact_order_lines_30d_dp2"
+DATASETS = (
+    *BRONZE.values(),
+    *SILVER.values(),
+    FACT,
+    DIM,
+    FEATURE,
+    LABELS,
+    LABELS_LEGACY,
+    CDC,
+    CDC_LEGACY,
+    WAREHOUSE,
+)
 FAILURE_PREFIXES = (
     "invalid",
     "duplicate",
@@ -51,6 +64,7 @@ SOURCE_DATASETS = {
     **{name: "file" for name in RAW_FILES.values()},
     RAW_WALMART: "postgres",
     KAFKA_WALMART_CDC: "kafka",
+    WAREHOUSE: "postgres",
 }
 
 
@@ -94,6 +108,9 @@ def job_map(
         },
         "dp3_return_labels": {
             "build_and_validate_return_labels": ([FACT], [LABELS]),
+        },
+        "dp4_warehouse": {
+            "export_and_index_warehouse": ([FACT], [WAREHOUSE]),
         },
     }
     return {dag: tasks for dag, tasks in jobs.items() if dags is None or dag in dags}

@@ -26,6 +26,7 @@ RUNS = {
     "dp3_features": "manual__2026-10-14T04:11:15+00:00",
     # Chưa có run mặc định (bản Walmart-only cũ chạy 2026-10-14): truyền --run dp3_return_labels=...
     "dp3_return_labels": "",
+    "dp4_warehouse": "",
 }
 CHANNELS = ("amazon", "walmart", "tiktok_shop", "shopify", "shopee")
 LEGACY_CDC_TABLE = "lakehouse.bronze.raw_walmart_cdc"
@@ -199,6 +200,18 @@ def metrics_for(dag: str, task: str, log: str) -> tuple[dict[str, int], str, str
             ),
         }
         rule = "Bridge nhãn năm Channel có dòng ở mọi kênh; không lỗi và không trùng khóa"
+    elif task == "export_and_index_warehouse":
+        match = re.search(r"gold=(\{[^}]*\}) postgres=(\{[^}]*\})", log)
+        if match is None:
+            raise ValueError("Missing metric: gold/postgres warehouse")
+        gold, loaded = (ast.literal_eval(part) for part in match.groups())
+        metrics = {
+            "dataset_rows": number(r"index seller_sku: \S+; rows=([\d,]+)", log),
+            "source_rows": sum(gold.values()),
+            "bad_channel_counts": sum(gold.get(c, 0) != loaded.get(c, 0) for c in CHANNELS),
+            "missing_channels": sum(gold.get(c, 0) <= 0 for c in CHANNELS),
+        }
+        rule = "Warehouse 30 ngày khớp Gold theo từng Channel (đủ 5 kênh) trước khi tạo index"
     else:
         raise ValueError(f"Unknown validation task: {dag}.{task}")
     if metrics.get("dataset_rows", 0) <= 0 or any(
@@ -285,6 +298,7 @@ def main() -> None:
                 "lakehouse.gold.fact_return_labels_dp3",
             )
         ]
+        + [("dp4_warehouse", "export_and_index_warehouse", "warehouse.fact_order_lines_30d_dp2")]
     )
     checks = []
     for dag, task, dataset in (t for t in tasks if t[0] in args.dags):
