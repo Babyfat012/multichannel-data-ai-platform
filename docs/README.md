@@ -20,7 +20,7 @@ Bắt đầu: [phạm vi và code](data-platform.md) · [kiến trúc](diagrams/
 | Storage và truy vấn | [Storage](storage.md), [Trino](trino.md), [warehouse order lifecycle](warehouse-order-lifecycle.md) |
 | Streaming và CDC | [Flink v1](flink.md), [stream order lifecycle](stream-order-lifecycle.md), [CDC v1](cdc.md), [CDC order lifecycle](cdc-order-lifecycle.md) |
 | Điều phối và governance | [Airflow v1](airflow.md), [Airflow order lifecycle](airflow-order-lifecycle.md), [DataHub v1](datahub.md), [DataHub order lifecycle](datahub-order-lifecycle.md) |
-| Kiểm chứng đầu-cuối | [E2E order lifecycle local](e2e-order-lifecycle-local.md), [evidence](data-platform-evidence.md) |
+| Kiểm chứng đầu-cuối | [E2E order lifecycle local](e2e-order-lifecycle-local.md), [evidence](data-platform-evidence.md), [kiểm kê rubric × cloud](rubric-cloud-audit.md) |
 | Các cơ chế mở rộng | [Tổng quan](data-integration.md), [data contract](data-contracts.md), [Iceberg maintenance](iceberg-maintenance.md) |
 
 ## ML Platform

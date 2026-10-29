@@ -1,0 +1,85 @@
+# Rubric × cloud — kiểm kê 2026-10-29
+
+Nguồn: `edai-k11-cw/rubic/EDAI K11 - MLE.xlsx`, sheet `de` (100đ) và `mle` (100đ). Nguyên tắc learner chốt:
+mọi dòng phải có bằng chứng **triển khai trên AWS**; thiếu là phải làm. Bằng chứng cloud ghi ở
+[data-platform-evidence.md](data-platform-evidence.md) mục "Trên AWS"; bằng chứng local ở
+[ml-llm-platform-evidence.md](ml-llm-platform-evidence.md).
+
+Ký hiệu: ✅ có bằng chứng AWS · ⚠️ có trên AWS nhưng thiếu phần rubric đòi · ❌ chỉ local / chưa có.
+
+## Sheet `de`
+
+| Dòng rubric | Điểm | Trạng thái | Việc còn lại |
+|---|---|---|---|
+| Docker & Compose + optimize Dockerfile | 2+3 | ✅ | Compose chạy trên EC2; số đo multistage 2,39 GB → 698 MB (đo local, cùng Dockerfile) |
+| Generator offline: skew, schema evolution, duplicate, lưu nguồn | 2×4 | ✅ | 100 GB sinh trên EC2, raw S3 + Postgres EC2 |
+| Generator online: late arrival, duplicate stream | 2×2 | ✅ | Kafka + producer trên EC2 |
+| Spark baseline / skew / schema evolution / other + Spark UI | 2+3+3+3 | ⚠️ | Pipeline chạy AWS, nhưng tài liệu tối ưu + ảnh Spark UI skew là số local. **Làm:** đo baseline vs xử lý skew trên AWS (Spark UI EC2) |
+| Spark job tích hợp pipeline | 2 | ✅ | dp1–dp3 trên Airflow EC2 |
+| Flink baseline / late arrival / other / window | 2+3+3+2 | ✅ | 5 job Flink trên EC2, ảnh Flink UI |
+| Lakehouse optimize (compaction/partition) | 3 | ⚠️ | `maintenance_iceberg` chạy nhưng no-op (1 file/partition). **Làm:** chạy compaction trên bảng có file nhỏ thật để có trước/sau |
+| Warehouse indexing | 3 | ❌ | **Làm:** `dp4_warehouse` + EXPLAIN trước/sau |
+| DP1 / DP2 / DP3 ingest + validate | 2×6 | ✅ | Airflow AWS |
+| DataHub lineage + validation DP1/DP2/DP3 | 2×6 | ✅ | DataHub EC2, 5 DAG. **Làm thêm:** publish `dp3_return_labels`, `dp4_warehouse` |
+| Schema: zones, SCD2, feat_, dim–fact, naming | 2×5 | ✅ | Tài liệu bảng Gold A (cùng bảng trên AWS) |
+| Novel idea 1: Trino federation | 10 | ❌ | Trino tắt trên AWS. **Làm:** bật Trino EC2, chạy lại truy vấn liên nguồn Iceberg + Postgres |
+| Novel idea 2: CDC Debezium | 10 | ✅ | Debezium EC2, probe c/u/d |
+
+## Sheet `mle`
+
+| Dòng rubric | Điểm | Trạng thái | Việc còn lại |
+|---|---|---|---|
+| LLM inference platform + benchmark | 2+2 | ❌ | llama.cpp Qwen lên EKS + benchmark |
+| Custom LLM model | 2 | ❌ | GGUF tự host trên EKS |
+| agentgateway + security/policy | 1 | ❌ | agentgateway trên EKS |
+| Global model config | 2 | ❌ | `default-model-config` → agentgateway |
+| Agent registry | 2 | ❌ | agentregistry trên EKS + ảnh UI |
+| RAG pipeline (Airflow) + governance (DataHub) | 2+2 | ❌ | pgvector EKS, DAG `ml_rag_ingest` trên Airflow EC2, lineage DataHub |
+| Materialize offline → online | 2 | ✅ | `ml_feature_materialize` 4/4 |
+| Push streaming feature → offline + online | 2 | ❌ | Flink `sku_return_24h` + feast-pusher trên AWS (hiện file rỗng) |
+| KFP training ≥4 bước | 2 | ✅ | `train-aws-3` 5/5 |
+| MLflow version model + data + tag | 2 | ✅ | v1 `production` |
+| KServe model-inside-image | 2 | ✅ | predict OK |
+| FastAPI + pydantic + healthcheck / async / MCP helm rolling + fallback | 1+1+2 | ❌ | Feature API trên EKS (`deploy_feature_api.sh` nhánh s3) |
+| Agent 1 multi-replica + KEDA, Sandbox, publish | 2+1+1 | ❌ | data-agent + KEDA trên EKS; Sandbox (Substrate) local cũng chưa có |
+| Agent 2: online feature + predict + RAG | 8 | ❌ | model-agent trên EKS |
+| MCP gateway / A2A gateway | 2+2 | ❌ | agentgateway route `/mcp`, A2A |
+| Coordinator multi-replica + KEDA, publish | 2+2 | ❌ | coordinator + KEDA trên EKS |
+| Warm Up (Agent Substrate) | 2 | ❌ | Local cũng chưa có (cần gVisor) |
+| Unit coverage, EP/BVA, mutation, property-based | 1+2+2+2 | ✅ | Kiểm ở mức code (PR testing), không phụ thuộc nơi chạy |
+| Load test locust Web API | 2 | ⚠️ | Rubric ghi "Local Testing"; nên chạy lại trên Feature API EKS khi có |
+| CI/CD RAG / agent / coordinator / stream feature | 2×4 | ❌ | Jenkins local; cần đích ECR + EKS |
+| NGINX: Grafana, log, trace, agent UI, registry UI | 2×5 | ❌ | ingress-nginx trên EKS |
+| Basic auth + rate limit | 2 | ❌ | annotation ingress |
+| Domain + HTTPS Web API | 1 | ❌ | |
+| Terraform / Ansible | 1+1 | ✅ | Terraform AWS + Ansible chạy thật (cập nhật dòng cũ "chưa kiểm chứng") |
+| Observability: Web API metrics, Prom+Grafana, logs, traces | 1×4 | ❌ | stack observability trên EKS |
+| LLM telemetry (token, TTFT…) / Agent telemetry | 2+2 | ❌ | |
+| A/B agent / A/B LLM | 1+1 | ❌ | |
+| Vault | 1 | ❌ | |
+| README + docs theo rule | 2 | ⚠️ | Thêm sơ đồ triển khai AWS tổng thể |
+| Novel idea 1 / 2 | 2+2 | ❓ | Chưa xác định ý tưởng MLE; cần chốt |
+
+## Ước lượng
+
+- `de`: ~73đ ✅ chắc; ⚠️/❌ còn ~27đ (Spark skew AWS, compaction thật, index, Trino).
+- `mle`: ~17đ ✅ (materialize 2, KFP 2, MLflow 2, KServe 2, testing 7, IaC 2); ⚠️ 4đ; ❓ novel 4đ; ❌ ~75đ.
+- Ràng buộc: EKS 2 × c6i.xlarge (8 GB), quota 16 vCPU đã dùng hết.
+
+## Cấu hình và kế hoạch chốt (learner duyệt 29/10)
+
+Cấu hình: EC2 `r6i.xlarge` (4 vCPU/32 GB, IP riêng 10.42.0.12 giữ nguyên khi đổi type), 2 node EKS
+`r6i.xlarge` (2 × 4 vCPU/32 GB). 12/16 vCPU quota. ~1,1 USD/giờ khi bật cả hai; ~0,18 USD/giờ khi tắt hết
+(EKS control plane 0,10 + EBS). Ngân sách tính 100 USD ⇒ chạy theo đợt, tắt khi nghỉ (~10 ngày).
+gVisor KHÔNG cài qua launch template (sai key containerd 1.x/2.x có thể làm node không join) ⇒ DaemonSet ở đợt 5.
+
+| Đợt | Bật | Việc |
+|---|---|---|
+| 0 | cả hai | Terraform EC2 + EKS đổi type; Ansible với `feast_redis` = IP node mới; materialize lại |
+| 1 | EC2 | dp4_warehouse + EXPLAIN; compaction có trước/sau thật; đo skew AWS; Trino liên nguồn; DataHub 2 DAG mới |
+| 2 | EKS | Mạng public cho Ingress (LB AWS, tag subnet, SG 80/443, domain DuckDNS) → ingress-nginx + basic auth + rate limit + HTTPS; Prometheus/Grafana/Loki/Jaeger (+ alert đĩa, slot lag, retry: gap #7 #8 #17 #20); Vault; KEDA |
+| 3 | EKS | llama.cpp Qwen + benchmark; agentgateway; model config; registry; Feature API (MCP, helm); data-agent, model-agent, coordinator + KEDA; MCP/A2A gateway; Langfuse; telemetry LLM + agent |
+| 4 | cả hai | RAG (Airflow → pgvector) + lineage DataHub; stream push (Flink → feast-pusher, gap #5 #12); materialize lại |
+| 5 | EKS (+EC2) | Jenkins 4 pipeline (gap #9); A/B agent + LLM; gVisor DaemonSet + Substrate (Sandbox, Warm Up) |
+| 6 | — | README + sơ đồ AWS; evidence; chốt 2 Novel MLE; commit |
+| 7 | tuỳ | Gap loại 2 còn lại: nhỏ trước #10 #15 #19 #14 #6, lớn sau #3 #22 #18 (#11 nói thật) |

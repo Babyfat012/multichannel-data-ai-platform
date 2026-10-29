@@ -214,5 +214,75 @@
       "fingerprint": "-2551885948954549477803"
     },
     "note": "1 file/partition ngày (180 ngày, trung bình ~2,6 MB/file) nên không có gì để gộp; compaction no-op đúng dự đoán. Gap #16: partition theo ngày cho kênh nhỏ."
+  },
+  "airflow_ml_feature_materialize": {
+    "dag_run": "manual__2026-10-29T00:30:43+00:00",
+    "tasks_success": "4/4",
+    "outputs": [
+      "s3://platform-665116832975-lakehouse/feature-store/sku_daily",
+      "s3://platform-665116832975-lakehouse/feature-store/training_lines",
+      "s3://platform-665116832975-lakehouse/feature-store/registry.db"
+    ],
+    "online_store": "Redis EKS NodePort 10.42.0.121:30379",
+    "credentials": "IAM role platform-data-platform-vm (không access key)",
+    "cutoff": "2026-06-30T00:00:00Z",
+    "training_sample": "10 per mille hash(order_line_key)",
+    "failures_fixed": [
+      "export_training_lines: AMBIGUOUS_REFERENCE run_id",
+      "feast_apply: /opt/feature_repo không mount trong overlay AWS"
+    ],
+    "limitation": "sku_return_24h.parquet rỗng: stream pusher chưa chạy trên AWS",
+    "evidence": [
+      "ml-feature-materialize-feast-apply-log-20261029.png",
+      "ml-feature-materialize-graph-20261029.png",
+      "ml-feature-materialize-gantt-20261029.png"
+    ]
+  },
+  "ml_eks": {
+    "kfp": {
+      "version": "2.17.2",
+      "run": "train-aws-3",
+      "state": "SUCCEEDED",
+      "duration": "0:10:42",
+      "image": "665116832975.dkr.ecr.ap-southeast-2.amazonaws.com/platform/platform-train:9d49807-m3b",
+      "training_rows": 359457,
+      "sample_per_mille": 2,
+      "failed_attempts": 4,
+      "run_id": "0485ebd9-d74f-4db9-9b70-aaac07e5cb24"
+    },
+    "mlflow": {
+      "host": "EC2 10.42.0.12:5050",
+      "artifacts": "s3://platform-665116832975-lakehouse/mlflow",
+      "run": "mysterious-flea-253",
+      "model": "return-risk",
+      "version": 1,
+      "alias": "production",
+      "pr_auc_model": "≈0.25",
+      "pr_auc_baseline": "≈0.25",
+      "beats_baseline": 1,
+      "lift_model": 2.25,
+      "prevalence": 0.11,
+      "test_rows": 16411
+    },
+    "kserve": {
+      "version": "0.21.0",
+      "mode": "RawDeployment",
+      "image": "665116832975.dkr.ecr.ap-southeast-2.amazonaws.com/platform/platform-return-risk:v1-9d49807-m4a-55e51c6b",
+      "ready": true,
+      "smoke": {
+        "request": {
+          "seller_sku": "APP-00042",
+          "channel": "amazon",
+          "country": "US",
+          "ordered_basis_qty": 1,
+          "ordered_product_net_minor": 2500
+        },
+        "response": {
+          "score": 0.1660696886792393,
+          "abstain": false,
+          "model_version": "1"
+        }
+      }
+    }
   }
 }
