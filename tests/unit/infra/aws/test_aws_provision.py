@@ -153,9 +153,11 @@ def test_overlay_fits_c6i_2xlarge_without_keys_or_gcs():
         return float(value[:-1]) / (1024 if value.endswith("m") else 1)
 
     # cpus là trần, không giữ chỗ: 6 cho Data Platform + 0,25 MLflow (rảnh trừ lúc KFP register model).
+    # Từ 29/10 EC2 là r6i.xlarge (4 vCPU/32 GiB): trần CPU cộng lại vượt 4 là có chủ đích (Spark nặng đã
+    # chạy xong; job còn lại nhỏ), RAM thì dư gấp đôi.
     assert sum(float(services[n]["cpus"]) for n in running) <= 6.25
     assert sum(gib(str(services[n]["mem_limit"])) for n in running) <= 15
-    for name in ("minio", "kafka", "flink-jobmanager", "trino"):
+    for name in ("minio", "kafka", "flink-jobmanager"):
         assert services[name]["profiles"] == ["disabled-aws"]
     assert services["airflow"]["environment"][
         "AIRFLOW_VAR_PLATFORM_ORDER_LIFECYCLE_SOURCE_ROOT"
@@ -433,3 +435,24 @@ def test_training_sample_and_kfp_memory_fit_eks_nodes():
     pipeline = (ROOT / "ml/training_pipeline.py").read_text()
     assert 'loaded.set_memory_request("2G").set_memory_limit("4G")' in pipeline
     assert 'task.set_memory_request("1G").set_memory_limit("3G")' in pipeline
+
+
+def test_ec2_allows_memory_optimized_r6i_within_quota():
+    """r6i.xlarge (4 vCPU/32 GiB) được phép: cùng quota vCPU, gấp đôi RAM cho DataHub/Trino/Kafka cùng lúc."""
+    text = (ROOT / "infra/aws/terraform/variables.tf").read_text()
+    block = text[text.index('variable "instance_type"') :]
+    assert '"r6i.xlarge"' in block[: block.index("}\n}")]
+
+
+def test_trino_on_aws_uses_iam_catalog_on_loopback_only_when_measuring():
+    """Trino AWS: catalog S3 không key/endpoint MinIO, cổng loopback, chỉ bật theo profile query."""
+    trino = yaml.load((ROOT / "docker-compose.aws.yml").read_text(), Loader=ComposeLoader)[
+        "services"
+    ]["trino"]
+    assert trino["profiles"] == ["query"]
+    assert trino["volumes"] == ["./trino/catalog-aws:/etc/trino/catalog:ro"]
+    assert trino["ports"] == ["127.0.0.1:${TRINO_PORT:-8083}:8080"]
+    assert "minio" not in trino["depends_on"]
+    lake = (ROOT / "trino/catalog-aws/lakehouse.properties").read_text()
+    assert "aws-access-key" not in lake and "minio" not in lake and "s3.endpoint" not in lake
+    assert "iceberg.rest-catalog.warehouse=${ENV:WAREHOUSE_NAME}" in lake

@@ -195,9 +195,22 @@ services:
   flink-taskmanager:
     profiles: !override [disabled-aws]
     scale: 0
+  # Trino liên nguồn (Novel #1): Iceberg trên S3 qua IAM role + PostgreSQL EC2; chỉ bật khi đo
+  # (--profile query), nghe loopback, xem UI qua tunnel 8083.
   trino:
-    profiles: !override [disabled-aws]
-    scale: 0
+    profiles: !override [query]
+    cpus: "1"
+    mem_limit: 3g
+    depends_on: !override
+      lakekeeper: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+    environment: !override
+      <<: *s3-env
+      WAREHOUSE_NAME: ${WAREHOUSE_NAME:-}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes: !override
+      - ./trino/catalog-aws:/etc/trino/catalog:ro
     ports: !override
       - "127.0.0.1:${TRINO_PORT:-8083}:8080"
   debezium-connect:
