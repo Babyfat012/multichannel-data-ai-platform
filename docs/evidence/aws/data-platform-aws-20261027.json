@@ -284,5 +284,130 @@
         }
       }
     }
+  },
+  "airflow_dp4_warehouse": {
+    "dag_run": "manual__2026-10-29T08:34:06.602356+00:00",
+    "attempt": 3,
+    "table": "warehouse.fact_order_lines_30d_dp2",
+    "window": "[2026-05-31, 2026-06-30)",
+    "rows": 37045741,
+    "table_mb": 5513,
+    "index_mb": 250,
+    "jdbc_write_s": 686,
+    "explain": {
+      "APP-00482": {
+        "rows": 4517,
+        "before": {
+          "plan": "Parallel Seq Scan",
+          "buffers_read": 690595,
+          "ms": 42567.429
+        },
+        "after": {
+          "plan": "Bitmap Index Scan",
+          "buffers_read": 4475,
+          "ms": 1497.187
+        }
+      },
+      "ELE-01103": {
+        "rows": 2011389,
+        "before": {
+          "plan": "Parallel Seq Scan",
+          "buffers_read": 690558,
+          "ms": 41744.754
+        },
+        "after": {
+          "plan": "Parallel Seq Scan (planner bỏ index)",
+          "buffers_read": 690502,
+          "ms": 41304.405
+        }
+      }
+    },
+    "failures_fixed": [
+      "thiếu runtime_groups postgres (KeyError POSTGRES_PASSWORD)",
+      "schema warehouse chưa tồn tại"
+    ]
+  },
+  "novel_trino_federation": {
+    "engine": "trino 483 (EC2, profile query)",
+    "catalogs": [
+      "lakehouse (Iceberg REST + S3 IAM)",
+      "postgres (EC2)"
+    ],
+    "sku": "APP-00482",
+    "window": "[2026-05-31, 2026-06-30)",
+    "iceberg": {
+      "rows": 4517,
+      "net": "49632312.55"
+    },
+    "postgres": {
+      "rows": 4517,
+      "net": "49632312.55"
+    },
+    "match": true
+  },
+  "lakehouse_repartition_shopee": {
+    "table": "lakehouse.bronze.raw_shopee_orders_dp1",
+    "change": "identity(export_date) -> months(export_date) + rewrite_data_files rewrite-all",
+    "status": "success",
+    "before": {
+      "data_files": 180,
+      "avg_file_mb": 2.44,
+      "count_all_s": 1.04,
+      "last_30_days_s": 7.943
+    },
+    "after": {
+      "data_files": 6,
+      "avg_file_mb": 73.13,
+      "count_all_s": 0.286,
+      "last_30_days_s": 0.968
+    },
+    "rows": 4689957,
+    "fingerprint": "-2551885948954549477803",
+    "fingerprint_equal": true,
+    "receipt": "/mnt/platform-data/airflow/logs/iceberg-maintenance/repartition-shopee.json"
+  },
+  "spark_skew_aws": {
+    "machine": "EC2 r6i.xlarge, Spark 2 worker x 2 core",
+    "sample_days": 20,
+    "aqe": "off",
+    "rows": 12627457,
+    "hash_runs_s": [
+      93.8,
+      88.7,
+      90.7
+    ],
+    "hash_mean_s": 91.1,
+    "noise_s": 5.1,
+    "hash_files": 20,
+    "hash_avg_mb": 47.3,
+    "none_s": 71.6,
+    "none_delta_pct": -21.4,
+    "none_files": 309,
+    "none_avg_mb": 3.1,
+    "spark_ui": {
+      "hash_stages": 2,
+      "hash_tasks": 314,
+      "none_stages": 1,
+      "none_tasks": 114,
+      "stage1_median_ms": 2,
+      "stage1_max_s": 12,
+      "stage1_max_records": 2173164
+    },
+    "decision": "giữ hash"
+  },
+  "datahub_six_dags": {
+    "dags": [
+      "dp1_bronze",
+      "dp1_cdc",
+      "dp2_silver",
+      "dp3_features",
+      "dp3_return_labels",
+      "dp4_warehouse"
+    ],
+    "datasets": 22,
+    "jobs": 30,
+    "assertions_pass": 16,
+    "manifest": "docs/evidence/aws/datahub-validation-aws-20261029.json",
+    "return_labels_rows": 179436428
   }
 }

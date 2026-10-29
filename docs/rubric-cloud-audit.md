@@ -14,15 +14,15 @@ Ký hiệu: ✅ có bằng chứng AWS · ⚠️ có trên AWS nhưng thiếu ph
 | Docker & Compose + optimize Dockerfile | 2+3 | ✅ | Compose chạy trên EC2; số đo multistage 2,39 GB → 698 MB (đo local, cùng Dockerfile) |
 | Generator offline: skew, schema evolution, duplicate, lưu nguồn | 2×4 | ✅ | 100 GB sinh trên EC2, raw S3 + Postgres EC2 |
 | Generator online: late arrival, duplicate stream | 2×2 | ✅ | Kafka + producer trên EC2 |
-| Spark baseline / skew / schema evolution / other + Spark UI | 2+3+3+3 | ⚠️ | Pipeline chạy AWS, nhưng tài liệu tối ưu + ảnh Spark UI skew là số local. **Làm:** đo baseline vs xử lý skew trên AWS (Spark UI EC2) |
+| Spark baseline / skew / schema evolution / other + Spark UI | 2+3+3+3 | ✅ | 29/10: đo skew trên AWS + Spark UI History EC2 ([spark.md 5g](spark.md)) |
 | Spark job tích hợp pipeline | 2 | ✅ | dp1–dp3 trên Airflow EC2 |
 | Flink baseline / late arrival / other / window | 2+3+3+2 | ✅ | 5 job Flink trên EC2, ảnh Flink UI |
-| Lakehouse optimize (compaction/partition) | 3 | ⚠️ | `maintenance_iceberg` chạy nhưng no-op (1 file/partition). **Làm:** chạy compaction trên bảng có file nhỏ thật để có trước/sau |
-| Warehouse indexing | 3 | ❌ | **Làm:** `dp4_warehouse` + EXPLAIN trước/sau |
+| Lakehouse optimize (compaction/partition) | 3 | ✅ | 29/10: shopee ngày→tháng, 180→6 file, lọc 30 ngày 8× ([storage.md](storage.md)) |
+| Warehouse indexing | 3 | ✅ | 29/10: `dp4_warehouse` 37 tr dòng, EXPLAIN 42,6 s → 1,5 s ([storage.md](storage.md)) |
 | DP1 / DP2 / DP3 ingest + validate | 2×6 | ✅ | Airflow AWS |
-| DataHub lineage + validation DP1/DP2/DP3 | 2×6 | ✅ | DataHub EC2, 5 DAG. **Làm thêm:** publish `dp3_return_labels`, `dp4_warehouse` |
+| DataHub lineage + validation DP1/DP2/DP3 | 2×6 | ✅ | DataHub EC2, 6 DAG: 22 dataset, 30 job, 16 assertion |
 | Schema: zones, SCD2, feat_, dim–fact, naming | 2×5 | ✅ | Tài liệu bảng Gold A (cùng bảng trên AWS) |
-| Novel idea 1: Trino federation | 10 | ❌ | Trino tắt trên AWS. **Làm:** bật Trino EC2, chạy lại truy vấn liên nguồn Iceberg + Postgres |
+| Novel idea 1: Trino federation | 10 | ✅ | 29/10: Trino EC2, Iceberg S3 = Postgres 4.517 dòng ([trino.md](trino.md)) |
 | Novel idea 2: CDC Debezium | 10 | ✅ | Debezium EC2, probe c/u/d |
 
 ## Sheet `mle`
@@ -62,7 +62,7 @@ Ký hiệu: ✅ có bằng chứng AWS · ⚠️ có trên AWS nhưng thiếu ph
 
 ## Ước lượng
 
-- `de`: ~73đ ✅ chắc; ⚠️/❌ còn ~27đ (Spark skew AWS, compaction thật, index, Trino).
+- `de`: **100đ có bằng chứng AWS** (29/10, đợt 1 xong).
 - `mle`: ~17đ ✅ (materialize 2, KFP 2, MLflow 2, KServe 2, testing 7, IaC 2); ⚠️ 4đ; ❓ novel 4đ; ❌ ~75đ.
 - Ràng buộc: EKS 2 × c6i.xlarge (8 GB), quota 16 vCPU đã dùng hết.
 

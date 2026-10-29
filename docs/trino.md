@@ -93,3 +93,33 @@ Cấu hình theo tài liệu chính thức của
 [Iceberg REST catalog](https://trino.io/docs/current/object-storage/metastores.html#rest-catalog),
 [S3-compatible storage](https://trino.io/docs/current/object-storage/file-system-s3.html)
 và [PostgreSQL connector](https://trino.io/docs/current/connector/postgresql.html).
+
+## Trên AWS (2026-10-29)
+
+Trino 483 chạy trên EC2 (profile `query`, loopback 8083), catalog [`trino/catalog-aws/lakehouse.properties`](../trino/catalog-aws/lakehouse.properties):
+`lakehouse` = Iceberg REST (Lakekeeper) + S3 thật qua IAM role của EC2 (không access key), `postgres` =
+PostgreSQL EC2. Một câu SQL đọc cùng lúc Gold trên S3 và warehouse 30 ngày trên PostgreSQL:
+
+```sql
+SELECT 'iceberg' AS nguon, count(*) AS dong, sum(line_net_amount) AS tien
+FROM lakehouse.gold.fact_order_lines_dp2
+WHERE seller_sku = 'APP-00482'
+  AND created_at >= TIMESTAMP '2026-05-31 00:00:00 UTC' AND created_at < TIMESTAMP '2026-06-30 00:00:00 UTC'
+UNION ALL
+SELECT 'postgres', count(*), sum(line_net_amount)
+FROM postgres.warehouse.fact_order_lines_30d_dp2
+WHERE seller_sku = 'APP-00482'
+```
+
+| nguon | dong | tien |
+|---|---|---|
+| iceberg | 4.517 | 49.632.312,55 |
+| postgres | 4.517 | 49.632.312,55 |
+
+Hai nguồn khớp từng dòng và từng đồng: vừa là truy vấn liên nguồn, vừa là phép kiểm chéo rằng
+`dp4_warehouse` chép đúng 30 ngày từ Gold.
+
+Query `20261029_092844_00002_zfrx9`: FINISHED, 15,50 s (planning 571 ms), 3 stage; stage 1 đọc Iceberg
+(7,18M dòng quét, 27,3 s scheduled trên 1 worker). Ảnh: [danh sách query](evidence/aws/trino-queries-20261029.png),
+[overview](evidence/aws/trino-federation-overview-20261029.png), [stages](evidence/aws/trino-federation-stages-20261029.png).
+

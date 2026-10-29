@@ -269,6 +269,29 @@ chưa điều tra.
 
 ---
 
+### g. Đo lại trên AWS (2026-10-29, EC2 r6i.xlarge 4 vCPU, nguồn `s3a://`)
+
+Cùng thí nghiệm 5f, chạy bằng `PLATFORM_STORAGE=s3 bash scripts/evidence/measure_order_snapshots_bronze.sh
+skew_0|skew_b` trên EC2 (driver trong container Airflow, Spark 2 worker × 2 core, đọc raw S3 qua IAM role):
+20 ngày mẫu, AQE tắt, 12.627.457 dòng mỗi lần.
+
+| Lần chạy | "XONG sau" | Số file | Cỡ file TB |
+|---|---|---|---|
+| đối chứng `hash` (lần 1/2/3) | 93,8 / 88,7 / 90,7 s → **TB 91,1 s**, nhiễu 5,1 s (5,6%) | 20 | 47,3 MB |
+| **(b)** `distribution-mode=none` | **71,6 s** (−19,5 s = **−21,4%**, ~4× nhiễu) | **309** | **3,1 MB** |
+
+Spark UI (History Server EC2): với `hash`, job ghi có **2 stage** — stage 0 đọc 9,4 GiB / 114 task (44 s) và
+xáo 2,2 GiB; stage 1 nhận 2,2 GiB / 200 task (31 s), ghi 945,4 MiB. Summary Metrics stage 1: **median 2 ms /
+0 dòng, max 12 s / 2.173.164 dòng** — 180 task rỗng vì chỉ có 20 ngày, task của ngày đông nhất ôm 2,17 tr
+dòng (trùng số local). Với `none` chỉ **1 stage** / 114 task (1,0 phút): bỏ hẳn shuffle nên nhanh hơn, đổi lại
+mỗi task ghi file riêng cho mọi ngày nó gặp ⇒ 309 file nhỏ.
+
+Kết luận giống local và giữ nguyên quyết định ở (e): **giữ `hash`** — nhanh hơn 21% lúc ghi không bù được
+15× số file nhỏ cho mọi lần đọc sau (xem compaction ở [storage.md](storage.md)).
+Ảnh: [4 lần chạy](evidence/aws/spark-skew-runs-20261029.png), [jobs hash](evidence/aws/spark-ui-skew0-jobs-20261029.png),
+[jobs none](evidence/aws/spark-ui-skewb-jobs-20261029.png), [stages hash](evidence/aws/spark-ui-skew0-stages-20261029.png),
+[summary stage 1](evidence/aws/spark-ui-skew0-stage1-summary-20261029.png).
+
 ## 6. Kết quả ở quy mô đầy đủ — lần 3
 
 `--aqe on --table raw_amazon_orders`, cả 180 ngày,
