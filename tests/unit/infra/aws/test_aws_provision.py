@@ -132,8 +132,11 @@ def test_overlay_fits_c6i_2xlarge_without_keys_or_gcs():
     """Service chạy thường trực vừa 8 vCPU/16 GiB (chừa 2 vCPU), port loopback, không key, không GCS."""
     text = (ROOT / "docker-compose.aws.yml").read_text()
     services = yaml.load(text, Loader=ComposeLoader)["services"]
-    for svc in services.values():
-        assert all(port.startswith("127.0.0.1:") for port in svc.get("ports", []))
+    # Ngoại lệ duy nhất: MLflow nghe thêm IP riêng VPC cho pod EKS (SG chỉ mở 5050 từ SG cluster).
+    private = "${PLATFORM_PRIVATE_IP:?PLATFORM_PRIVATE_IP_required}:${MLFLOW_PORT:-5050}:5000"
+    for name, svc in services.items():
+        ports = [p for p in svc.get("ports", []) if not (name == "mlflow" and p == private)]
+        assert all(port.startswith("127.0.0.1:") for port in ports), name
     assert "AWS_ACCESS_KEY_ID" not in text and "gcs" not in text.lower()
     running = [
         "postgres",
@@ -142,13 +145,15 @@ def test_overlay_fits_c6i_2xlarge_without_keys_or_gcs():
         "spark-worker-1",
         "spark-worker-2",
         "airflow",
+        "mlflow",
     ]
 
     def gib(value: str) -> float:
         """Đổi mem_limit Compose (g/m) ra GiB."""
         return float(value[:-1]) / (1024 if value.endswith("m") else 1)
 
-    assert sum(float(services[n]["cpus"]) for n in running) <= 6
+    # cpus là trần, không giữ chỗ: 6 cho Data Platform + 0,25 MLflow (rảnh trừ lúc KFP register model).
+    assert sum(float(services[n]["cpus"]) for n in running) <= 6.25
     assert sum(gib(str(services[n]["mem_limit"])) for n in running) <= 15
     for name in ("minio", "kafka", "flink-jobmanager", "trino"):
         assert services[name]["profiles"] == ["disabled-aws"]
@@ -346,3 +351,29 @@ def test_docker_log_size_is_capped_before_containers_start():
     assert restart["when"] == f"{daemon['register']}.changed"
     roles = [r["role"] for r in yaml.safe_load((ANSIBLE / "site.yml").read_text())[0]["roles"]]
     assert roles.index("base") < roles.index("app") < roles.index("datahub")
+
+
+def test_mlflow_on_aws_uses_s3_iam_and_private_listener():
+    """MLflow EC2: không MinIO, artifact S3 thật, nghe loopback + IP riêng; Ansible bật đúng mlflow."""
+    services = yaml.load((ROOT / "docker-compose.aws.yml").read_text(), Loader=ComposeLoader)[
+        "services"
+    ]
+    mlflow = services["mlflow"]
+    assert "minio" not in mlflow["depends_on"]
+    assert not {"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "MLFLOW_S3_ENDPOINT_URL"} & set(
+        mlflow["environment"]
+    )
+    command = mlflow["command"]
+    assert (
+        command[command.index("--artifacts-destination") + 1] == "s3://${LAKEHOUSE_BUCKET}/mlflow"
+    )
+    assert mlflow["ports"] == [
+        "127.0.0.1:${MLFLOW_PORT:-5050}:5000",
+        "${PLATFORM_PRIVATE_IP:?PLATFORM_PRIVATE_IP_required}:${MLFLOW_PORT:-5050}:5000",
+    ]
+    assert (
+        "PLATFORM_PRIVATE_IP={{ ansible_default_ipv4.address"
+        in (ANSIBLE / "roles/app/templates/env.j2").read_text()
+    )
+    tasks = (ANSIBLE / "roles/app/tasks/main.yml").read_text()
+    assert "docker compose --profile ml up -d --wait --wait-timeout 180 mlflow" in tasks

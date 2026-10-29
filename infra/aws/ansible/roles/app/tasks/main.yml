@@ -125,6 +125,18 @@
   register: compose_up
   changed_when: "'Started' in compose_up.stderr or 'Created' in compose_up.stderr or 'Recreated' in compose_up.stderr"
   no_log: true
+- name: Build image MLflow (pip mlflow + psycopg2 + boto3)
+  ansible.builtin.command: docker compose --profile ml build mlflow
+  args:
+    chdir: '{{ app_dir }}'
+  changed_when: false
+- name: Bật MLflow (chỉ mlflow + db-init, không bật registry local)
+  ansible.builtin.command: docker compose --profile ml up -d --wait --wait-timeout 180 mlflow
+  args:
+    chdir: '{{ app_dir }}'
+  register: mlflow_up
+  changed_when: "'Started' in mlflow_up.stderr or 'Created' in mlflow_up.stderr or 'Recreated' in mlflow_up.stderr"
+  no_log: true
 - name: Chờ Airflow metadata và scheduler sẵn sàng
   ansible.builtin.uri:
     url: http://127.0.0.1:8081/health

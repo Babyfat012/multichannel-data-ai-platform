@@ -208,3 +208,21 @@ services:
     scale: 0
     ports: !override
       - "127.0.0.1:${KAFKA_UI_PORT:-8085}:8080"
+  # MLflow trên EC2: sổ ghi ở DB mlflow của Postgres EC2, artifact ở S3 lakehouse qua IAM role (server
+  # proxy artifact nên pod KFP trên EKS không cần quyền S3). Nghe loopback (tunnel) + IP riêng VPC cho
+  # EKS (SG chỉ mở 5050 từ SG cluster), không 0.0.0.0.
+  mlflow:
+    cpus: "0.25"
+    mem_limit: 512m
+    depends_on: !override
+      mlflow-db-init: {condition: service_completed_successfully}
+    environment: !override
+      <<: *s3-env
+      MLFLOW_SERVER_ENABLE_JOB_EXECUTION: "false"
+    command: !override ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000",
+              "--backend-store-uri", "postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/mlflow",
+              "--artifacts-destination", "s3://${LAKEHOUSE_BUCKET}/mlflow",
+              "--allowed-hosts", "*", "--workers", "1"]
+    ports: !override
+      - "127.0.0.1:${MLFLOW_PORT:-5050}:5000"
+      - "${PLATFORM_PRIVATE_IP:?PLATFORM_PRIVATE_IP_required}:${MLFLOW_PORT:-5050}:5000"

@@ -13,7 +13,7 @@ def test_performance_merge_fits_vm_and_keeps_cloud_auth(tmp_path):
     envfile = tmp_path / ".env"
     envfile.write_text(
         (ROOT / ".env.example").read_text()
-        + "\nAWS_REGION=ap-southeast-2\nRAW_BUCKET=test-raw\nLAKEHOUSE_BUCKET=test-lake\n"
+        + "\nAWS_REGION=ap-southeast-2\nRAW_BUCKET=test-raw\nLAKEHOUSE_BUCKET=test-lake\nPLATFORM_PRIVATE_IP=10.42.0.12\n"
         + "PLATFORM_SPARK_PACKAGES_AWS=org.example:test:1\n"
     )
     result = subprocess.run(
@@ -43,6 +43,7 @@ def test_performance_merge_fits_vm_and_keeps_cloud_auth(tmp_path):
             "AWS_REGION": "ap-southeast-2",
             "RAW_BUCKET": "test-raw",
             "LAKEHOUSE_BUCKET": "test-lake",
+            "PLATFORM_PRIVATE_IP": "10.42.0.12",
             "PLATFORM_SPARK_PACKAGES_AWS": "org.example:test:1",
         },
         text=True,
