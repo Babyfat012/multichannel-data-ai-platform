@@ -246,6 +246,10 @@ def test_aws_feast_uses_s3_iam_and_eks_redis():
     assert env["AIRFLOW_VAR_PLATFORM_FEAST_REDIS"] == "${PLATFORM_FEAST_REDIS:-}"
     assert env["AIRFLOW_VAR_PLATFORM_ML_CUTOFF"] == "2026-06-30T00:00:00Z"
     assert env["PLATFORM_STORAGE"] == "s3"
+    volumes = yaml.load((ROOT / "docker-compose.aws.yml").read_text(), Loader=ComposeLoader)[
+        "services"
+    ]["airflow"]["volumes"]
+    assert "./feature_repo:/opt/feature_repo:ro" in volumes  # volumes !override từng làm mất mount
     template = (ANSIBLE / "roles/app/templates/env.j2").read_text()
     assert "PLATFORM_FEAST_REDIS={{ feast_redis | default('10.42.0.121:30379')" in template
     dag = (ROOT / "dags/ml_feature_materialize.py").read_text()

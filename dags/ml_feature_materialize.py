@@ -20,6 +20,11 @@ from airflow.operators.python import PythonOperator
 from platform_spark_operator import PlatformSparkSubmitOperator
 
 FEAST = "/home/airflow/feast-venv/bin/feast"
+FEAST_PYTHON = "/home/airflow/feast-venv/bin/python"
+ENSURE_24H = (
+    "import os; from push_stream_features import ensure_offline_file; "
+    "ensure_offline_file(os.environ['FEAST_SKU_RETURN_24H_PATH'])"
+)
 REPO = "/opt/feature_repo"
 # Cutoff của Gold A (hết 180 ngày dữ liệu); local chưa đặt biến thì về cutoff cũ.
 CUTOFF = "{{ var.value.get('platform_ml_cutoff', var.value.platform_order_lifecycle_cutoff) }}"
@@ -56,6 +61,11 @@ def run_feast(*args):
     }
     with tempfile.TemporaryDirectory() as tmp:
         repo = shutil.copytree(REPO, f"{tmp}/repo")
+        if args[0] == "apply":
+            # View stream 24h đọc Parquet do pusher tạo; nơi chưa chạy pusher (AWS) thì tạo file rỗng.
+            subprocess.run(
+                [FEAST_PYTHON, "-c", ENSURE_24H], cwd=repo, env=env, check=True, timeout=120
+            )
         result = subprocess.run(
             [FEAST, *args], cwd=repo, env=env, capture_output=True, text=True, check=False
         )

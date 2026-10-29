@@ -11,7 +11,6 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import s3fs
-from confluent_kafka import Consumer
 from feast import FeatureStore
 from feast.data_source import PushMode
 
@@ -43,6 +42,9 @@ def to_frame(messages):
 
 def main():
     """Vòng lặp: gom tối đa 500 tin hoặc 2 giây, push một lần, rồi commit."""
+    # Import ở đây: Airflow gọi ensure_offline_file từ venv Feast không có confluent_kafka.
+    from confluent_kafka import Consumer
+
     ensure_offline_file(os.environ["FEAST_SKU_RETURN_24H_PATH"])
     store = FeatureStore(os.path.dirname(os.path.abspath(__file__)))
     consumer = Consumer(

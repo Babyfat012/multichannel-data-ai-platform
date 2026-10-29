@@ -180,6 +180,8 @@ services:
       - ./generator:/opt/generator:ro
       - ./contracts:/opt/contracts:ro
       - ./sql:/opt/sql:ro
+      # Định nghĩa Feast cho ml_feature_materialize (feast apply/materialize chạy trong container này).
+      - ./feature_repo:/opt/feature_repo:ro
       - /mnt/platform-data/spark-events:/spark-events
       - /mnt/platform-data/airflow:/opt/airflow
       - ./dags:/opt/airflow/dags:ro
