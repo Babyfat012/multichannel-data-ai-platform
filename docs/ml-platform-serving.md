@@ -34,7 +34,7 @@ K="kubectl --context kind-platform"
 $K apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.21.2/cert-manager.yaml
 $K -n cert-manager wait --for=condition=Available deploy --all --timeout=300s
 helm --kube-context kind-platform install kserve-crd oci://ghcr.io/kserve/charts/kserve-crd --version v0.21.0
-helm --kube-context kind-platform install kserve oci://ghcr.io/kserve/charts/kserve --version v0.21.0 \
+helm --kube-context kind-platform install kserve oci://ghcr.io/kserve/charts/kserve-resources --version v0.21.0 \
   -n kserve --create-namespace --set kserve.controller.deploymentMode=RawDeployment
 scripts/run/deploy_return_risk.sh
 ```

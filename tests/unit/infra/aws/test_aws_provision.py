@@ -403,6 +403,29 @@ def test_kfp_on_eks_reads_s3_by_pod_identity_without_minio():
     assert 'if [[ "$PIPELINE_TARGET" == aws ]]' in script and "REGISTRY phải là ECR" in script
 
 
+def test_kserve_on_eks_reads_registry_by_pod_identity():
+    """return-risk: SA riêng có role chỉ-đọc feature-store; Secret MinIO không bắt buộc; nhánh s3 không tạo Secret."""
+    docs = list(yaml.safe_load_all((ROOT / "infra/k8s/ml/return-risk.yaml").read_text()))
+    account = next(d for d in docs if d["kind"] == "ServiceAccount")
+    service = next(d for d in docs if d["kind"] == "InferenceService")
+    predictor = service["spec"]["predictor"]
+    assert predictor["serviceAccountName"] == account["metadata"]["name"] == "return-risk"
+    container = predictor["containers"][0]
+    assert {"secretRef": {"name": "platform-minio", "optional": True}} in container["envFrom"]
+    env = {e["name"]: e["value"] for e in container["env"]}
+    assert env["FEAST_REGISTRY"] == "@@FEAST_ROOT@@/registry.db"
+    identity = (ROOT / "infra/aws/kubernetes/identity.tf").read_text()
+    assert (
+        'model_reader    = { namespace = "ml-serving", service_account = "return-risk" }'
+        in identity
+    )
+    block = identity[identity.index('resource "aws_iam_role_policy" "model_reader"') :]
+    assert "data.aws_iam_policy_document.feature_reader.json" in block.split("}")[0]
+    script = (ROOT / "scripts/run/deploy_return_risk.sh").read_text()
+    s3 = script[script.index("== s3 ]]; then") : script.index("\nelse\n")]
+    assert "platform-minio" not in s3 and "REGISTRY phải là ECR" in s3
+
+
 def test_training_sample_and_kfp_memory_fit_eks_nodes():
     """Tập train 2‰ (1% từng OOM node 8 GB); mọi bước KFP khai RAM, load nhiều nhất."""
     dag = (ROOT / "dags/ml_feature_materialize.py").read_text()

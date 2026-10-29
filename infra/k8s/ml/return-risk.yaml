@@ -5,6 +5,13 @@ kind: Namespace
 metadata:
   name: ml-serving
 ---
+# Pod Identity (EKS) gắn quyền đọc S3 feature-store vào account này; kind không dùng tới.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: return-risk
+  namespace: ml-serving
+---
 apiVersion: serving.kserve.io/v1beta1
 kind: InferenceService
 metadata:
@@ -21,6 +28,7 @@ metadata:
     model-version: "@@VERSION@@"
 spec:
   predictor:
+    serviceAccountName: return-risk
     minReplicas: 1
     maxReplicas: 1
     containers:
@@ -31,8 +39,14 @@ spec:
         env:
           - {name: MIN_HISTORY, value: "20"}
           - {name: FEAST_REDIS, value: "redis.feature-store.svc.cluster.local:6379"}
+          # Script deploy điền: kind = s3://platform/feature-store (MinIO), EKS = S3 lakehouse.
+          - {name: FEAST_REGISTRY, value: "@@FEAST_ROOT@@/registry.db"}
+          - {name: FEAST_SKU_DAILY_PATH, value: "@@FEAST_ROOT@@/sku_daily"}
+          - {name: FEAST_SKU_RETURN_24H_PATH, value: "@@FEAST_ROOT@@/sku_return_24h.parquet"}
+          - {name: AWS_REGION, value: "@@AWS_REGION@@"}
         envFrom:
-          - secretRef: {name: platform-minio}
+          # kind: key + endpoint MinIO; EKS không có Secret này, S3 qua Pod Identity.
+          - secretRef: {name: platform-minio, optional: true}
         resources:
           requests: {cpu: 100m, memory: 256Mi}
           limits: {memory: 768Mi}

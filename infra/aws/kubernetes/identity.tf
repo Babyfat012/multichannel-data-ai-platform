@@ -4,6 +4,7 @@ data "aws_iam_policy_document" "pod_trust" {
     ebs             = { namespace = "kube-system", service_account = "ebs-csi-controller-sa" }
     feature_reader  = { namespace = "feature-store", service_account = "feature-api" }
     pipeline_reader = { namespace = "kubeflow", service_account = "pipeline-runner" }
+    model_reader    = { namespace = "ml-serving", service_account = "return-risk" }
   }
   statement {
     actions = ["sts:AssumeRole", "sts:TagSession"]
@@ -101,5 +102,25 @@ resource "aws_eks_pod_identity_association" "pipeline_runner" {
   namespace       = "kubeflow"
   service_account = "pipeline-runner"
   role_arn        = aws_iam_role.pipeline_reader.arn
+  depends_on      = [aws_eks_addon.pod_identity]
+}
+
+# KServe return-risk: Feast online cần đọc registry.db trên S3 trước khi tra Redis; chỉ-đọc feature-store/*.
+resource "aws_iam_role" "model_reader" {
+  name               = "${var.name_prefix}-model-reader"
+  assume_role_policy = data.aws_iam_policy_document.pod_trust["model_reader"].json
+}
+
+resource "aws_iam_role_policy" "model_reader" {
+  name   = "feature-store-read"
+  role   = aws_iam_role.model_reader.id
+  policy = data.aws_iam_policy_document.feature_reader.json
+}
+
+resource "aws_eks_pod_identity_association" "return_risk" {
+  cluster_name    = aws_eks_cluster.apps.name
+  namespace       = "ml-serving"
+  service_account = "return-risk"
+  role_arn        = aws_iam_role.model_reader.arn
   depends_on      = [aws_eks_addon.pod_identity]
 }
