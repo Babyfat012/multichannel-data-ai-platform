@@ -38,7 +38,8 @@
 # và bị Docker kill OOM. `table-default.*` là thuộc tính catalog Iceberg: áp cho bảng MỚI
 # tạo, nên chỉ bảng thử bị đổi, mặc định của job và hai bảng thật không đổi.
 #
-# Dùng:  bash scripts/evidence/measure_order_snapshots_bronze.sh [lan1|lan2|lan3|wal1|wal16|wal|tatca|skew_0|skew_a|skew_b|skew_c]
+# Dùng:  bash scripts/evidence/measure_order_snapshots_bronze.sh [lan1|lan2|lan3|wal1|wal16|wal|tatca|skew_0|skew_a|skew_b|skew_c|drop_skew]
+# AWS (trên EC2, /opt/platform): PLATFORM_STORAGE=s3 bash scripts/evidence/measure_order_snapshots_bronze.sh skew_0
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
@@ -50,7 +51,8 @@ ICEBERG_PKGS="org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.11.0,org.apach
 # sách. Spark bỏ qua jar không dùng, chi phí là vài giây tải lần đầu rồi cache lại.
 JDBC_PKGS="org.postgresql:postgresql:42.7.4"
 ALL_PKGS="$ICEBERG_PKGS,$JDBC_PKGS"
-LOG_DIR="out/bronze-runs"
+# AWS: /opt/platform do rsync (sudo) ghi nên không chắc ghi được; log để trong HOME của ubuntu.
+if [[ "${PLATFORM_STORAGE:-minio}" == s3 ]]; then LOG_DIR="${LOG_DIR:-$HOME/bronze-runs}"; else LOG_DIR="${LOG_DIR:-out/bronze-runs}"; fi
 mkdir -p "$LOG_DIR"
 
 submit() {
@@ -59,11 +61,22 @@ submit() {
   local job="$1"; shift
   local log="$LOG_DIR/${name}.log"
   printf '==> %s  (log: %s)\n' "$name" "$log"
-  docker exec "$MASTER_CONTAINER" /opt/spark/bin/spark-submit \
-    --master spark://spark-master:7077 \
-    --packages "$ALL_PKGS" \
-    ${EXTRA_SUBMIT_ARGS:-} \
-    "/opt/spark_jobs/$job" "$@" > "$log" 2>&1
+  if [[ "${PLATFORM_STORAGE:-minio}" == s3 ]]; then
+    # AWS (chạy ở /opt/platform trên EC2): driver trong container airflow như DAG; gói AWS và
+    # nguồn s3a:// lấy từ biến AIRFLOW_VAR_* có sẵn trong container, credential qua IAM role.
+    docker compose exec -T airflow bash -c 'job="$1"; shift; exec spark-submit \
+      --master spark://spark-master:7077 --conf spark.driver.host=airflow \
+      --conf spark.driver.bindAddress=0.0.0.0 --conf spark.jars.ivy=/opt/airflow/.ivy2 \
+      --packages "$AIRFLOW_VAR_PLATFORM_SPARK_PACKAGES" '"${EXTRA_SUBMIT_ARGS:-}"' \
+      "/opt/spark_jobs/$job" --source "$AIRFLOW_VAR_PLATFORM_DP1_AMAZON_SOURCE" "$@"' \
+      _ "$job" "$@" > "$log" 2>&1
+  else
+    docker exec "$MASTER_CONTAINER" /opt/spark/bin/spark-submit \
+      --master spark://spark-master:7077 \
+      --packages "$ALL_PKGS" \
+      ${EXTRA_SUBMIT_ARGS:-} \
+      "/opt/spark_jobs/$job" "$@" > "$log" 2>&1
+  fi
   grep -E "^run_id|^bảng (đích|nguồn)|^AQE|^ngày sẽ nạp|^chia theo|^số kết nối|^XONG|^Số dòng" \
     "$log" || tail -5 "$log"
 }
@@ -118,10 +131,23 @@ case "$WHICH" in
       submit "skew_c-dist-range" bronze/ingest_amazon_order_snapshots.py \
         --sample-days 20 --aqe off --table raw_amazon_orders_skew_c
     ;;
+  drop_skew)
+    # Xoá bảng thử sau khi đo (Trino phải đang chạy: docker compose --profile query up -d trino).
+    for t in skew_0 skew_a skew_b skew_c; do
+      docker compose exec -T trino trino --execute "DROP TABLE IF EXISTS lakehouse.bronze.raw_amazon_orders_$t"
+    done
+    ;;
   lan1|lan2|lan3|wal1|wal16|wal|tatca|skew_0|skew_a|skew_b|skew_c) ;;
-  *) echo "Tham số phải là lan1 | lan2 | lan3 | wal1 | wal16 | wal | tatca | skew_0 | skew_a | skew_b | skew_c" >&2; exit 2 ;;
+  *) echo "Tham số phải là lan1 | lan2 | lan3 | wal1 | wal16 | wal | tatca | skew_0 | skew_a | skew_b | skew_c | drop_skew" >&2; exit 2 ;;
 esac
 
+if [[ "${PLATFORM_STORAGE:-minio}" == s3 ]]; then
+  printf '\n==> AWS: event log ở /mnt/platform-data/spark-events (chủ 50000:root, quyền 660 ⇒ History thêm nhóm root: --group-add 0; --user 50000 lỗi vì uid không có tên). History Server (loopback, tunnel 18080):\n'
+  printf '    docker run -d --name spark-history --group-add 0 -p 127.0.0.1:18080:18080 -v /mnt/platform-data/spark-events:/spark-events:ro \\\n'
+  printf '      -e SPARK_HISTORY_OPTS="-Dspark.history.fs.logDirectory=file:///spark-events" \\\n'
+  printf '      apache/spark:3.5.3-java17 /opt/spark/bin/spark-class org.apache.spark.deploy.history.HistoryServer\n'
+  exit 0
+fi
 printf '\n==> Event log đã thu: %s\n' "$(ls -1 out/spark-events 2>/dev/null | wc -l) file"
 printf '==> Xem lại bằng History Server:\n'
 printf '    docker run --rm -p 18080:18080 -v "$PWD/out/spark-events:/spark-events" \\\n'
