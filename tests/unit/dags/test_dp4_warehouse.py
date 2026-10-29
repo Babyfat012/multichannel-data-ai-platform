@@ -15,8 +15,11 @@ def test_dag_exports_thirty_days_before_ml_cutoff():
     assert "/opt/spark_jobs/warehouse/export_order_snapshot_lines.py" in text
     assert "var.value.get('platform_ml_cutoff'" in text
     assert '"--days",\n            "30"' in text
+    assert 'runtime_groups=("iceberg", "postgres")' in text  # thiếu thì KeyError POSTGRES_PASSWORD
     job = (ROOT / "spark_jobs/warehouse/export_order_snapshot_lines.py").read_text()
     assert 'F.col("channel") == "walmart"' not in job
+    # JDBC chỉ tạo bảng, không tạo schema: phải tạo trước lần ghi đầu (Postgres AWS mới tinh).
+    assert job.index('CREATE SCHEMA IF NOT EXISTS warehouse') < job.index('.write.format("jdbc")')
 
 
 def test_count_mismatches_blocks_short_or_empty_channels():

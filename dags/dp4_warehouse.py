@@ -21,6 +21,9 @@ with DAG(
     SparkSubmitOperator(
         task_id="export_and_index_warehouse",
         application="/opt/spark_jobs/warehouse/export_order_snapshot_lines.py",
+        # Ghi JDBC + đối soát cần credential Postgres từ Connection platform_postgres (operator chỉ
+        # cấp đúng nhóm khai báo).
+        runtime_groups=("iceberg", "postgres"),
         application_args=[
             "--source-table",
             "{{ var.value.platform_dp3_gold_source_table }}",
