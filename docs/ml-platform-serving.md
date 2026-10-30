@@ -76,3 +76,12 @@ Kiểm qua Prometheus (route `metrics.`): sau 5 request × 2 dòng + 1 request t
 gắn tag `v<version>-<băm code+model>` (vd `v3-d18e5f42`), mỗi bản build một tag.
 
 <!-- Ảnh pod KServe + curl predict: người vận hành chụp rồi gắn vào đây. -->
+
+## Trên EKS (2026-10-31)
+
+InferenceService [`return-risk`](../infra/k8s/ml/return-risk.yaml) ở namespace `ml-serving` (model-inside-image: image
+ECR chứa model MLflow `return-risk` v1 `production`, build bằng [`deploy_return_risk.sh`](../scripts/run/deploy_return_risk.sh)). Gọi thẳng predictor qua
+port-forward, đơn APP-00042 Amazon US 1 cái 25 USD ⇒ `score` 0,1661, `abstain` false, `model_version` "1" — cùng số
+Feature API `/predict` và model-agent trả (xem [Web API](ml-llm-platform-web-api.md#trên-eks-2026-10-30)).
+
+![KServe trên EKS: inferenceservice return-risk READY True, pod predictor Running, POST :predict trả score 0.1661 model_version 1](evidence/aws/kserve-pod-predict-20261031.png)
