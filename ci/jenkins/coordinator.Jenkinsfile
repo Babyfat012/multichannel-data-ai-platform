@@ -6,8 +6,10 @@ pipeline {
   parameters {
     string(name: 'TARGET_CONTEXT', defaultValue: 'kind-platform', description: 'Kubecontext from the deployment kubeconfig')
     string(name: 'KUBE_CREDENTIAL', defaultValue: 'kind-kubeconfig', description: 'Jenkins file credential containing the target kubeconfig')
+    string(name: 'EVAL_SKUS', defaultValue: '', description: 'SKU chấm agent; trống = bộ local sku-0000x, AWS (pipeline A) điền APP-…')
   }
   environment {
+    EVAL_SKUS = "${params.EVAL_SKUS}"
     KCTX = "${params.TARGET_CONTEXT}"
     VAULT_ADDR = 'http://localhost:8200'
   }

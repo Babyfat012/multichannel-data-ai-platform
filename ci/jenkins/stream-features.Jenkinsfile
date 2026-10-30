@@ -7,12 +7,15 @@ pipeline {
   options { timestamps(); disableConcurrentBuilds(); timeout(time: 30, unit: 'MINUTES') }
   parameters {
     string(name: 'IMAGE_REGISTRY', defaultValue: 'localhost:5001', description: 'Registry namespace prefix; use ECR for cloud')
+    choice(name: 'DATA_STORAGE', choices: ['minio', 's3'], description: 's3 = Jenkins trên EC2: .env + overlay AWS/stream, Flink bản pipeline A')
   }
   environment {
+    DATA_STORAGE = "${params.DATA_STORAGE}"
+    CI_STREAM = '1'
     REGISTRY = "${params.IMAGE_REGISTRY}"
     TAG = "${env.GIT_COMMIT ?: env.BUILD_NUMBER}"
     POSTGRES_DB = 'sources'
-    COMPOSE = 'docker compose --profile stream --profile flink --profile ml-stream'
+    COMPOSE = 'scripts/run/ci_compose.sh --profile stream --profile flink --profile ml-stream'
   }
   stages {
     stage('Test') {
@@ -28,7 +31,7 @@ pipeline {
     }
     stage('Build') {
       steps {
-        sh '$COMPOSE build flink-jobmanager feast-pusher'
+        sh 'docker compose --profile stream --profile flink --profile ml-stream build flink-jobmanager feast-pusher'
       }
     }
     stage('Push') {
@@ -44,12 +47,14 @@ pipeline {
       steps {
         withCredentials([string(credentialsId: 'vault-ci-token', variable: 'VAULT_TOKEN')]) {
           withEnv(['VAULT_ADDR=http://localhost:8200']) {
-            sh '$COMPOSE -f docker-compose.yml -f out/ci-compose-images.yaml up --no-build --pull always -d --wait kafka flink-jobmanager flink-taskmanager'
-            // Đăng ký view mới (nếu đổi features.py) trước khi pusher đọc registry.
-            sh 'set +x; eval "$(scripts/setup/vault_env.sh minio)" && $COMPOSE -f docker-compose.yml -f out/ci-compose-images.yaml run --rm --no-deps feast-pusher feast apply'
-            sh 'set +x; eval "$(scripts/setup/vault_env.sh minio)" && $COMPOSE -f docker-compose.yml -f out/ci-compose-images.yaml up --no-build --pull always -d --force-recreate feast-pusher'
-            // Huỷ job cùng tên rồi submit lại ⇒ không có hai job song song; credential PG lấy từ Vault.
-            sh 'scripts/run/run_sku_return_feature.sh'
+            // AWS: .env THẬT của EC2; registry Feast do DAG feast_apply (Airflow) quản ⇒ không apply từ CI; S3 qua IAM.
+            sh '[ "$DATA_STORAGE" != s3 ] || install -m 600 /repo/.env .env'
+            sh '$COMPOSE up --no-build --pull always -d --wait kafka flink-jobmanager flink-taskmanager'
+            // Local: đăng ký view mới (nếu đổi features.py) trước khi pusher đọc registry.
+            sh '[ "$DATA_STORAGE" = s3 ] || { set +x; eval "$(scripts/setup/vault_env.sh minio)" && $COMPOSE run --rm --no-deps feast-pusher feast apply; }'
+            sh 'if [ "$DATA_STORAGE" != s3 ]; then set +x; eval "$(scripts/setup/vault_env.sh minio)"; fi; $COMPOSE up --no-build --pull always -d --force-recreate feast-pusher'
+            // Huỷ job cùng tên rồi submit lại ⇒ không có hai job song song. AWS: bản A (Return phát lại, không tra PG).
+            sh 'if [ "$DATA_STORAGE" = s3 ]; then export FEATURE_SQL=flink_jobs/ml/sku_return_feature_a.sql; fi; scripts/run/run_sku_return_feature.sh'
           }
         }
       }
@@ -60,11 +65,12 @@ pipeline {
                 curl -fsS localhost:${FLINK_UI_PORT:-8082}/jobs/overview | python3 -c "import json,sys
 jobs=[j for j in json.load(sys.stdin)['jobs'] if j['name']=='ml-sku-return-24h' and j['state']=='RUNNING']
 sys.exit(0 if len(jobs)==1 else 1)" && exit 0; sleep 5; done; exit 1'''
-        sh '$COMPOSE -f docker-compose.yml -f out/ci-compose-images.yaml ps feast-pusher --format "{{.State}}" | grep -qx running'
+        sh '$COMPOSE ps feast-pusher --format "{{.State}}" | grep -qx running'
       }
     }
   }
   post {
-    failure { sh '$COMPOSE -f docker-compose.yml -f out/ci-compose-images.yaml logs --tail 50 feast-pusher flink-jobmanager || true' }
+    failure { sh '$COMPOSE logs --tail 50 feast-pusher flink-jobmanager || true' }
+    always { sh 'rm -f .env' }
   }
 }

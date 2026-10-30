@@ -11,8 +11,10 @@ pipeline {
     string(name: 'IMAGE_REGISTRY', defaultValue: 'localhost:5001', description: 'Registry namespace prefix; use ECR for cloud')
     string(name: 'TARGET_CONTEXT', defaultValue: 'kind-platform', description: 'Kubecontext from the deployment kubeconfig')
     string(name: 'KUBE_CREDENTIAL', defaultValue: 'kind-kubeconfig', description: 'Jenkins file credential containing the target kubeconfig')
+    string(name: 'EVAL_SKUS', defaultValue: '', description: 'SKU chấm agent; trống = bộ local sku-0000x, AWS (pipeline A) điền APP-…')
   }
   environment {
+    EVAL_SKUS = "${params.EVAL_SKUS}"
     PLATFORM_STORAGE = "${params.DATA_STORAGE}"
     AWS_REGION = "${params.CLOUD_REGION}"
     LAKEHOUSE_BUCKET = "${params.CLOUD_LAKEHOUSE_BUCKET}"

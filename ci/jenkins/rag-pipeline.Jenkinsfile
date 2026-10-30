@@ -6,8 +6,10 @@ pipeline {
   options { timestamps(); disableConcurrentBuilds() }
   parameters {
     string(name: 'IMAGE_REGISTRY', defaultValue: 'localhost:5001', description: 'Registry namespace prefix; use ECR for cloud')
+    choice(name: 'DATA_STORAGE', choices: ['minio', 's3'], description: 's3 = Jenkins trên EC2: dùng .env + overlay AWS của máy')
   }
   environment {
+    DATA_STORAGE = "${params.DATA_STORAGE}"
     VAULT_ADDR = 'http://localhost:8200'
     REGISTRY = "${params.IMAGE_REGISTRY}"
     TAG = "${env.GIT_COMMIT ?: env.BUILD_NUMBER}"
@@ -31,21 +33,25 @@ pipeline {
     stage('Deploy') {
       steps {
         withCredentials([string(credentialsId: 'vault-ci-token', variable: 'VAULT_TOKEN')]) {
-          // Compose cần file .env (env_file): dựng tạm từ .env.example + credential Vault, xoá ngay sau đó.
+          // Local: .env tạm từ .env.example + Vault, setup_airflow nạp Connection. AWS (s3): .env THẬT của EC2
+          // (Ansible, /repo/.env) + overlay AWS; cấu hình Airflow nằm trong biến môi trường nên không setup_airflow.
           sh '''
-            { cat .env.example
-              scripts/setup/vault_env.sh minio | sed 's/^export //'
-              scripts/setup/vault_env.sh postgres | sed 's/^export //'; } > .env
-            docker compose -f docker-compose.yml -f out/ci-compose-images.yaml --profile airflow up --no-build --pull always -d --wait airflow
-            bash scripts/setup/setup_airflow.sh
-            rm -f .env
+            if [ "$DATA_STORAGE" = s3 ]; then
+              install -m 600 /repo/.env .env
+            else
+              { cat .env.example
+                scripts/setup/vault_env.sh minio | sed 's/^export //'
+                scripts/setup/vault_env.sh postgres | sed 's/^export //'; } > .env
+            fi
+            scripts/run/ci_compose.sh --profile airflow up --no-build --pull always -d --wait airflow
+            if [ "$DATA_STORAGE" != s3 ]; then bash scripts/setup/setup_airflow.sh; rm -f .env; fi
           '''
         }
       }
     }
     stage('DAG import') {
       steps {
-        sh '''docker compose -f docker-compose.yml -f out/ci-compose-images.yaml --profile airflow exec -T airflow python -c "
+        sh '''scripts/run/ci_compose.sh --profile airflow exec -T airflow python -c "
 from airflow.models import DagBag
 b = DagBag('/opt/airflow/dags', include_examples=False)
 assert 'ml_rag_ingest' in b.dags and not b.import_errors, b.import_errors"'''
@@ -55,9 +61,9 @@ assert 'ml_rag_ingest' in b.dags and not b.import_errors, b.import_errors"'''
       steps {
         sh '''
           run=ci_$BUILD_NUMBER
-          docker compose -f docker-compose.yml -f out/ci-compose-images.yaml --profile airflow exec -T airflow airflow dags trigger ml_rag_ingest -r $run
+          scripts/run/ci_compose.sh --profile airflow exec -T airflow airflow dags trigger ml_rag_ingest -r $run
           for i in $(seq 1 90); do
-            state=$(docker compose -f docker-compose.yml -f out/ci-compose-images.yaml --profile airflow exec -T airflow airflow dags list-runs -d ml_rag_ingest -o plain \
+            state=$(scripts/run/ci_compose.sh --profile airflow exec -T airflow airflow dags list-runs -d ml_rag_ingest -o plain \
               | awk -v r="$run" '$2 == r {print $3}')
             echo "state=$state"; [ "$state" = success ] && exit 0; [ "$state" = failed ] && exit 1; sleep 10
           done; exit 1
@@ -65,4 +71,5 @@ assert 'ml_rag_ingest' in b.dags and not b.import_errors, b.import_errors"'''
       }
     }
   }
+  post { always { sh 'rm -f .env' } }
 }

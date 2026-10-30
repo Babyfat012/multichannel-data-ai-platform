@@ -251,3 +251,48 @@ def test_jenkins_on_ec2_is_loopback_with_eks_kubeconfig_and_bundle_source():
     assert "eks update-kubeconfig" in eks and "kind get kubeconfig" not in eks
     dockerfile = (ROOT / "docker/Dockerfile.jenkins").read_text()
     assert "/release/v1.37.2/" in dockerfile and "awscli-exe-linux-x86_64-2.31.0.zip" in dockerfile
+
+
+def _compose_args(tmp_path, env):
+    """Chạy ci_compose.sh với docker giả, trả các tham số nó truyền cho docker."""
+    fake = tmp_path / "docker"
+    fake.write_text('#!/bin/bash\nprintf "%s\\n" "$*" > "$DOCKER_LOG"\n')
+    fake.chmod(0o755)
+    log = tmp_path / "docker.log"
+    subprocess.run(["bash", str(ROOT / "scripts/run/ci_compose.sh"), "ps"], cwd=tmp_path, check=True,
+                   env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "DOCKER_LOG": str(log), **env})
+    return log.read_text().split()
+
+
+def test_ci_compose_adds_aws_overlays_only_on_s3(tmp_path):
+    """Jenkins trên EC2 phải mang overlay AWS (không thì tạo lại Airflow/Flink bằng cấu hình local)."""
+    assert _compose_args(tmp_path, {}) == ["compose", "-f", "docker-compose.yml", "ps"]
+    assert _compose_args(tmp_path, {"DATA_STORAGE": "s3"}) == [
+        "compose", "-f", "docker-compose.yml", "-f", "docker-compose.aws.yml", "ps"]
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out/ci-compose-images.yaml").write_text("services: {}\n")
+    assert _compose_args(tmp_path, {"DATA_STORAGE": "s3", "CI_STREAM": "1"}) == [
+        "compose", "-f", "docker-compose.yml", "-f", "docker-compose.aws.yml", "-f", "docker-compose.aws-stream.yml",
+        "-f", "out/ci-compose-images.yaml", "ps"]
+
+
+def test_compose_pipelines_use_machine_env_and_pipeline_a_flink_on_aws():
+    """Nhánh s3: .env thật của EC2, không key MinIO, không setup_airflow, Flink bản A; không còn compose trơn."""
+    rag = (ROOT / "ci/jenkins/rag-pipeline.Jenkinsfile").read_text()
+    stream = (ROOT / "ci/jenkins/stream-features.Jenkinsfile").read_text()
+    for text in (rag, stream):
+        assert "choice(name: 'DATA_STORAGE', choices: ['minio', 's3']" in text
+        assert "install -m 600 /repo/.env .env" in text
+        assert "-f docker-compose.yml -f out/ci-compose-images.yaml" not in text
+        assert "always { sh 'rm -f .env' }" in text
+    assert 'if [ "$DATA_STORAGE" != s3 ]; then bash scripts/setup/setup_airflow.sh' in rag
+    assert "export FEATURE_SQL=flink_jobs/ml/sku_return_feature_a.sql" in stream
+    assert '[ "$DATA_STORAGE" = s3 ] || { set +x; eval "$(scripts/setup/vault_env.sh minio)"' in stream
+
+
+def test_agent_pipelines_pass_eval_skus_for_pipeline_a():
+    """SKU AWS (APP-…) khác local ⇒ hai pipeline agent nhận EVAL_SKUS, script dùng bộ local khi trống."""
+    for name in ("feature-api-agents", "coordinator"):
+        text = (ROOT / f"ci/jenkins/{name}.Jenkinsfile").read_text()
+        assert "string(name: 'EVAL_SKUS'" in text and 'EVAL_SKUS = "${params.EVAL_SKUS}"' in text
+    assert '--skus "${EVAL_SKUS:-sku-00001,' in (ROOT / "scripts/run/eval_agent_ci.sh").read_text()
