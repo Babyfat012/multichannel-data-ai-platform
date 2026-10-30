@@ -27,9 +27,10 @@ QUERIES = {
     "llm_tokens": "sum(agentgateway_gen_ai_client_token_usage_sum)",
     "ttft_requests": "sum(agentgateway_gen_ai_server_time_to_first_token_count)",
     "mcp_requests": "sum(agentgateway_mcp_requests_total)",
-    "a2a_requests": 'sum(agentgateway_requests_total{route=~"a2a-.*"})',
+    "a2a_requests": 'sum(agentgateway_requests_total{route=~"default/a2a-.*"})',  # route có tiền tố namespace
     "pii_checks": "sum(agentgateway_guardrail_checks_total)",
-    "llamacpp_tokens_per_s": "max(llamacpp:predicted_tokens_seconds)",
+    # Gauge llama.cpp về 0 ở lần scrape không có token mới ⇒ lấy đỉnh 5 phút.
+    "llamacpp_tokens_per_s": "max(max_over_time(llamacpp:predicted_tokens_seconds[5m]))",
 }
 
 
@@ -81,7 +82,10 @@ async def mcp_calls(client, key, sku):
 async def run(gateway, prometheus, key, sku, burst):
     """Gọi đủ bảng kiểm qua gateway, chờ scrape rồi hỏi Prometheus; trả list dòng chưa chấm."""
     auth = {"Authorization": f"Bearer {key}"}
-    async with httpx.AsyncClient(base_url=gateway, timeout=120) as c:
+    # Gateway đóng kết nối sau 401 của /mcp; dùng lại kết nối đó qua port-forward ⇒ "Server disconnected"
+    # và kubectl port-forward chết. Mỗi request một kết nối mới.
+    no_reuse = httpx.Limits(max_keepalive_connections=0)
+    async with httpx.AsyncClient(base_url=gateway, timeout=120, limits=no_reuse) as c:
         rows = [
             {"check": "LLM không key", "got": (await c.post("/v1/chat/completions", json=chat())).status_code, "want": 401},
             {"check": "LLM có key", "got": (await c.post("/v1/chat/completions", headers=auth, json=chat())).status_code, "want": 200},

@@ -1,0 +1,32 @@
+# KEDA autoscale data-agent (EKS platform-apps, 2026-10-30T10:57:37Z)
+# Tải: 3 request/giây vào route a2a-data-agent (header x-kagent-host) lấy agent card, 150 s; ngưỡng 500m/pod.
+t=0s target=0/500m pods=2
+t=21s target=0/500m pods=2
+t=42s target=933m/500m pods=3
+t=62s target=917m/500m pods=3
+t=83s target=978m/500m pods=3
+t=103s target=1/500m pods=3
+t=123s target=1/500m pods=3
+t=144s target=1/500m pods=3
+t=165s target=1/500m pods=3
+t=185s target=711m/500m pods=3
+t=206s target=45m/500m pods=3
+t=226s target=0/500m pods=3
+t=246s target=0/500m pods=3
+t=267s target=0/500m pods=3
+t=287s target=0/500m pods=3
+t=307s target=0/500m pods=3
+t=328s target=0/500m pods=3
+t=348s target=0/500m pods=3
+t=369s target=0/500m pods=3
+t=389s target=0/500m pods=3
+t=409s target=0/500m pods=3
+t=430s target=0/500m pods=3
+t=450s target=0/500m pods=3
+t=471s target=0/500m pods=3
+t=491s target=0/500m pods=2
+Events:
+  Type    Reason             Age    From                       Message
+  ----    ------             ----   ----                       -------
+  Normal  SuccessfulRescale  7m54s  horizontal-pod-autoscaler  New size: 3; reason: external metric s0-prometheus(&LabelSelector{MatchLabels:map[string]string{scaledobject.keda.sh/name: data-agent,},MatchExpressions:[]LabelSelectorRequirement{},}) above target
+  Normal  SuccessfulRescale  23s    horizontal-pod-autoscaler  New size: 2; reason: All metrics below target
