@@ -101,3 +101,65 @@ Lần chạy local 2026-10-21 (fixture 15 đơn / 2 SKU):
 - Cửa sổ cuối dừng ở 02-05 10:00 vì watermark chỉ tiến khi có tin mới (luồng không tự kết thúc).
 
 <!-- Ảnh Flink UI job RUNNING + log pusher: người vận hành chụp rồi gắn vào đây. -->
+
+## Trên AWS (pipeline A), 2026-10-30
+
+Stream của pipeline A (thông báo đơn Amazon, webhook TikTok) không có sự kiện Return, chỉ có trạng thái đơn.
+Nên trên AWS phát **lại** Return đã duyệt từ Gold A vào Kafka, theo đúng thứ tự thời điểm biết Return (gap #25:
+feature tới Redis/Parquet thật, nhưng model `return-risk` v1 train khi feature này còn rỗng nên chưa dùng nó).
+
+```text
+Trino (EC2) ──① Gold A: fact_return_labels_dp3 ⋈ fact_order_lines_dp2, label=1, 3 ngày trước 2026-06-30
+   │            sql/ml/return_events_replay.sql → ~/return_events.jsonl (401.129 dòng)
+   ▼
+replay_return_events.py ──② Kafka order_snapshots.return_events (3 partition, tổng offset 401.129)
+   ▼
+Flink ml-sku-return-24h ──③ bỏ trùng theo Order Line, HOP 24h trượt 1h → Kafka ml.sku_return_24h
+   │                       flink_jobs/ml/sku_return_feature_a.sql (không tra PostgreSQL như bản B)
+   ▼
+feast-pusher ──④ push ONLINE_AND_OFFLINE: Redis EKS (NodePort) + S3 sku_return_24h.parquet
+   ▼
+Feature API EKS ──⑤ /features trả approved_returns_24h
+```
+
+Ba lỗi khi chạy lần đầu (đã sửa):
+
+1. `docker compose` thiếu overlay AWS ⇒ Trino lấy catalog MinIO local. Runbook đặt
+   `COMPOSE_FILE=docker-compose.yml:docker-compose.aws.yml:docker-compose.aws-stream.yml` một lần.
+2. Replay `run feast-pusher` chỉ bật profile `ml-stream` ⇒ "depends on undefined service kafka"; thêm
+   `--profile stream --no-deps`. Job Flink `RESTARTING` vì topic nguồn chưa có là bình thường: Kafka tự tạo topic
+   khi có tin đầu, Flink tự thử lại.
+3. Job `RESTARTING` mãi, mọi checkpoint hỏng. Nghi đầu tiên là thiếu RAM (log có `OutOfMemoryError: Java heap space`)
+   ⇒ cho taskmanager AWS 4 GB ([`docker-compose.aws-stream.yml`](../docker-compose.aws-stream.yml)) nhưng vẫn hỏng.
+   Log taskmanager mới chỉ ra gốc: `Size of the state is larger than the maximum permitted memory-backed state.
+   Size=72467011, maxSize=5242880` — chưa khai nơi lưu checkpoint nên Flink giữ ở bộ nhớ JobManager (tối đa 5 MB),
+   state bỏ trùng + HOP ~80 MB. Sửa: [`sku_return_feature_a.sql`](../flink_jobs/ml/sku_return_feature_a.sql) (và bản B)
+   `SET 'state.checkpoints.dir' = 'file:///opt/flink/output/checkpoints'` (thư mục mount EBS cả JobManager lẫn
+   taskmanager); test `test_stream_feature_checkpoints_go_to_disk_not_jobmanager_memory`. Trước khi sửa, feature đã
+   tới API nhưng chỉ tới cửa sổ 2026-06-27 09:00.
+
+Sau khi sửa, job mới chạy hết 3 ngày phát lại: 401.129 sự kiện vào, 76/76 checkpoint thành công (~79 MB mỗi lần,
+`file:/opt/flink/output/checkpoints/…`), 0 lỗi.
+
+![Flink ml-sku-return-24h RUNNING: Source return_events → Deduplicate + LocalWindowAggregate → GlobalWindowAggregate → sink ml.sku_return_24h; 401.129 bản ghi vào](evidence/aws/flink-sku-return-24h-running-20261031.png)
+
+![Checkpoint: 76 triggered, 76 completed, 0 failed; checkpoint mới nhất 79,1 MB ghi ra file:/opt/flink/output/checkpoints](evidence/aws/flink-sku-return-24h-checkpoints-20261031.png)
+
+**Đối chiếu độc lập** (script đếm lại trên EC2, không dùng Flink): đọc lại `~/return_events.jsonl`, bỏ trùng theo
+`order_line_key`, đếm Return trong `[window_end − 24h, window_end)` cho từng tin Flink ghi ở `ml.sku_return_24h`
+(gồm cả tin của job hỏng trước đó) ⇒ **1.004.354 / 1.004.354 cửa sổ khớp, 0 lệch**, 2.000 SKU. Cửa sổ cuối
+2026-06-29 22:00 khớp số Feature API trả qua Redis:
+
+| SKU | Flink cửa sổ cuối | Feature API `/features` |
+|---|---:|---:|
+| BEA-01708 | 39 | 39 |
+| ELE-01084 | 38 | 38 |
+| APP-00042 | 23 | 23 |
+
+![Swagger /features trên EKS: approved_returns_24h BEA-01708 = 39, APP-00042 = 23, cạnh feature batch 90 ngày](evidence/aws/feature-api-stream-a-features-20261031.png)
+
+Cửa sổ cuối dừng ở 06-29 22:00 (không tới 06-30 00:00) vì watermark trễ 1 giờ sau sự kiện cuối, luồng không tự kết
+thúc — giống lần chạy local. Code job: [`sku_return_feature_a.sql`](../flink_jobs/ml/sku_return_feature_a.sql),
+phát lại: [`replay_return_events.py`](../feature_repo/replay_return_events.py),
+[`return_events_replay.sql`](../sql/ml/return_events_replay.sql), pusher:
+[`push_stream_features.py`](../feature_repo/push_stream_features.py).

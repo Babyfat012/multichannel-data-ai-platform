@@ -40,7 +40,7 @@ Cập nhật 30/10 tối sau buổi EKS. Bằng chứng: [LLM và agent](llm-pla
 | Agent registry | 2 | ✅ | agentregistry 0.4.0, 1 MCP + 3 agent (`agent-registry-ui`) |
 | RAG pipeline (Airflow) + governance (DataHub) | 2+2 | ⚠️ | `ml_rag_ingest` 5 task xanh trên Airflow EC2 + `/chunks` EKS ✅; `publish` DataHub skipped (DataHub tắt) |
 | Materialize offline → online | 2 | ✅ | `ml_feature_materialize` 4/4 |
-| Push streaming feature → offline + online | 2 | ❌ | Đang chạy (bước 4 tối 30/10): Kafka + Flink + feast-pusher EC2, phát lại Return (gap #25) |
+| Push streaming feature → offline + online | 2 | ✅ | 31/10: Flink EC2 76/76 checkpoint, đối chiếu 1.004.354 cửa sổ khớp, API `approved_returns_24h` ([stream](ml-platform-stream-feature.md)); dữ liệu phát lại (gap #25) |
 | KFP training ≥4 bước | 2 | ✅ | `train-aws-3` 5/5 |
 | MLflow version model + data + tag | 2 | ✅ | v1 `production` |
 | KServe model-inside-image | 2 | ✅ | predict OK |
@@ -97,7 +97,7 @@ gVisor KHÔNG cài qua launch template (sai key containerd 1.x/2.x có thể là
 | # | Dòng | Điểm | Thiếu | Cần cloud |
 |---|---|---|---|---|
 | 1 | RAG pipeline + governance | 2+2 | Ảnh lineage DataHub cho `ml_rag_ingest` (`publish` đang skipped) | Có: bật DataHub EC2 |
-| 2 | Terraform / Ansible | 1+1 | `IaC.md` chưa có ảnh code đã chạy | Có: chụp `PLAY RECAP`, `terraform plan` |
-| 3 | Computing telemetry | 1 | Ảnh Grafana CPU/RAM/disk/network | Có |
-| 4 | README theo ô A2 | 2 | Sơ đồ triển khai tổng thể (deployable unit, mũi tên đánh số) | Không |
-| 5 | Unit coverage > 90% | 1 | Screenshot (đang chỉ có `evidence/serving-coverage-20261021.txt`, 96%) | Không |
+| 2 | Terraform / Ansible | 1+1 | ✅ 31/10 ảnh `terraform plan` No changes + Ansible `PLAY RECAP` trong `IaC.md` | — |
+| 3 | Computing telemetry | 1 | ✅ 31/10 ảnh Grafana EC2 CPU/RAM/disk/network | — |
+| 4 | README theo ô A2 | 2 | ✅ 31/10 `aws-architecture-layer12/layer3.png` trong README | — |
+| 5 | Unit coverage > 90% | 1 | ✅ 31/10 ảnh `serving-coverage-20261031.png` | — |
