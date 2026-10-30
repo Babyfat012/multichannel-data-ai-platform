@@ -48,3 +48,21 @@ restart container vault                          → sealed=true; setup_vault.sh
 ```
 
 <!-- Ảnh UI Vault (http://localhost:8200, secret/platform/*): người vận hành chụp rồi gắn vào đây. -->
+
+## Trên AWS (2026-10-31)
+
+Vault 2.1.1 chạy trên EC2 (Docker Compose, dữ liệu trên EBS `/mnt/platform-data/vault`, chỉ nghe loopback 8200, vào
+qua SSM). Khởi tạo lại 30/10 sau sự cố thay EC2 ([`setup_vault.sh`](../scripts/setup/setup_vault.sh)). KV v2
+`secret/platform/*` là nơi duy nhất giữ secret dùng chung:
+
+| Secret | Ai đọc |
+|---|---|
+| `agent-ui`, `ops-ui` | [`setup_ingress.sh`](../scripts/setup/setup_ingress.sh) sinh một lần rồi đọc để tạo htpasswd basic auth cho NGINX |
+| `postgres` | [`vault_env.sh`](../scripts/setup/vault_env.sh) cho job/CI (Flink, Jenkins), không ghi vào repo |
+| `minio` | bản local (trên AWS dùng IAM role, không có MinIO) |
+
+Ảnh dưới chỉ in trạng thái, tên secret và metadata phiên bản, **không in giá trị**: `Sealed false`, 4 key dưới
+`secret/platform`, `agent-ui` version 1 tạo 2026-10-30 08:54 UTC — đúng lúc `setup_ingress.sh` chạy lần đầu sau khi
+khởi tạo lại Vault.
+
+![Vault trên EC2: status unsealed 2.1.1, kv list secret/platform (agent-ui, minio, ops-ui, postgres), metadata agent-ui version 1](evidence/aws/vault-status-kv-20261031.png)
