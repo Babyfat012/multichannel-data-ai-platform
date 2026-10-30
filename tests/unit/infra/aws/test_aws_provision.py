@@ -229,7 +229,13 @@ def test_stream_overlay_only_enables_kafka_flink_on_loopback():
     services = yaml.load(
         (ROOT / "docker-compose.aws-stream.yml").read_text(), Loader=ComposeLoader
     )["services"]
-    assert set(services) == {"kafka", "flink-jobmanager", "flink-taskmanager", "debezium-connect", "feast-pusher"}
+    assert set(services) == {
+        "kafka",
+        "flink-jobmanager",
+        "flink-taskmanager",
+        "debezium-connect",
+        "feast-pusher",
+    }
     for svc in services.values():
         assert all(port.startswith("127.0.0.1:") for port in svc.get("ports", []))
     # File gốc mở 0.0.0.0 cho Kafka và Flink UI: overlay phải ghi đè cả hai.
@@ -316,6 +322,36 @@ def test_cdc_on_aws_enables_debezium_and_loads_dp1_cdc_variables():
 def _mb(value: str) -> int:
     """'2560m' / '3g' -> MB."""
     return int(value[:-1]) * (1024 if value.endswith("g") else 1)
+
+
+@pytest.mark.parametrize("name", ["sku_return_feature_a.sql", "sku_return_feature.sql"])
+def test_stream_feature_checkpoints_go_to_disk_not_jobmanager_memory(name):
+    """Checkpoint mặc định ở bộ nhớ JobManager (≤5 MB); state stream A ~72 MB ⇒ phải ghi ra thư mục mount."""
+    sql = (ROOT / "flink_jobs/ml" / name).read_text()
+    assert "SET 'state.checkpoints.dir' = 'file:///opt/flink/output/checkpoints';" in sql
+    stream = yaml.load((ROOT / "docker-compose.aws-stream.yml").read_text(), Loader=ComposeLoader)
+    for svc in ("flink-jobmanager", "flink-taskmanager"):
+        assert "/mnt/platform-data/flink:/opt/flink/output" in stream["services"][svc]["volumes"]
+
+
+def test_prometheus_reloads_config_when_targets_change():
+    """30/10: reload tắt ⇒ đổi IP EC2 trong values mà Prometheus vẫn scrape IP cũ tới khi pod chết."""
+    values = yaml.safe_load((ROOT / "infra/k8s/observability/prometheus-values.yaml").read_text())
+    assert values["configmapReload"]["prometheus"]["enabled"] is True
+
+
+def test_aws_flink_taskmanager_has_room_for_stream_a_state():
+    """30/10: 1024m làm checkpoint OOM (Java heap) với ~401k Return phát lại; Flink hứa RAM vừa trần container."""
+    tm = yaml.load((ROOT / "docker-compose.aws-stream.yml").read_text(), Loader=ComposeLoader)[
+        "services"
+    ]["flink-taskmanager"]
+    props = dict(
+        line.split(": ", 1) for line in tm["environment"]["FLINK_PROPERTIES"].strip().splitlines()
+    )
+    process = _mb(props["taskmanager.memory.process.size"])
+    assert process >= 4096
+    assert process < _mb(tm["mem_limit"])
+    assert props["jobmanager.rpc.address"] == "flink-jobmanager"
 
 
 def test_spark_worker_promise_fits_container_limit():
@@ -506,7 +542,9 @@ def test_wave2_prometheus_pulls_ec2_exporters_with_alerts():
     assert "contains([5432, 8181, 5050, 8200, 9100, 9187], p)" in variables
     tasks = (ANSIBLE / "roles/app/tasks/main.yml").read_text()
     assert "spark-worker-2 airflow node-exporter postgres-exporter" in tasks
-    values = yaml.safe_load((ROOT / "infra/k8s/observability/prometheus-values-aws.yaml").read_text())
+    values = yaml.safe_load(
+        (ROOT / "infra/k8s/observability/prometheus-values-aws.yaml").read_text()
+    )
     jobs = yaml.safe_load(values["extraScrapeConfigs"])
     assert {j["job_name"]: j["static_configs"][0]["targets"] for j in jobs} == {
         "ec2-node": ["10.42.0.151:9100"],
@@ -522,19 +560,24 @@ def test_wave2_prometheus_pulls_ec2_exporters_with_alerts():
     assert "> 0.8" in rules["EC2DataDiskAlmostFull"]
     assert "confirmed_flush_lsn > 1073741824" in rules["PostgresSlotWalRetained"]
     script = (ROOT / "scripts/setup/deploy_kind_observability.sh").read_text()
-    assert '[[ "${KCTX:-kind-platform}" == kind-* ]] || prom_aws=(-f $V/prometheus-values-aws.yaml)' in script
+    assert (
+        '[[ "${KCTX:-kind-platform}" == kind-* ]] || prom_aws=(-f $V/prometheus-values-aws.yaml)'
+        in script
+    )
     assert '"${prom_aws[@]}" --wait' in script
 
 
 def test_letsencrypt_first_issue_opens_then_closes_each_route():
     """HTTP-01 trên F5 NGINX: edit-in-place mọi Ingress; lần đầu apply bản mở, chờ Ready, rồi bản đủ."""
     for f in ("feature-api", "agent-ui", "ops-ui"):
-        doc = yaml.safe_load(
-            (ROOT / f"infra/k8s/ingress/{f}.yaml").read_text().replace("@@", "x")
-        )
-        assert doc["metadata"]["annotations"]["acme.cert-manager.io/http01-edit-in-place"] == "true", f
+        doc = yaml.safe_load((ROOT / f"infra/k8s/ingress/{f}.yaml").read_text().replace("@@", "x"))
+        assert (
+            doc["metadata"]["annotations"]["acme.cert-manager.io/http01-edit-in-place"] == "true"
+        ), f
     script = (ROOT / "scripts/setup/setup_ingress.sh").read_text()
-    fn = script[script.index("apply_ing() {") : script.index("\n}\n", script.index("apply_ing() {"))]
+    fn = script[
+        script.index("apply_ing() {") : script.index("\n}\n", script.index("apply_ing() {"))
+    ]
     opened, wait, full = (
         fn.index("/nginx.org\\/basic-auth/d"),
         fn.index('wait --for=condition=Ready "certificate/$2"'),
@@ -543,7 +586,7 @@ def test_letsencrypt_first_issue_opens_then_closes_each_route():
     assert opened < wait < full
     assert 'ingress.kubernetes.io/ssl-redirect: "false"' in fn
     # Secret có thể tồn tại mà chưa có cert thật ⇒ phải hỏi Certificate Ready, không hỏi secret.
-    assert '(@.type=="Ready")].status}\'' in fn and '!= True ]]' in fn
+    assert '(@.type=="Ready")].status}\'' in fn and "!= True ]]" in fn
     assert "get secret" not in fn
     assert '.yaml" | apply_ing "${f%/*}" "${f#*/}-tls"' in script
     assert 'ops-ui.yaml | apply_ing "$ns" "$name-tls"' in script
@@ -551,16 +594,23 @@ def test_letsencrypt_first_issue_opens_then_closes_each_route():
 
 def test_wave4_rag_reaches_pgvector_nodeport_with_iam_s3():
     """Airflow EC2: mount rag, root S3 lakehouse, connection pgvector JSON từ Ansible; SG mở đúng 30432."""
-    airflow = yaml.load((ROOT / "docker-compose.aws.yml").read_text(), Loader=ComposeLoader)["services"]["airflow"]
+    airflow = yaml.load((ROOT / "docker-compose.aws.yml").read_text(), Loader=ComposeLoader)[
+        "services"
+    ]["airflow"]
     assert "./rag:/opt/rag/rag:ro" in airflow["volumes"]
     assert airflow["environment"]["AIRFLOW_VAR_PLATFORM_RAG_ROOT"] == "s3://${LAKEHOUSE_BUCKET}/rag"
-    assert airflow["environment"]["AIRFLOW_CONN_PLATFORM_RAG_PG"].startswith("${PLATFORM_RAG_PG_CONN:?")
+    assert airflow["environment"]["AIRFLOW_CONN_PLATFORM_RAG_PG"].startswith(
+        "${PLATFORM_RAG_PG_CONN:?"
+    )
     env = (ANSIBLE / "roles/app/templates/env.j2").read_text()
     assert "(rag_pg | default(':30432')).split(':')" in env
     assert "| to_json | quote }}" in env.split("PLATFORM_RAG_PG_CONN=")[1].splitlines()[0]
     tf = (ROOT / "infra/aws/kubernetes/cluster.tf").read_text()
     rule = tf[tf.index('"data_to_pgvector"') :].split("}")[0]
-    assert "from_port                    = 30432" in rule and "to_port                      = 30432" in rule
+    assert (
+        "from_port                    = 30432" in rule
+        and "to_port                      = 30432" in rule
+    )
     assert "data_security_group_id" in rule
 
 
@@ -569,7 +619,9 @@ def test_wave4_stream_feature_a_keeps_kafka_on_ebs_and_pushes_with_iam():
     base = yaml.load((ROOT / "docker-compose.yml").read_text(), Loader=ComposeLoader)["services"]
     assert base["kafka"]["environment"]["KAFKA_LOG_DIRS"] == "/var/lib/kafka/data"
     assert "kafka-data:/var/lib/kafka/data" in base["kafka"]["volumes"]
-    stream = yaml.load((ROOT / "docker-compose.aws-stream.yml").read_text(), Loader=ComposeLoader)["services"]
+    stream = yaml.load((ROOT / "docker-compose.aws-stream.yml").read_text(), Loader=ComposeLoader)[
+        "services"
+    ]
     assert stream["kafka"]["volumes"] == ["/mnt/platform-data/kafka:/var/lib/kafka/data"]
     env = stream["feast-pusher"]["environment"]
     assert not {"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "FEAST_S3_ENDPOINT_URL"} & set(env)
@@ -599,17 +651,29 @@ def test_wave5_ci_role_is_namespace_scoped_and_ecr_limited():
     tf = (ROOT / "infra/aws/kubernetes/cluster.tf").read_text()
     entry = tf[tf.index('resource "aws_eks_access_entry" "ci"') :].split("}")[0]
     assert 'kubernetes_groups = ["platform-ci"]' in entry
-    assert "aws_eks_access_policy_association" not in tf[tf.index('resource "aws_eks_access_entry" "ci"') :]
+    assert (
+        "aws_eks_access_policy_association"
+        not in tf[tf.index('resource "aws_eks_access_entry" "ci"') :]
+    )
     api = tf[tf.index('"data_to_api"') :].split("}")[0]
     assert "from_port                    = 443" in api and "data_security_group_id" in api
     docs = [d for d in yaml.safe_load_all((ROOT / "infra/k8s/ci/rbac.yaml").read_text()) if d]
     bindings = [d for d in docs if d["kind"] in ("RoleBinding", "ClusterRoleBinding")]
-    assert all(b["subjects"] == [{"apiGroup": "rbac.authorization.k8s.io", "kind": "Group", "name": "platform-ci"}]
-               for b in bindings)
+    assert all(
+        b["subjects"]
+        == [{"apiGroup": "rbac.authorization.k8s.io", "kind": "Group", "name": "platform-ci"}]
+        for b in bindings
+    )
     cluster_roles = [d for d in docs if d["kind"] == "ClusterRole"]
-    assert [r["rules"] for r in cluster_roles] == [[{"apiGroups": [""], "resources": ["namespaces"], "verbs": ["get", "list"]}]]
+    assert [r["rules"] for r in cluster_roles] == [
+        [{"apiGroups": [""], "resources": ["namespaces"], "verbs": ["get", "list"]}]
+    ]
     assert {d["metadata"]["namespace"] for d in docs if d["kind"] == "Role"} == {
-        "kagent", "feature-store", "agentgateway", "langfuse"}
+        "kagent",
+        "feature-store",
+        "agentgateway",
+        "langfuse",
+    }
     iam = (ROOT / "infra/aws/terraform/iam.tf").read_text()
     ecr = iam[iam.index('data "aws_iam_policy_document" "ci_ecr"') :]
     assert "resources = [for repo in aws_ecr_repository.application : repo.arn]" in ecr
@@ -628,10 +692,15 @@ def test_mle_drift_job_reads_s3_with_pipeline_reader_identity():
     assert '"evidently==0.7.23"' in command
     assert "s3://@@LAKEHOUSE_BUCKET@@/feature-store/training_lines" in command
     assert "--shift-channel shopee" in command
-    assert not {"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"} & {e["name"] for e in container["env"]}
+    assert not {"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"} & {
+        e["name"] for e in container["env"]
+    }
     assert container["volumeMounts"] == [{"name": "code", "mountPath": "/work/ml"}]
     identity = (ROOT / "infra/aws/kubernetes/identity.tf").read_text()
-    assert 'pipeline_reader = { namespace = "kubeflow", service_account = "pipeline-runner" }' in identity
+    assert (
+        'pipeline_reader = { namespace = "kubeflow", service_account = "pipeline-runner" }'
+        in identity
+    )
 
 
 def test_stopped_ec2_is_not_replaced_by_terraform():
@@ -646,5 +715,7 @@ def test_fresh_pgvector_volume_enables_vector_extension():
     init = next(d for d in docs if d["kind"] == "ConfigMap")
     pod = next(d for d in docs if d["kind"] == "Deployment")["spec"]["template"]["spec"]
     assert "CREATE EXTENSION IF NOT EXISTS vector" in "".join(init["data"].values())
-    assert {"name": "init", "mountPath": "/docker-entrypoint-initdb.d"} in pod["containers"][0]["volumeMounts"]
+    assert {"name": "init", "mountPath": "/docker-entrypoint-initdb.d"} in pod["containers"][0][
+        "volumeMounts"
+    ]
     assert {"name": "init", "configMap": {"name": init["metadata"]["name"]}} in pod["volumes"]

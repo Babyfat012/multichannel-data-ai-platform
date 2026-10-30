@@ -33,6 +33,13 @@ services:
     profiles: !override [flink]
     scale: 1
     cpus: "2"
+    # 1 GB của file gốc (cỡ laptop) hết heap khi checkpoint stream A: state bỏ trùng ~401k Return + cửa sổ HOP 24h.
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.memory.process.size: 4096m
+        taskmanager.numberOfTaskSlots: 2
+    mem_limit: 4608m
     volumes: !override
       - ./flink_jobs:/opt/flink/jobs:ro
       - /mnt/platform-data/flink:/opt/flink/output

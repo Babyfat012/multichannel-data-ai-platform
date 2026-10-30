@@ -4,8 +4,14 @@ alertmanager: {enabled: false}
 prometheus-pushgateway: {enabled: false}
 prometheus-node-exporter: {enabled: false}
 kube-state-metrics: {enabled: false}
+# Sidecar nạp lại config khi ConfigMap đổi. Tắt thì `helm upgrade` đổi target mà Prometheus vẫn chạy config cũ
+# (30/10: vẫn scrape IP EC2 cũ 10.42.0.12 suốt 13 giờ sau khi values đã trỏ 10.42.0.151).
 configmapReload:
-  prometheus: {enabled: false}
+  prometheus:
+    enabled: true
+    resources:
+      requests: {cpu: 5m, memory: 16Mi}
+      limits: {memory: 32Mi}
 server:
   retention: 6h
   persistentVolume: {enabled: false}

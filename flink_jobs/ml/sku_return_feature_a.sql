@@ -5,6 +5,9 @@ SET 'table.local-time-zone' = 'UTC';
 SET 'parallelism.default' = '1';
 SET 'pipeline.name' = 'ml-sku-return-24h';
 SET 'execution.checkpointing.interval' = '10s';
+-- Checkpoint ra đĩa (mount /mnt/platform-data/flink trên EC2): mặc định giữ ở bộ nhớ JobManager, tối đa 5 MB;
+-- state bỏ trùng + HOP của stream A ~72 MB ⇒ mọi checkpoint hỏng, job RESTARTING mãi (30/10).
+SET 'state.checkpoints.dir' = 'file:///opt/flink/output/checkpoints';
 SET 'table.exec.source.idle-timeout' = '10s';
 
 CREATE TABLE return_events (
