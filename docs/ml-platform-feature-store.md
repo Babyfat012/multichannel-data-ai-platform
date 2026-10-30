@@ -105,3 +105,16 @@ Lần chạy local 2026-10-21 (fixture 15 đơn / 2 SKU, cutoff 2026-06-01):
   Dữ liệu cỡ lớn (bước train) mới có số > 0.
 
 <!-- Ảnh Grid DAG xanh + log hai lần materialize: người vận hành chụp rồi gắn vào đây. -->
+
+### Trên AWS, 2026-10-30
+
+DAG `ml_feature_materialize` trên Airflow EC2 hỏng ở `feast_apply`: `feast apply` import mọi `.py` trong
+`feature_repo/`, kể cả `replay_return_events.py` (dùng `datetime.UTC`, chỉ có từ Python 3.11) trong venv Feast
+Python 3.10 của Airflow.
+
+![feast_apply lỗi: ImportError cannot import name 'UTC' from 'datetime'](evidence/aws/airflow-feast-apply-utc-error-20261030.png)
+
+Sửa: [`feature_repo/.feastignore`](../feature_repo/.feastignore) loại hai script không phải định nghĩa feature,
+test `test_feast_apply_skips_helper_scripts`. Chạy lại: bốn task xanh, Redis `DBSIZE` 2000.
+
+![ml_feature_materialize: export_sku_daily, export_training_lines, feast_apply, materialize_incremental đều success](evidence/aws/airflow-ml-feature-materialize-success-20261030.png)

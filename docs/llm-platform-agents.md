@@ -244,3 +244,57 @@ kagent dựng lại config Agent (Secret <agent>/config.json)
 `sum(rate(agentgateway_requests_total{route=~"default/a2a-coordinator(-path)?"}[1m]))`, ngưỡng 0,5/pod.
 Tải 3 request/giây trong 150 s: **2 → 3 pod** ở giây 45 (0,87/pod), **3 → 2** sau 5 phút hết tải
 ([evidence](evidence/keda-coordinator-20261021.txt)). Sau đo: ScaledObject tạm dừng ở 0 để trả RAM.
+
+## Trên EKS, 2026-10-30
+
+Ba Agent chạy trên EKS `platform-apps`, cùng dùng Qwen 2.5 1,5B, vào qua `https://agent.<ip>.sslip.io`
+(basic auth `seller`, mật khẩu ở Vault `secret/platform/agent-ui`).
+
+![kagent UI: coordinator, data-agent, model-agent cùng model qwen2.5-1.5b-instruct](evidence/aws/kagent-ui-agents-20261030.png)
+
+**Chat qua Coordinator.** Câu hỏi: "What is the return rate of SKU APP-00042 on amazon US, and what is the
+predicted return risk for an order of 1 unit at 25 USD?". Coordinator gọi data-agent (tool `get_sku_features`) rồi
+model-agent (tool `predict_return_risk`) qua A2A trên agentgateway, rồi ghép hai số:
+
+![data-agent trả feature APP-00042: 15306 dòng có nhãn, 2599 Return, tỉ lệ 0.1698](evidence/aws/kagent-ui-coordinator-data-agent-20261030.png)
+
+![model-agent gọi predict-return-risk, điểm rủi ro 0.1661](evidence/aws/kagent-ui-model-agent-tool-20261030.png)
+
+![Câu trả lời cuối của Coordinator: tỉ lệ 0.1698 và điểm rủi ro 0.1661](evidence/aws/kagent-ui-coordinator-answer-20261030.png)
+
+Hai số khớp `/features` (0,1698) và `/predict` (0,166) gọi thẳng Feature API.
+
+**Lỗi tìm thấy khi chạy thật.** Lần chat đầu, câu trả lời ghi `<PHONE_NUMBER>` thay cho tỉ lệ Return:
+Feature API trả `0.16980269175486737` (17 chữ số), guardrail `phoneNumber` ở chiều trả lời của agentgateway che
+nhầm thành số điện thoại.
+
+![Lần chat đầu: Coordinator trả <PHONE_NUMBER> thay cho tỉ lệ Return](evidence/aws/kagent-ui-pii-mask-before-20261030.png)
+
+Sửa ở nguồn: [`serving/app.py`](../serving/app.py) làm tròn tỉ lệ và điểm còn 4 số (`Rounded`), test
+`test_long_decimals_rounded_for_pii_guardrail`; image `813627b-pii1`, `helm upgrade` revision 2 (rolling).
+Activity của data-agent cho thấy cùng câu hỏi trước và sau khi sửa:
+
+![Activity data-agent: trước 0.16980269175486737, sau 0.1698](evidence/aws/kagent-ui-rounding-before-after-20261030.png)
+
+Hạn chế đã biết: khi câu hỏi không nêu số lượng/giá, model 1,5B tự điền `ordered_product_net_minor` (có lần
+`1000000000000000`, vượt giới hạn API ⇒ tool lỗi, Agent diễn giải sai thành "too little history"). Nêu giá trong câu
+hỏi thì đúng.
+
+**KEDA trên EKS.** Cùng cách đo như local: 3 request/giây (agent card, không gọi LLM) vào route `a2a-data-agent`
+trong 150 s ([log](evidence/aws/keda-data-agent-20261030.txt)):
+
+| Thời điểm | Tải / pod | Pod |
+|---|---|---|
+| 0–21 s | 0 | 2 |
+| 42 s | 933m > 500m | **3** (HPA "above target") |
+| 206 s | 45m (hết tải) | 3 |
+| 491 s | 0 | **2** (HPA "All metrics below target") |
+
+**Prompt từ Langfuse.** Ba prompt `platform-*` ở nhãn `production`, script seed tạo bằng API rồi đổ vào ConfigMap
+`agent-prompts`:
+
+![Langfuse: 3 prompt platform-coordinator, platform-model-agent, platform-data-agent](evidence/aws/langfuse-prompts-20261030.png)
+
+Nội dung từng prompt: [coordinator](evidence/aws/langfuse-prompt-coordinator-20261030.png),
+[model-agent](evidence/aws/langfuse-prompt-model-agent-20261030.png),
+[data-agent](evidence/aws/langfuse-prompt-data-agent-20261030.png).

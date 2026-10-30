@@ -59,3 +59,24 @@ Kiểm PII/TTFT 2026-10-21 (gọi `/v1/chat/completions` qua gateway): "Email th
 request `stream: true` → có `time_to_first_token`. `guardrail_checks_total`: Request/Allow 2, Request/Reject 2,
 Response/Allow 1. Tool: gọi `get_sku_features` qua gateway khi MinIO đang tắt → `mcp_tool_calls_total{outcome="error"}`
 tăng đúng số lượt lỗi.
+
+## Trên EKS, 2026-10-30
+
+Grafana `https://grafana.<ip>.sslip.io` (basic auth `ops` rồi tài khoản admin Grafana), dashboard
+"Agents, LLM, MCP", 3 giờ gồm benchmark Qwen, [`gateway_smoke`](evidence/aws/gateway-smoke-20261030.json) (17/17),
+chat Coordinator và đợt tải KEDA.
+
+![LLM qua agentgateway: 151 request, 50,2k token, token/giây, thời gian 1 lượt; llama.cpp token/giây](evidence/aws/grafana-agents-llm-20261030.png)
+
+![Lượt gọi mỗi Agent (đỉnh tải KEDA ở a2a-data-agent), mỗi MCP tool, request lỗi theo status gồm 429 rate limit](evidence/aws/grafana-agents-mcp-gateway-20261030.png)
+
+![Feature API request/giây và p95; KServe dự đoán theo abstain, thời gian tra Feast](evidence/aws/grafana-feature-api-kserve-20261030.png)
+
+![TTFT, thời gian mỗi token, guardrail PII theo kết quả gồm Response Mask](evidence/aws/grafana-llm-ttft-pii-20261030.png)
+
+Panel guardrail có "Response Mask": chính lần gateway che nhầm tỉ lệ Return thành `<PHONE_NUMBER>`
+(xem [LLM và agent](llm-platform-agents.md#trên-eks-2026-10-30)).
+
+Jaeger nhận trace OTLP của agentgateway; một trace MCP `tools/list` có span con tới backend `features`:
+
+![Jaeger: trace agentgateway tools/list, 2 span](evidence/aws/jaeger-agentgateway-trace-20261030.png)
