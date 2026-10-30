@@ -79,6 +79,8 @@ và bước ghép kết quả thủ công. Phép đo Novel #1 ở
 
 Ảnh lần chạy 2026-10-14:
 
+![Trino UI: danh sách truy vấn, JOIN Iceberg Silver với bảng PostgreSQL và UNION ALL đối chiếu Gold/warehouse đều FINISHED](images/novel/trino-federation-query-overview.png)
+
 ![Trino UI: chi tiết truy vấn liên nguồn, trạng thái FINISHED](images/novel/trino-federation-query-detail.png)
 
 ![DBeaver chạy câu SQL liên nguồn: hai dòng kết quả iceberg/postgres bằng nhau, mỗi bên 211 dòng và net 12.038,74](images/novel/dbeaver-federation-result.png)
