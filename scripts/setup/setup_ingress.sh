@@ -28,6 +28,22 @@ if [[ "$issuer" == platform-letsencrypt ]]; then
 elif [[ "$issuer" != platform-local-ca ]]; then
   echo "INGRESS_ISSUER chỉ nhận platform-local-ca hoặc platform-letsencrypt" >&2; exit 1
 fi
+# Let's Encrypt lần đầu (Certificate chưa Ready; secret có thể đã tồn tại mà rỗng): redirect HTTPS (chưa có cert) và basic auth chặn HTTP-01
+# ⇒ apply bản mở, chờ cert Ready, rồi apply bản đủ. ponytail: gia hạn ngày 60 vẫn bị basic auth chặn ⇒
+# chạy lại script (gap #24); prod dùng mergeable ingress hoặc DNS-01.
+apply_ing() {  # $1 namespace, $2 secret TLS; stdin = Ingress đã render
+  local y; y=$(cat)
+  if [[ "$issuer" == platform-letsencrypt ]] && [[ "$($K -n "$1" get certificate "$2" \
+      -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)" != True ]]; then
+    sed -e '/nginx.org\/basic-auth/d' \
+      -e 's|^\(    acme.cert-manager.io/http01-edit-in-place: .*\)$|\1\n    ingress.kubernetes.io/ssl-redirect: "false"|' \
+      <<<"$y" | $K apply -f - >/dev/null
+    for _ in $(seq 1 30); do $K -n "$1" get certificate "$2" >/dev/null 2>&1 && break; sleep 2; done
+    $K -n "$1" wait --for=condition=Ready "certificate/$2" --timeout=300s >/dev/null || {
+      echo "cert $1/$2 chưa Ready: kubectl --context ${KCTX:-kind-platform} -n $1 describe challenges" >&2; exit 1; }
+  fi
+  $K apply -f - <<<"$y" >/dev/null
+}
 export VAULT_ADDR="${VAULT_ADDR:-http://localhost:${VAULT_PORT:-8200}}"
 # Vault ở EC2: truyền VAULT_TOKEN qua môi trường (tunnel 8200); local đọc init.json như cũ.
 ROOT=${VAULT_TOKEN:-$(python3 -c 'import json;print(json.load(open("out/vault/init.json"))["root_token"])')}
@@ -39,9 +55,9 @@ fi
 pw=$(api "$VAULT_ADDR/v1/secret/data/platform/agent-ui" | python3 -c 'import json,sys;print(json.load(sys.stdin)["data"]["data"]["password"])')
 $K -n kagent create secret generic agent-ui-basic-auth --type=nginx.org/htpasswd \
   --from-literal=htpasswd="seller:$(openssl passwd -apr1 "$pw")" --dry-run=client -o yaml | $K apply -f - >/dev/null
-for f in feature-api agent-ui; do
+for f in feature-store/feature-api kagent/agent-ui; do
   sed -e "s/@@NODE_IP_DASH@@.sslip.io/$host_suffix/g" -e "s/cluster-issuer: platform-local-ca/cluster-issuer: $issuer/" \
-    "infra/k8s/ingress/$f.yaml" | $K apply -f - >/dev/null
+    "infra/k8s/ingress/${f#*/}.yaml" | apply_ing "${f%/*}" "${f#*/}-tls"
 done
 # UI vận hành: mật khẩu chung "ops" ở Vault secret/platform/ops-ui; route chỉ tạo khi service đã có.
 if ! api "$VAULT_ADDR/v1/secret/data/platform/ops-ui" >/dev/null 2>&1; then
@@ -56,7 +72,7 @@ while read -r name ns svc port host; do
     --from-literal=htpasswd="ops:$(openssl passwd -apr1 "$ops_pw")" --dry-run=client -o yaml | $K apply -f - >/dev/null
   sed -e "s/@@NAME@@/$name/g" -e "s/@@NS@@/$ns/g" -e "s/@@SVC@@/$svc/g" -e "s/@@PORT@@/$port/g" \
     -e "s/@@HOST@@/$host.$host_suffix/g" -e "s/cluster-issuer: platform-local-ca/cluster-issuer: $issuer/" \
-    infra/k8s/ingress/ops-ui.yaml | $K apply -f - >/dev/null
+    infra/k8s/ingress/ops-ui.yaml | apply_ing "$ns" "$name-tls"
   echo "route https://$host.$host_suffix:$https_port → $ns/$svc:$port"
 done <<'ROUTES'
 grafana observability grafana 80 grafana

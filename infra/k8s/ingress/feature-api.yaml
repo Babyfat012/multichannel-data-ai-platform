@@ -7,6 +7,8 @@ metadata:
   namespace: feature-store
   annotations:
     cert-manager.io/cluster-issuer: platform-local-ca
+    # Đường kiểm tra HTTP-01 gắn vào chính Ingress này (F5 NGINX từ chối Ingress thứ hai cùng host).
+    acme.cert-manager.io/http01-edit-in-place: "true"
     nginx.org/redirect-to-https: "true"
     nginx.org/limit-req-rate: "50r/s"
     nginx.org/limit-req-burst: "100"
