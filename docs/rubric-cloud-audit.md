@@ -27,43 +27,47 @@ Ký hiệu: ✅ có bằng chứng AWS · ⚠️ có trên AWS nhưng thiếu ph
 
 ## Sheet `mle`
 
+Cập nhật 30/10 tối sau buổi EKS. Bằng chứng: [LLM và agent](llm-platform-agents.md#trên-eks-2026-10-30),
+[RAG](llm-platform-rag.md#trên-aws-2026-10-30), [Web API](ml-llm-platform-web-api.md#trên-eks-2026-10-30),
+[Observability](ml-llm-platform-observability.md#trên-eks-2026-10-30), ảnh trong `evidence/aws/*-20261030.*`.
+
 | Dòng rubric | Điểm | Trạng thái | Việc còn lại |
 |---|---|---|---|
-| LLM inference platform + benchmark | 2+2 | ❌ | llama.cpp Qwen lên EKS + benchmark |
-| Custom LLM model | 2 | ❌ | GGUF tự host trên EKS |
-| agentgateway + security/policy | 1 | ❌ | agentgateway trên EKS |
-| Global model config | 2 | ❌ | `default-model-config` → agentgateway |
-| Agent registry | 2 | ❌ | agentregistry trên EKS + ảnh UI |
-| RAG pipeline (Airflow) + governance (DataHub) | 2+2 | ❌ | pgvector EKS, DAG `ml_rag_ingest` trên Airflow EC2, lineage DataHub |
+| LLM inference platform + benchmark | 2+2 | ✅ | llama.cpp Qwen 2.5 1,5B trên EKS; bench 6/3/4 luồng (`bench-llm-eks-t*.json`), chọn 3 |
+| Custom LLM model | 2 | ✅ | GGUF tự host trên EKS |
+| agentgateway + security/policy | 1 | ✅ | `gateway-smoke-20261030.json` 17/17 (API key, PII, rate limit) |
+| Global model config | 2 | ✅ | `default-model-config` → agentgateway |
+| Agent registry | 2 | ✅ | agentregistry 0.4.0, 1 MCP + 3 agent (`agent-registry-ui`) |
+| RAG pipeline (Airflow) + governance (DataHub) | 2+2 | ⚠️ | `ml_rag_ingest` 5 task xanh trên Airflow EC2 + `/chunks` EKS ✅; `publish` DataHub skipped (DataHub tắt) |
 | Materialize offline → online | 2 | ✅ | `ml_feature_materialize` 4/4 |
-| Push streaming feature → offline + online | 2 | ❌ | Flink `sku_return_24h` + feast-pusher trên AWS (hiện file rỗng) |
+| Push streaming feature → offline + online | 2 | ❌ | Đang chạy (bước 4 tối 30/10): Kafka + Flink + feast-pusher EC2, phát lại Return (gap #25) |
 | KFP training ≥4 bước | 2 | ✅ | `train-aws-3` 5/5 |
 | MLflow version model + data + tag | 2 | ✅ | v1 `production` |
 | KServe model-inside-image | 2 | ✅ | predict OK |
-| FastAPI + pydantic + healthcheck / async / MCP helm rolling + fallback | 1+1+2 | ❌ | Feature API trên EKS (`deploy_feature_api.sh` nhánh s3) |
-| Agent 1 multi-replica + KEDA, Sandbox, publish | 2+1+1 | ❌ | data-agent + KEDA trên EKS; Sandbox (Substrate) local cũng chưa có |
-| Agent 2: online feature + predict + RAG | 8 | ❌ | model-agent trên EKS |
-| MCP gateway / A2A gateway | 2+2 | ❌ | agentgateway route `/mcp`, A2A |
-| Coordinator multi-replica + KEDA, publish | 2+2 | ❌ | coordinator + KEDA trên EKS |
-| Warm Up (Agent Substrate) | 2 | ❌ | Local cũng chưa có (cần gVisor) |
+| FastAPI + pydantic + healthcheck / async / MCP helm rolling + fallback | 1+1+2 | ✅ | Feature API helm 2 replica, rolling; Swagger `/features` `/predict` `/chunks` |
+| Agent 1 multi-replica + KEDA, Sandbox, publish | 2+1+1 | ⚠️ | data-agent 2 pod + KEDA 2→3→2 ✅, publish registry ✅; Sandbox (Substrate) ❌ |
+| Agent 2: online feature + predict + RAG | 8 | ✅ | model-agent gọi `predict_return_risk` và `search_policy_chunks` (ảnh `rag-model-agent-*`) |
+| MCP gateway / A2A gateway | 2+2 | ✅ | route `/mcp`, A2A theo header; Grafana đếm theo route |
+| Coordinator multi-replica + KEDA, publish | 2+2 | ✅ | coordinator 2 pod, ScaledObject min 2 max 3, publish registry |
+| Warm Up (Agent Substrate) | 2 | ❌ | Bước 8 |
 | Unit coverage, EP/BVA, mutation, property-based | 1+2+2+2 | ✅ | Kiểm ở mức code (PR testing), không phụ thuộc nơi chạy |
-| Load test locust Web API | 2 | ⚠️ | Rubric ghi "Local Testing"; nên chạy lại trên Feature API EKS khi có |
-| CI/CD RAG / agent / coordinator / stream feature | 2×4 | ❌ | Jenkins local; cần đích ECR + EKS |
-| NGINX: Grafana, log, trace, agent UI, registry UI | 2×5 | 🟡 | 30/10: route HTTPS + cert LE cho Grafana (log Loki xem trong Grafana), metrics, traces; route `agent.` có cert, backend kagent ở đợt 3; registry đợt 3 |
-| Basic auth + rate limit | 2 | 🟡 | Basic auth đo được (401 không mật khẩu); rate limit đã khai, đo khi Feature API có ở đợt 3 |
-| Domain + HTTPS Web API | 1 | 🟡 | `api.15-134-182-157.sslip.io` có cert LE thật; Feature API deploy đợt 3 (hiện 502) |
-| Terraform / Ansible | 1+1 | ✅ | Terraform AWS + Ansible chạy thật (cập nhật dòng cũ "chưa kiểm chứng") |
-| Observability: Web API metrics, Prom+Grafana, logs, traces | 1×4 | 🟡 | Prom+Grafana ✅, Loki+Fluent Bit chạy (chưa có ảnh truy vấn log), Jaeger ✅ (trace của chính nó); Web API metrics chờ Feature API đợt 3. Thêm: cảnh báo EC2 (#17 #20) |
-| LLM telemetry (token, TTFT…) / Agent telemetry | 2+2 | ❌ | |
-| A/B agent / A/B LLM | 1+1 | ❌ | |
-| Vault | 1 | ✅ | 30/10: Vault EC2 (EBS), KV v2, mật khẩu ingress sinh và đọc từ Vault |
-| README + docs theo rule | 2 | ⚠️ | Thêm sơ đồ triển khai AWS tổng thể |
-| Novel idea 1 / 2 | 2+2 | ❓ | Chưa xác định ý tưởng MLE; cần chốt |
+| Load test locust Web API | 2 | ✅ | Locust → Feature API EKS: 3.004 request, 0 lỗi (`load-test-feature-api-20261030.html`) |
+| CI/CD RAG / agent / coordinator / stream feature | 2×4 | ❌ | Bước 7 Jenkins EC2 |
+| NGINX: Grafana, log, trace, agent UI, registry UI | 2×5 | ✅ | Route HTTPS + cert LE: grafana., traces., agent., registry. |
+| Basic auth + rate limit | 2 | ✅ | 401 không mật khẩu; rate limit trong gateway smoke |
+| Domain + HTTPS Web API | 1 | ✅ | `api.15-134-182-157.sslip.io` cert LE, Swagger qua HTTPS |
+| Terraform / Ansible | 1+1 | ✅ | Terraform AWS + Ansible chạy thật |
+| Observability: Web API metrics, Prom+Grafana, logs, traces | 1×4 | ✅ | Panel Feature API/KServe, Loki `{namespace="feature-store"}`, Jaeger trace agentgateway |
+| LLM telemetry (token, TTFT…) / Agent telemetry | 2+2 | ✅ | Grafana token, TTFT, thời gian/token, lượt gọi Agent + MCP tool |
+| A/B agent / A/B LLM | 1+1 | ❌ | Bước 5 |
+| Vault | 1 | ✅ | Vault EC2 (EBS), KV v2, mật khẩu ingress |
+| README + docs theo rule | 2 | ⚠️ | Thiếu sơ đồ triển khai AWS tổng thể |
+| Novel idea 1 / 2 | 2+2 | ⚠️ | Chốt ML-N1 (agent eval) + ML-N2 (drift Evidently); chưa có bằng chứng AWS (bước 5, 6) |
 
 ## Ước lượng
 
 - `de`: **100đ có bằng chứng AWS** (29/10, đợt 1 xong).
-- `mle`: ~17đ ✅ (materialize 2, KFP 2, MLflow 2, KServe 2, testing 7, IaC 2); ⚠️ 4đ; ❓ novel 4đ; ❌ ~75đ.
+- `mle` (30/10 tối, tự đếm): có bằng chứng AWS **~77đ** (72 dòng ✅ + 5 phần đã xong của dòng ⚠️); thiếu ~9đ ở dòng ⚠️ (DataHub RAG 2, Sandbox 1, README 2, novel 4); ❌ 14đ (stream 2, Warm Up 2, CI/CD 8, A/B 2).
 - Ràng buộc: EKS 2 × c6i.xlarge (8 GB), quota 16 vCPU đã dùng hết.
 
 ## Cấu hình và kế hoạch chốt (learner duyệt 29/10)
@@ -84,3 +88,16 @@ gVisor KHÔNG cài qua launch template (sai key containerd 1.x/2.x có thể là
 | 5 | EKS (+EC2) | Jenkins 4 pipeline (gap #9); A/B agent + LLM; gVisor DaemonSet + Substrate (Sandbox, Warm Up) |
 | 6 | — | README + sơ đồ AWS; evidence; chốt 2 Novel MLE; commit |
 | 7 | tuỳ | Gap loại 2 còn lại: nhỏ trước #10 #15 #19 #14 #6, lớn sau #3 #22 #18 (#11 nói thật) |
+
+## Đối chiếu từng dòng rubric thật (30/10 tối)
+
+Đọc lại `EDAI K11 - MLE.xlsx` sheet `mle` cột "Document": nhiều dòng đòi **ảnh**, không chỉ chạy được. Ngoài bước
+4–9 trong handoff, còn thiếu để đủ 100/100:
+
+| # | Dòng | Điểm | Thiếu | Cần cloud |
+|---|---|---|---|---|
+| 1 | RAG pipeline + governance | 2+2 | Ảnh lineage DataHub cho `ml_rag_ingest` (`publish` đang skipped) | Có: bật DataHub EC2 |
+| 2 | Terraform / Ansible | 1+1 | `IaC.md` chưa có ảnh code đã chạy | Có: chụp `PLAY RECAP`, `terraform plan` |
+| 3 | Computing telemetry | 1 | Ảnh Grafana CPU/RAM/disk/network | Có |
+| 4 | README theo ô A2 | 2 | Sơ đồ triển khai tổng thể (deployable unit, mũi tên đánh số) | Không |
+| 5 | Unit coverage > 90% | 1 | Screenshot (đang chỉ có `evidence/serving-coverage-20261021.txt`, 96%) | Không |

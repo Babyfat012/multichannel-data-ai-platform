@@ -89,3 +89,14 @@ Log: Fluent Bit (DaemonSet, 1 pod/node) đọc log container, gắn nhãn `names
 
 Hai cột ~1,5k và ~1k dòng khớp đợt [load test trên EKS](ml-llm-platform-web-api.md#load-test-trên-eks)
 (3.004 request trong 60 s).
+
+Computing telemetry của EC2 (node-exporter `:9100`, Prometheus EKS scrape qua IP riêng). Grafana Explore, 4 truy vấn:
+CPU % (`node_cpu_seconds_total` idle), RAM % (`MemAvailable/MemTotal`), disk % cho `/` và `/mnt/platform-data` (EBS dữ
+liệu), network nhận byte/giây (bỏ `lo`, veth, docker, bridge).
+
+![Grafana Explore EC2: CPU giảm từ ~75% về ~17% sau đợt Flink, RAM ~31%, disk / 12% và /mnt/platform-data 31%, network nhận](evidence/aws/grafana-ec2-compute-20261031.png)
+
+Khung 15 phút, đồ thị chỉ có từ 00:01: trước đó Prometheus vẫn scrape IP EC2 **cũ** (`10.42.0.12`, máy bị thay hôm 30/10) dù
+ConfigMap đã trỏ `10.42.0.151`, vì sidecar nạp lại config bị tắt và pod chạy 13 giờ không khởi động lại.
+Sửa: [`prometheus-values.yaml`](../infra/k8s/observability/prometheus-values.yaml) bật `configmapReload`, test
+`test_prometheus_reloads_config_when_targets_change`.

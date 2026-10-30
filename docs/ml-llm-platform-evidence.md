@@ -31,7 +31,7 @@ Receipt, log và ảnh gốc giữ nguyên định danh của môi trường đ�
 | Coordinator multi-replica + scale | Đã ghi nhận | KEDA min 2 / max 3 theo request A2A ở gateway: 2→3→2 pod — [evidence](evidence/keda-coordinator-20261021.txt), [`coordinator-keda.yaml`](../infra/k8s/agents/coordinator-keda.yaml) | ảnh kagent UI chat |
 | Publish coordinator lên registry | Đã ghi nhận | [agents](llm-platform-agents.md) | Theo phạm vi tài liệu được dẫn |
 | Warm Up / Agent Fleet (substrate) | Chưa kiểm chứng | Agent Substrate (kagent `controller.substrate`, WorkerPool gVisor, snapshot/rehydrate agent rảnh) cần ate-system ~2–3 GB RAM — không chạy được cạnh KFP/LLM trên máy 14 GB; local thay bằng scale-to-0 có kiểm soát (KEDA pause, scale qwen 0) | AWS/EKS: cài substrate, ảnh nhiều agent / ít worker; ngoài mốc 1 |
-| Unit test coverage | Đã ghi nhận | 85 test, `serving/app.py` 98% (fixture + MagicMock/AsyncMock + httpx MockTransport) — [evidence](evidence/serving-coverage-20261021.txt), [`test_app.py`](../serving/tests/test_app.py) | Coverage theo snapshot của báo cáo 2026-10-21 |
+| Unit test coverage | Đã ghi nhận | 85 test, `serving/app.py` 98% (fixture + MagicMock/AsyncMock + httpx MockTransport) — [evidence](evidence/serving-coverage-20261021.txt), [ảnh 2026-10-31: 86 test, `app.py` 98%, tổng 96%](evidence/serving-coverage-20261031.png), [`test_app.py`](../serving/tests/test_app.py) | Coverage theo snapshot của báo cáo 2026-10-21 |
 | Equivalence partitioning / BVA | Đã ghi nhận | parametrize biên — `tests/unit/test_serve.py`, `test_agent_eval.py`, [web-api](ml-llm-platform-web-api.md) | Theo phạm vi tài liệu được dẫn |
 | Mutation testing | Đã ghi nhận | mutmut — [web-api](ml-llm-platform-web-api.md) | Theo phạm vi tài liệu được dẫn |
 | Property-based (hypothesis) | Đã ghi nhận | model: [`tests/unit/test_model_properties.py`](../tests/unit/test_model_properties.py) (dự đoán idempotent, train lại cùng seed ra cùng model, split không lọt tương lai; hypothesis tìm ra ca test một-lớp) + Web API: `test_idempotent` (Hypothesis) — gọi lại cùng request và gửi lặp SKU ra cùng kết quả, [`serving/tests/test_app.py`](../serving/tests/test_app.py) | Theo phạm vi tài liệu được dẫn |
@@ -62,6 +62,15 @@ Receipt, log và ảnh gốc giữ nguyên định danh của môi trường đ�
 | drift monitoring | Đã ghi nhận | Evidently, Sale event alert — [drift](ml-platform-drift.md) | Theo phạm vi tài liệu được dẫn |
 
 Các dòng “Đã ghi nhận” trỏ tới báo cáo hoặc receipt tại thời điểm chạy, không xác nhận service đang hoạt động. Tài liệu thành phần có lệnh tái lập và phần thiếu ảnh/log; không dùng trạng thái bảng này thay kết quả chạy mới.
+
+## Unit test coverage Web API
+
+`pytest serving/tests --cov=serving`: 86 test pass, `serving/app.py` 98% (4 dòng chưa phủ: `load_store` nạp Feast thật,
+và nhánh lỗi HTTP của tool `get_policy_chunks`), tổng 96% > 90%. `locustfile.py` 0% vì là kịch bản load test, không phải code
+ứng dụng. Test dùng fixture + `MagicMock`/`AsyncMock` thay Feast, `httpx.MockTransport` thay KServe:
+[`serving/tests/test_app.py`](../serving/tests/test_app.py).
+
+![pytest coverage serving: 86 passed, app.py 98%, TOTAL 96%](evidence/serving-coverage-20261031.png)
 
 ## Tái lập và bổ sung evidence
 

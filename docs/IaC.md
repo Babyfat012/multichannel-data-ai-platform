@@ -86,7 +86,21 @@ sơ công khai; chỉ ảnh/receipt đã kiểm mới đặt trong `docs/`.
 <!-- chụp: terraform apply thành công + output region/instance/bucket; lưu docs/images/aws/terraform-apply.png, che thông tin nhạy cảm. -->
 <!-- chụp: Console EC2 tại ap-southeast-1: instance, IAM role, IMDSv2 required/hop 2, EBS encrypted; SG không inbound; lưu docs/images/aws/ec2.png. -->
 <!-- chụp: Console S3 hai bucket raw/lakehouse, block public + versioning; lưu docs/images/aws/s3.png. -->
-<!-- chụp: Ansible PLAY RECAP failed=0 sau site/source_data/smoke; lưu docs/images/aws/ansible-recap.png. -->
+### Terraform đã chạy (2026-10-31)
+
+`terraform plan` trên hạ tầng đang chạy: Terraform đọc lại từng tài nguyên thật (VPC, subnet, SG, EC2, EBS, S3 raw/lakehouse,
+IAM role + policy `platform-ci-ecr`, ECR repo, budget) và so với code ⇒ **No changes**: hạ tầng khớp code, kể cả sau
+sự cố 30/10 (EC2 bị thay khi stop, đã sửa bằng `lifecycle.ignore_changes`).
+
+![terraform plan: refresh từng tài nguyên AWS, No changes](evidence/aws/terraform-plan-no-changes-20261031.png)
+
+### Ansible đã chạy (2026-10-31)
+
+Playbook đầy đủ `site.yml` trên EC2 qua SSM, truyền IP node EKS hiện tại cho Redis/pgvector (`-e feast_redis=…
+-e rag_pg=…`; thiếu thì `.env` về IP mặc định cũ). Task theo role `app` (checksum Dockerfile, Fernet, compose up,
+MLflow, Lakekeeper, Variable Airflow) và `datahub`; trong ảnh thấy 2 trong 4 `changed` (bật dịch vụ Data Platform, bật MLflow); phần lớn task `ok` vì chạy lại không đổi gì.
+
+![Ansible site.yml: các task role app/datahub, PLAY RECAP ok=51 changed=4 failed=0](evidence/aws/ansible-play-recap-20261031.png)
 
 Các comment là vị trí cần ảnh, **chưa phải bằng chứng**. Không dùng ảnh
 `terraform validate` thay apply. Quy trình thu pipeline/ảnh theo từng dòng Data Platform
