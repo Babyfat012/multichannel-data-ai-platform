@@ -25,6 +25,7 @@ ORDER = [
 KNOWN = {
     "sku-00001": (10, 3, 0.3, 2),
     "sku-00002": (0, 0, 0.0, 0),
+    "sku-00003": (15306, 2599, 0.16980269175486737, None),
 }
 
 
@@ -480,6 +481,23 @@ def test_predict_sends_v1_instance(predict_client):
     assert url == KSERVE
     instance = json.loads(raw)["instances"][0]
     assert instance == ORDER_LINE
+
+
+def test_long_decimals_rounded_for_pii_guardrail(store, monkeypatch):
+    """0.16980269175486737 bị guardrail phoneNumber của gateway che thành <PHONE_NUMBER> (30/10) ⇒ làm tròn 4 số."""
+    monkeypatch.setenv("KSERVE_URL", KSERVE)
+    prediction = {
+        "seller_sku": "sku-00003",
+        "score": 0.1661234567891234,
+        "abstain": False,
+        "reason": None,
+        "model_version": "1",
+    }
+    _, factory = kserve(payload={"predictions": [prediction]})
+    with TestClient(create_app(store_factory=lambda: store, http_factory=factory)) as c:
+        rate = c.post("/features", json={"seller_skus": ["sku-00003"]}).json()["features"][0]
+        score = c.post("/predict", json=ORDER_LINE).json()["score"]
+    assert (rate["return_or_refund_rate_90d"], score) == (0.1698, 0.1661)
 
 
 def test_predict_rejects_missing_country(predict_client):

@@ -18,7 +18,7 @@ from fastapi.responses import Response
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
-from pydantic import BaseModel, Field, StringConstraints, ValidationError
+from pydantic import AfterValidator, BaseModel, Field, StringConstraints, ValidationError
 
 # Tra từng view riêng: một view lỗi/chưa đăng ký thì feature của nó là None, không hỏng cả request.
 VIEWS = {
@@ -53,6 +53,9 @@ def counted(tool):
 
 # Dạng thật là `sku-00001`; cho rộng hơn để Channel khác vẫn qua, nhưng chặn ký tự lạ.
 SellerSku = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_.-]{1,64}$")]
+# Số thập phân dài (0.16980269175486737) bị guardrail phoneNumber của agentgateway che thành <PHONE_NUMBER>
+# trong câu trả lời Agent ⇒ làm tròn 4 số, vẫn đủ để xếp hạng SKU.
+Rounded = Annotated[float, AfterValidator(lambda v: round(v, 4))]
 
 
 class FeatureRequest(BaseModel):
@@ -65,7 +68,7 @@ class SkuFeatures(BaseModel):
     seller_sku: str
     labeled_count_90d: int | None
     positive_count_90d: int | None
-    return_or_refund_rate_90d: float | None
+    return_or_refund_rate_90d: Rounded | None
     approved_returns_24h: int | None
 
 
@@ -93,7 +96,7 @@ class Prediction(BaseModel):
     """score là tín hiệu xếp hạng rủi ro Return trong [0, 1], không phải xác suất đã hiệu chỉnh."""
 
     seller_sku: str
-    score: float | None
+    score: Rounded | None
     abstain: bool
     reason: str | None
     model_version: str | None
