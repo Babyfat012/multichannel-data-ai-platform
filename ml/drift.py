@@ -13,8 +13,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from generator.generate_order_lifecycle import POSITIVE_SCENARIOS
-
 COLUMNS = ["seller_sku", "label"]
 
 
@@ -69,6 +67,9 @@ def check(reference: pd.DataFrame, current: pd.DataFrame, html: Path) -> dict:
 
 def sale_batch(truth_path: str) -> pd.DataFrame:
     """Lô 'đợt Sale' từ file truth của generator: SKU + nhãn trả/hoàn trong 30 ngày."""
+    # Import ở đây: Job trên EKS (pipeline A) không mang mã generator, chỉ cần khi có lô Sale của B.
+    from generator.generate_order_lifecycle import POSITIVE_SCENARIOS
+
     rows = [json.loads(line) for line in Path(truth_path).read_text().splitlines()]
     return pd.DataFrame(
         {
@@ -78,24 +79,45 @@ def sale_batch(truth_path: str) -> pd.DataFrame:
     )
 
 
+def comparisons(frame: pd.DataFrame, reference_days: int, shift_channel: str | None = None) -> dict:
+    """Cặp (tham chiếu, hiện tại): `stable` = N ngày đầu vs phần sau; `channel_shift` = N ngày đầu vs
+    phần sau chỉ của một kênh (cơ cấu đơn dồn về một sàn) — kịch bản drift dựng được trên pipeline A."""
+    day = pd.to_datetime(frame["event_timestamp"], utc=True).dt.normalize()
+    boundary = day.min() + pd.Timedelta(days=reference_days)
+    reference, later = frame[day < boundary], frame[day >= boundary]
+    pairs = {"stable": (reference, later)}
+    if shift_channel:
+        current = later[later["channel"] == shift_channel]
+        if current.empty:
+            raise ValueError(f"không có dòng nào của kênh {shift_channel!r} sau mốc tham chiếu")
+        pairs["channel_shift"] = (reference, current)
+    return pairs
+
+
 def main(argv=None):
-    """Hai phép so: tham chiếu vs giai đoạn sau (ổn định) và vs đợt Sale (nếu có)."""
+    """Các phép so: ổn định, lệch theo kênh (nếu có), đợt Sale của pipeline B (nếu có)."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--reference", required=True, help="Parquet training_lines (local hoặc s3://)"
     )
     parser.add_argument("--reference-days", type=int, default=30)
+    parser.add_argument("--shift-channel", help="vd shopee: lô hiện tại chỉ gồm một kênh")
     parser.add_argument("--sale-truth")
     parser.add_argument("--out", type=Path, default=Path("out/drift"))
     args = parser.parse_args(argv)
     frame = pd.read_parquet(args.reference)
-    day = pd.to_datetime(frame["event_timestamp"], utc=True).dt.normalize()
-    boundary = day.min() + pd.Timedelta(days=args.reference_days)
-    reference, later = frame[day < boundary], frame[day >= boundary]
-    results = {"stable": check(reference, later, args.out / "stable.html")}
+    pairs = comparisons(frame, args.reference_days, args.shift_channel)
+    results = {
+        name: {
+            "reference_rows": len(ref),
+            "current_rows": len(cur),
+            **check(ref, cur, args.out / f"{name}.html"),
+        }
+        for name, (ref, cur) in pairs.items()
+    }
     if args.sale_truth:
         results["sale_event"] = check(
-            reference, sale_batch(args.sale_truth), args.out / "sale_event.html"
+            pairs["stable"][0], sale_batch(args.sale_truth), args.out / "sale_event.html"
         )
     (args.out / "summary.json").write_text(json.dumps(results, indent=2))
     print(json.dumps(results, indent=2))

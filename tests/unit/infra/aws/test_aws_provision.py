@@ -614,3 +614,21 @@ def test_wave5_ci_role_is_namespace_scoped_and_ecr_limited():
     ecr = iam[iam.index('data "aws_iam_policy_document" "ci_ecr"') :]
     assert "resources = [for repo in aws_ecr_repository.application : repo.arn]" in ecr
     assert "Delete" not in ecr.split('resource "aws_iam_role_policy" "ci_ecr"')[0]
+
+
+def test_mle_drift_job_reads_s3_with_pipeline_reader_identity():
+    """ML-N2 trên EKS: SA pipeline-runner (Pod Identity chỉ đọc feature-store/*), không key, Evidently ghim bản,
+    có phép so lệch theo kênh; code mount đúng gói `ml`."""
+    job = yaml.safe_load((ROOT / "infra/k8s/ml/drift-job.yaml").read_text())
+    assert job["metadata"]["namespace"] == "kubeflow"
+    spec = job["spec"]["template"]["spec"]
+    assert spec["serviceAccountName"] == "pipeline-runner"
+    container = spec["containers"][0]
+    command = container["args"][0]
+    assert '"evidently==0.7.23"' in command
+    assert "s3://@@LAKEHOUSE_BUCKET@@/feature-store/training_lines" in command
+    assert "--shift-channel shopee" in command
+    assert not {"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"} & {e["name"] for e in container["env"]}
+    assert container["volumeMounts"] == [{"name": "code", "mountPath": "/work/ml"}]
+    identity = (ROOT / "infra/aws/kubernetes/identity.tf").read_text()
+    assert 'pipeline_reader = { namespace = "kubeflow", service_account = "pipeline-runner" }' in identity

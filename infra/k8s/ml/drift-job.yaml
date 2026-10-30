@@ -1,0 +1,39 @@
+# ML-N2 trên AWS: kiểm data drift (Evidently) đầu vào model return-risk trên training_lines pipeline A ở S3.
+# Chạy trong ns kubeflow bằng SA pipeline-runner (Pod Identity chỉ ĐỌC feature-store/*), không key.
+# Code nạp từ ConfigMap `drift-code` (tạo từ ml/drift.py, xem runbook); kết quả = JSON tóm tắt trong log Job.
+# @@LAKEHOUSE_BUCKET@@ / @@AWS_REGION@@ điền lúc apply (sed).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mle-drift
+  namespace: kubeflow
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      serviceAccountName: pipeline-runner
+      restartPolicy: Never
+      containers:
+        - name: drift
+          image: python:3.12-slim
+          command: ["sh", "-c"]
+          args:
+            - pip install --quiet --no-cache-dir "evidently==0.7.23" "s3fs==2026.9.0" pyarrow
+              && cd /work && python -m ml.drift --reference "s3://@@LAKEHOUSE_BUCKET@@/feature-store/training_lines"
+              --reference-days 30 --shift-channel shopee --out /tmp/drift
+          env:
+            - {name: AWS_REGION, value: "@@AWS_REGION@@"}
+            - {name: AWS_DEFAULT_REGION, value: "@@AWS_REGION@@"}
+          volumeMounts:
+            - {name: code, mountPath: /work/ml}
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {memory: 3Gi}
+      volumes:
+        - name: code
+          configMap:
+            name: drift-code
+            items:
+              - {key: drift.py, path: drift.py}
+              - {key: init, path: __init__.py}

@@ -1,8 +1,9 @@
 """Kiểm ml/drift.summarize: đọc đúng chiều p-value (nhỏ = drift) và khoảng cách (lớn = drift)."""
 
+import pandas as pd
 import pytest
 
-from ml.drift import summarize
+from ml.drift import comparisons, summarize
 
 
 def snapshot(*metrics):
@@ -37,3 +38,24 @@ def test_alert_when_any_column_drifts_and_ignores_other_metrics():
         )
     )
     assert out["drifted"] == ["seller_sku"] and out["alert"] is True
+
+
+def test_comparisons_split_by_reference_window_and_channel():
+    """N ngày đầu là tham chiếu; channel_shift chỉ giữ phần sau của một kênh; kênh vắng ⇒ báo lỗi rõ."""
+    frame = pd.DataFrame(
+        {
+            "event_timestamp": pd.to_datetime(
+                ["2026-01-01", "2026-01-05", "2026-02-10", "2026-02-11", "2026-02-12"], utc=True
+            ),
+            "channel": ["amazon", "shopee", "amazon", "shopee", "shopee"],
+            "seller_sku": ["A", "B", "A", "B", "B"],
+            "label": [0, 1, 0, 1, 0],
+        }
+    )
+    pairs = comparisons(frame, reference_days=30, shift_channel="shopee")
+    assert [len(x) for x in pairs["stable"]] == [2, 3]
+    ref, cur = pairs["channel_shift"]
+    assert len(ref) == 2 and set(cur["channel"]) == {"shopee"} and len(cur) == 2
+    assert "channel_shift" not in comparisons(frame, 30)
+    with pytest.raises(ValueError, match="walmart"):
+        comparisons(frame, 30, shift_channel="walmart")
