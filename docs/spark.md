@@ -288,9 +288,7 @@ mỗi task ghi file riêng cho mọi ngày nó gặp ⇒ 309 file nhỏ.
 
 Kết luận giống local và giữ nguyên quyết định ở (e): **giữ `hash`** — nhanh hơn 21% lúc ghi không bù được
 15× số file nhỏ cho mọi lần đọc sau (xem compaction ở [storage.md](storage.md)).
-Ảnh: [4 lần chạy](evidence/aws/spark-skew-runs-20261029.png), [jobs hash](evidence/aws/spark-ui-skew0-jobs-20261029.png),
-[jobs none](evidence/aws/spark-ui-skewb-jobs-20261029.png), [stages hash](evidence/aws/spark-ui-skew0-stages-20261029.png),
-[summary stage 1](evidence/aws/spark-ui-skew0-stage1-summary-20261029.png).
+Ảnh AWS được nhúng ở [mục AWS](#trên-aws-2026-10-29).
 
 ## 6. Kết quả ở quy mô đầy đủ — lần 3
 
@@ -514,3 +512,42 @@ Tái tạo ảnh bằng `scripts/evidence/capture_spark_silver_evidence.py` khi 
 đang đọc `out/spark-events`. Script kiểm execution đã hoàn tất và có cả hai
 tên khóa, `from_json`, `Union`, `row_number` trước khi lưu proof. Việc chụp
 không cần Spark worker hay đọc lại dữ liệu nguồn.
+
+## Trên AWS (2026-10-29)
+
+Thí nghiệm skew chạy Compose trên EC2 `r6i.xlarge`, hai Spark worker × hai core, nguồn S3;
+20 ngày Amazon, AQE tắt. [Mục 5g](#g-đo-lại-trên-aws-2026-10-29-ec2-r6ixlarge-4-vcpu-nguồn-s3a)
+và [receipt](evidence/aws/data-platform-aws-20261027.json) (`spark_skew_aws`) giữ số đo.
+Code: [script đo](../scripts/evidence/measure_order_snapshots_bronze.sh),
+[job ingest](../spark_jobs/bronze/ingest_amazon_order_snapshots.py).
+
+UI baseline `hash` có 314 task ở hai stage. Stage ghi có median 2 ms/0 dòng nhưng max 12 s/2.173.164 dòng:
+phần lớn partition hash rỗng, một số task chịu ngày nhiều dữ liệu. Đây là skew theo ngày ghi, không phải bằng chứng
+skew SKU trong phép join. Bỏ phân phối hash bằng `write.distribution-mode=none` bỏ shuffle, còn 114 task/một stage.
+Thời gian giảm từ trung bình 91,1 xuống 71,6 giây; file tăng 20 → 309. Giữ `hash` để tránh nhiều file nhỏ;
+đổi spec cho kênh nhỏ được đo riêng ở [Storage AWS](storage.md#trên-aws-2026-10-29).
+
+![Terminal EC2: ba run skew_0 mất 93,8, 88,7, 90,7 giây và skew_b mất 71,6 giây; mỗi run ghi 12.627.457 dòng](evidence/aws/spark-skew-runs-20261029.png)
+
+![Spark Jobs đối chứng hash: createOrReplace có 2 stage và 314 task thành công](evidence/aws/spark-ui-skew0-jobs-20261029.png)
+
+![Spark Stages hash: stage 0 có 114 task đọc 9,4 GiB, stage 1 có 200 task nhận shuffle 2,2 GiB](evidence/aws/spark-ui-skew0-stages-20261029.png)
+
+![Spark stage 1: median 2 ms và output 0 dòng; max 12 giây và output 2.173.164 dòng](evidence/aws/spark-ui-skew0-stage1-summary-20261029.png)
+
+![Spark Jobs none: createOrReplace hoàn tất một stage, 114 task, duration 1,0 phút](evidence/aws/spark-ui-skewb-jobs-20261029.png)
+
+Tích hợp: [dp1_bronze](../dags/dp1_bronze.py) submit ingest rồi validate từng nguồn;
+[dp2_silver](../dags/dp2_silver.py) submit chuẩn hóa/dedup rồi Gold/SCD2;
+[dp3_features](../dags/dp3_features.py) submit build/validate feature.
+[Airflow AWS](airflow.md#trên-aws-2026-10-27-đến-2026-10-28) nhúng Graph/Gantt/log và giải thích từng component.
+Ảnh Master dưới thuộc DP1 ngày 2026-10-27; thí nghiệm skew ngày 29 ở trên chạy riêng bằng script,
+không gán run_id của benchmark cho run DAG.
+
+![Spark Master: hai worker ALIVE, mỗi worker hai core; ứng dụng dp1-validate-amazon của user airflow đang RUNNING](evidence/aws/spark-master-2x2core-20261027.png)
+
+![Airflow DP1: danh sách 10 task màu xanh và cạnh ingest nối validate trong Graph](evidence/aws/dp1-bronze-graph-20261027.png)
+
+DP2 AWS đã validate Silver/Gold không lỗi ([Silver AWS](silver.md#trên-aws-2026-10-28)).
+Chưa có ảnh Spark UI AWS thể hiện Union parse schema cũ/mới và Window dedup như execution local ở mục 10;
+log PASS không thay thế capture đó cho DE13–14.

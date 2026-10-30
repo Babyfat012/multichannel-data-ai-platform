@@ -118,10 +118,20 @@ WHERE seller_sku = 'APP-00482'
 | iceberg | 4.517 | 49.632.312,55 |
 | postgres | 4.517 | 49.632.312,55 |
 
-Hai nguồn khớp từng dòng và từng đồng: vừa là truy vấn liên nguồn, vừa là phép kiểm chéo rằng
+Hai nguồn khớp số dòng và tổng tiền: vừa là truy vấn liên nguồn, vừa là phép kiểm chéo rằng
 `dp4_warehouse` chép đúng 30 ngày từ Gold.
 
 Query `20261029_092844_00002_zfrx9`: FINISHED, 15,50 s (planning 571 ms), 3 stage; stage 1 đọc Iceberg
-(7,18M dòng quét, 27,3 s scheduled trên 1 worker). Ảnh: [danh sách query](evidence/aws/trino-queries-20261029.png),
-[overview](evidence/aws/trino-federation-overview-20261029.png), [stages](evidence/aws/trino-federation-stages-20261029.png).
+(7,18M dòng quét, 27,3 s scheduled trên 1 worker).
 
+![Trino Cluster overview: một worker, query UNION ALL hai nguồn FINISHED](evidence/aws/trino-queries-20261029.png)
+
+![Trino query 20261029_092844_00002_zfrx9 FINISHED, elapsed 15,50 giây](evidence/aws/trino-federation-overview-20261029.png)
+
+![Trino: SQL đọc lakehouse.gold và postgres.warehouse, cả ba stage FINISHED](evidence/aws/trino-federation-stages-20261029.png)
+
+Ý tưởng là kiểm chéo Gold S3 với warehouse PostgreSQL trong một câu SQL, giảm bước ghép kết quả thủ công.
+`UNION ALL` giữ riêng kết quả từng nguồn; hai giá trị tổng hợp khớp không chứng minh toàn bộ từng dòng bằng nhau.
+Số 4.517 và 49.632.312,55 lấy từ [receipt](evidence/aws/data-platform-aws-20261027.json)
+(`novel_trino_federation`); ảnh UI cho thấy SQL hai catalog và FINISHED, không hiển thị bảng kết quả CLI.
+Catalog PostgreSQL: [postgres.properties](../trino/catalog-aws/postgres.properties).

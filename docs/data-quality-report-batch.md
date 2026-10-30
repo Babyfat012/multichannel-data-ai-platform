@@ -198,3 +198,18 @@ Khoảng một nửa bản trùng của Amazon là bản cũ hơn, mang Order St
 | `seller.skus` | 50 | 50 | 0% | 1 |
 
 Ba dòng `tiktok_shop.orders` / `shopify.orders` / `shopee.orders` (1.810 / 910 / 354) khớp đúng số dòng mà các job validate Bronze/Silver đếm được ở DP1/DP2, nên đường ống cho ba Channel mới được kiểm bằng số của chính nguồn nhỏ này. Đây là nguồn **nhỏ có chủ đích** để kiểm cấu trúc và đường ống, không phải bằng chứng đạt ngưỡng 100 GB; ngưỡng 100 GB chỉ dựa trên Amazon + Walmart ở `/data/raw`.
+
+## Trên AWS (2026-10-27)
+
+Nguồn batch nằm trên S3 và PostgreSQL EC2; [receipt AWS](evidence/aws/data-platform-aws-20261027.json)
+ghi `raw_s3` 17.393 object, 141.774.479.087 byte, khớp byte trên đĩa EC2.
+Phạm vi v1 Amazon + Walmart + SKU là 100.012.790.412 byte, khớp manifest local;
+PostgreSQL có 10.949.058 dòng Walmart và 2.000 SKU.
+
+![DataHub lọc AWS S3: bốn dataset nguồn Amazon, Shopee, Shopify và TikTok Shop ở source-exports](evidence/aws/datahub/s3-sources.png)
+
+Ảnh DataHub chỉ cho thấy các dataset nguồn S3 đã được khai metadata, không hiển thị số byte hay histogram.
+Số byte và số dòng trên lấy từ receipt; tỷ lệ skew, unique/total, duplicate và schema trước/sau ở các mục trước
+thuộc báo cáo local. Chưa có report/capture AWS đủ bốn đặc tính đó, nên DE5–8 chưa được coi là đủ chỉ vì byte khớp.
+[Code generator](../generator/__main__.py), [cấu hình 100 GB](../configs/scale-100gb.yaml),
+[manifest local để đối chiếu](evidence/batch-100gb-manifest.json).

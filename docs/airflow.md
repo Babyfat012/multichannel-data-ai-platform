@@ -316,3 +316,67 @@ Bronze; không thay thế đường nạp Batch của năm Channel. Hai lần ch
 đã đưa sáu sự kiện vào `lakehouse.bronze.raw_walmart_cdc`, log Validate ghi
 **Kafka 6 = Bronze 6, offset duy nhất 6, thiếu 0, lỗi 0**. Ảnh Graph/Grid và số
 đo commit → Bronze ở [`cdc.md`](cdc.md).
+
+## Trên AWS (2026-10-27 đến 2026-10-28)
+
+Airflow và Spark chạy bằng Compose trên EC2 Sydney, đọc raw S3 và PostgreSQL EC2.
+[Receipt AWS](evidence/aws/data-platform-aws-20261027.json) và
+[manifest validation](evidence/aws/datahub-validation-aws-20261029.json) giữ run_id và số đo.
+
+### DP1: nguồn → Bronze
+
+Run `manual__2026-10-27T14:58:12+00:00`, 10/10 task success.
+Trong [DAG dp1_bronze](../dags/dp1_bronze.py), `ingest_amazon` đọc JSONL S3;
+`ingest_walmart` đọc JDBC; `ingest_tiktok_shop`, `ingest_shopify`, `ingest_shopee` đọc export S3 của từng kênh.
+Mỗi `validate_<channel>` chạy sau ingest tương ứng, so số dòng nguồn/Bronze và kiểm payload, provenance.
+Amazon có 108.248.563 dòng ở cả hai phía, lỗi 0. Các task Spark chạy lần lượt để giới hạn RAM.
+
+![Airflow DP1: danh sách 10 task màu xanh và cạnh ingest nối validate trong Graph](evidence/aws/dp1-bronze-graph-20261027.png)
+
+![Gantt DP1: các cặp ingest và validate năm Channel chạy lần lượt, trạng thái xanh](evidence/aws/dp1-bronze-gantt-20261027.png)
+
+![Log validate_amazon: nguồn và Bronze đều 108.248.563, lỗi 0, DP1 Validate đạt](evidence/aws/dp1-validate-amazon-log-20261027.png)
+
+### DP2: Bronze → Silver → Gold và SCD2
+
+Run `manual__2026-10-27T16:05:58+00:00`, 14/14 task success sau khi chạy lại validator Walmart.
+[DAG dp2_silver](../dags/dp2_silver.py) có các component sau:
+
+| Component | Vai trò |
+|---|---|
+| `ingest_amazon_silver` | [Parse schema Amazon cũ/mới, explode Order Line và giữ revision mới nhất](../spark_jobs/silver/build_amazon_order_snapshots.py) |
+| `ingest_walmart_silver` | [Chuẩn hóa dòng JDBC Walmart, dedup theo khóa nguồn](../spark_jobs/silver/build_walmart_order_snapshots.py) |
+| `ingest_tiktok_shop_silver`, `ingest_shopify_silver`, `ingest_shopee_silver` | [Chuẩn hóa và dedup export của từng Channel](../spark_jobs/silver/build_file_order_snapshots.py) |
+| `validate_amazon_silver`, `validate_walmart_silver` | [Kiểm số Order Line so nguồn, cột bắt buộc, khóa và run_id](../spark_jobs/silver/validate_order_snapshots.py) |
+| `validate_tiktok_shop_silver`, `validate_shopify_silver`, `validate_shopee_silver` | [Kiểm Silver của từng kênh nhỏ](../spark_jobs/silver/validate_file_order_snapshots.py) |
+| `build_gold_order_lines` | [Hợp năm Silver thành fact chung](../spark_jobs/gold/build_order_snapshot_lines.py) |
+| `build_amazon_order_dim` | [Tạo các phiên bản SCD2 từ snapshot Amazon Bronze](../spark_jobs/gold/build_amazon_order_status_scd2.py) |
+| `validate_amazon_order_dim` | [Kiểm một bản hiện hành, khoảng hiệu lực và khóa fact → dim](../spark_jobs/gold/validate_amazon_order_status_scd2.py) |
+| `validate_gold_order_lines` | [So Gold với Silver từng kênh, kiểm lỗi và khóa trùng](../spark_jobs/gold/validate_order_snapshot_lines.py) |
+
+Gold = Silver 227.200.303 Order Line, lỗi và trùng khóa 0. Amazon SCD2 có 106.109.637 bản hiện hành,
+1.062.966 bản lịch sử; các kiểm tra đều 0 lỗi. Gantt còn dấu đỏ của `validate_walmart_silver`:
+receipt ghi ổ gốc đầy, dọn ổ rồi Clear và chạy lại PASS. `01:58:43` là duration trên Summary;
+không dùng số đó làm thời gian đầu-cuối từ run_id đến validate cuối sau các lần Clear.
+
+![Summary DP2: Total success 1, Total Tasks 14 và danh sách task Silver, Gold, SCD2 màu xanh](evidence/aws/dp2-silver-summary-20261028.png)
+
+![Gantt DP2: validate_walmart_silver có lần đỏ trước lần xanh; các task Gold và SCD2 hoàn tất](evidence/aws/dp2-silver-gantt-20261028.png)
+
+![Session Manager EC2: log DP2 ghi Silver validate PASS, Gold khớp từng Channel và Amazon SCD2 không lỗi](evidence/aws/dp2-validate-logs-20261028.png)
+
+### DP3: Gold → feature offline
+
+Run `manual__2026-10-28T00:05:21.167441+00:00`, 2/2 task success.
+[DAG dp3_features](../dags/dp3_features.py): `build_return_features` gọi
+[job build](../spark_jobs/gold/build_order_snapshot_return_features.py), chỉ lấy thuộc tính biết lúc đặt Order;
+`validate_return_features` gọi [validator](../spark_jobs/gold/validate_order_snapshot_return_features.py),
+so tập khóa với Gold, kiểm thiếu/thừa, trùng khóa và `event_timestamp = created_at`.
+Feature = Gold 227.200.303 dòng; mọi số lỗi nói trên bằng 0. Gantt cho thấy validate mất 01:03:55,
+lâu hơn build vì đối chiếu từng dòng; đây chưa phải chứng minh PIT join đầy đủ.
+
+![Summary DP3: build_return_features và validate_return_features màu xanh, Total success 1](evidence/aws/dp3-features-summary-20261028.png)
+
+![Gantt DP3: validate_return_features chạy 01:03:55, lâu hơn build_return_features](evidence/aws/dp3-features-gantt-20261028.png)
+
+![Session Manager EC2: fact_rows và feature_rows đều 227.200.303, missing, extra và wrong_event_time bằng 0](evidence/aws/dp3-validate-log-20261028.png)

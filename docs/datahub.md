@@ -141,3 +141,67 @@ Không áp dụng cấu hình đó cho môi trường chia sẻ hoặc productio
 Không xóa Docker volume để lấy chỗ: các volume lớn khác thuộc dự án khác.
 
 UI ở `http://localhost:9002`; GMS ở `http://localhost:8089`.
+
+## Trên AWS (2026-10-28 đến 2026-10-29)
+
+DataHub 1.7.0.1 chạy Compose trên EC2. Lần publish sáu DAG ghi 22 dataset, 30 job và 16 assertion PASS;
+[manifest AWS](evidence/aws/datahub-validation-aws-20261029.json) ghi run_id, task_id, rule và metrics của từng check.
+[Publisher](../scripts/run/publish_order_snapshots_datahub.py) khai lineage từ input/output DAG;
+[builder validation](../scripts/evidence/build_order_snapshots_datahub_validation.py) lấy kết quả từ log Airflow thành công.
+Ảnh Quality chỉ thấy assertion xanh; run_id và số chi tiết phải đọc manifest, không suy từ nhãn “hours ago”.
+
+| DAG / run_id | Bảng và nhiệm vụ | Assertion đã ghi |
+|---|---|---|
+| `dp1_bronze` / `manual__2026-10-27T14:58:12+00:00` | `bronze.raw_amazon_orders_dp1`: payload S3 qua `ingest_amazon`; bốn bảng raw còn lại giữ nguồn từng kênh | `validate_amazon`: nguồn = Bronze 108.248.563, invalid 0; từng kênh có check riêng |
+| `dp2_silver` / `manual__2026-10-27T16:05:58+00:00` | Năm `silver.stg_*_order_lines_dp2` qua `build_gold_order_lines` → `gold.fact_order_lines_dp2`; `gold.dim_amazon_order_dp2` giữ SCD2 | `validate_gold_order_lines`: 227.200.303 = Silver, invalid và khóa trùng 0; validator dimension kiểm khóa fact và một bản hiện hành |
+| `dp3_features` / `manual__2026-10-28T00:05:21.167441+00:00` | `gold.fact_order_lines_dp2` qua `build_return_features` → `gold.feat_order_line_return_dp3`: feature lúc đặt Order | `validate_return_features`: 227.200.303 = Gold; missing/extra/wrong event time/trùng khóa/invalid đều 0 |
+
+Code pipeline và vai trò từng task: [Airflow AWS](airflow.md#trên-aws-2026-10-27-đến-2026-10-28).
+
+### DP1: nguồn và Bronze
+
+![DataHub lọc AWS S3: bốn dataset nguồn Amazon, Shopee, Shopify và TikTok Shop ở source-exports](evidence/aws/datahub/s3-sources.png)
+
+![DataHub Bronze Amazon: nguồn S3 qua ingest_amazon tới raw_amazon_orders_dp1 và các task downstream](evidence/aws/datahub/dp1-lineage.png)
+
+![DataHub Quality raw_amazon_orders_dp1: assertion dp1_bronze.validate_amazon có dấu xanh và Passing (1)](evidence/aws/datahub/dp1-validation.png)
+
+### DP2: Silver và Gold
+
+![DataHub Gold fact: năm nhánh Bronze qua task Silver, hợp vào build_gold_order_lines rồi fact_order_lines_dp2](evidence/aws/datahub/dp2-lineage.png)
+
+![DataHub Quality fact_order_lines_dp2: assertion dp2_silver.validate_gold_order_lines có dấu xanh](evidence/aws/datahub/dp2-validation.png)
+
+### DP3: feature
+
+![DataHub: fact_order_lines tới build_return_features, feat_order_line_return rồi validate_return_features](evidence/aws/datahub/dp3-lineage.png)
+
+![DataHub Quality feat_order_line_return_dp3: assertion dp3_features.validate_return_features có dấu xanh](evidence/aws/datahub/dp3-validation.png)
+
+### CDC, nhãn và warehouse
+
+[DAG CDC](../dags/dp1_cdc.py), run `manual__2026-10-28T10:51:33.422898+00:00`:
+Kafka → `ingest_walmart_cdc` → `bronze.raw_walmart_cdc_v2`; validator kiểm 3 offset, không thiếu/thừa/sai payload.
+[Probe và giải thích CDC](cdc.md#trên-aws-2026-10-28).
+
+![DataHub CDC: Kafka orders qua ingest_walmart_cdc tới raw_walmart_cdc_v2 và validate_walmart_cdc](evidence/aws/datahub/dp1-cdc-lineage.png)
+
+![DataHub Quality raw_walmart_cdc_v2: assertion dp1_cdc.validate_walmart_cdc có dấu xanh](evidence/aws/datahub/dp1-cdc-validation.png)
+
+[DAG nhãn](../dags/dp3_return_labels.py), run `manual__2026-10-28T16:18:15.667507+00:00`:
+`build_and_validate_return_labels` nối Gold với đáp án generator → `gold.fact_return_labels_dp3`,
+179.436.428 dòng, duplicate và invalid 0 theo manifest. Nhãn tách khỏi feature để tránh leakage.
+
+![DataHub: năm nhánh Silver qua Gold fact và task build_and_validate tới fact_return_labels_dp3](evidence/aws/datahub/dp3-return-labels-lineage.png)
+
+[DAG warehouse](../dags/dp4_warehouse.py), run `manual__2026-10-29T08:34:06.602356+00:00`:
+`export_and_index_warehouse` chép Gold 30 ngày → PostgreSQL `warehouse.fact_order_lines_30d_dp2`.
+Assertion đối soát 37.045.741 dòng, đủ năm Channel và không lệch count trước khi tạo index.
+
+![DataHub: năm bảng Silver qua Gold fact và export_and_index_warehouse tới warehouse.fact_order_lines_30d_dp2](evidence/aws/datahub/dp4-warehouse-lineage.png)
+
+![DataHub Quality warehouse.fact_order_lines_30d_dp2: assertion dp4_warehouse.export_and_index_warehouse có dấu xanh](evidence/aws/datahub/dp4-warehouse-validation.png)
+
+Giới hạn: lineage khai trong publisher, chưa tự suy từ Spark execution plan. Metadata và assertion này
+là lịch sử của các run trong manifest; không khẳng định mọi run tiếp theo tự publish. Sidebar UI đang lỗi,
+nhưng các trang dataset/Lineage/Quality trong ảnh mở được.

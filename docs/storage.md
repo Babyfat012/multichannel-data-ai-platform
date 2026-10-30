@@ -147,12 +147,40 @@ SKU bị skew mạnh: nhiều nhất `ELE-01103` 2.011.389 dòng (5,4%), ít nh�
   lạnh trên EBS). Muốn nhanh hơn: `CLUSTER … USING` index, hoặc index bao (`INCLUDE (line_net_amount)`)
   để chỉ đọc index.
 
-Ảnh: [trước 1](evidence/aws/warehouse-explain-before-1-20261029.png),
-[trước 2](evidence/aws/warehouse-explain-before-2-20261029.png),
-[sau](evidence/aws/warehouse-explain-after-20261029.png), [log DAG](evidence/aws/dp4-warehouse-log-20261029.png).
+Ảnh EXPLAIN và log được nhúng ở [mục AWS](#trên-aws-2026-10-29).
 
 ## Phạm vi phép đo
 
 Tài liệu này ghi compaction Iceberg và chỉ mục PostgreSQL. Phép đối chiếu cùng
 câu hỏi giữa Iceberg và warehouse bằng Trino được ghi riêng tại
 [trino.md](trino.md); z-order chưa được đo trong bộ bằng chứng hiện có.
+
+## Trên AWS (2026-10-29)
+
+Spark/Iceberg và PostgreSQL chạy Compose trên EC2, dữ liệu lakehouse ở S3.
+[Receipt AWS](evidence/aws/data-platform-aws-20261027.json) có `lakehouse_repartition_shopee` và `airflow_dp4_warehouse`;
+chi tiết phép đo ở [Lakehouse](#lakehouse-trên-aws-gộp-file-nhỏ-bằng-partition-evolution-2026-10-29)
+và [Warehouse](#warehouse-trên-aws-30-ngày-năm-channel-2026-10-29).
+
+Với Shopee, [job partition evolution](../spark_jobs/maintenance/repartition_small_channel.py) đổi ngày → tháng,
+rewrite-all: 180 → 6 file; 4.689.957 dòng và fingerprint `-2551885948954549477803` giữ nguyên.
+Trung vị ba lần `count(*)` 1,040 → 0,286 s; lọc 30 ngày 7,943 → 0,968 s. Đây là số trong receipt;
+chưa có ảnh AWS chụp riêng trước/sau compaction. Maintenance trước đó no-op vì mỗi partition ngày chỉ một file.
+
+DAG [dp4_warehouse](../dags/dp4_warehouse.py), run `manual__2026-10-29T08:34:06.602356+00:00`,
+gọi [export và index](../spark_jobs/warehouse/export_order_snapshot_lines.py). Job chép 30 ngày năm Channel,
+so count từng Channel với Gold rồi tạo B-tree `(seller_sku)` và `ANALYZE`.
+Ảnh dưới cho thấy vấn đề của baseline: lọc SKU hiếm vẫn phải quét cả bảng.
+
+![Airflow dp4_warehouse attempt 3 màu xanh: log đối soát Gold và warehouse, đã ghi index seller_sku, rows 37.045.741](evidence/aws/dp4-warehouse-log-20261029.png)
+
+![Session Manager: thống kê SKU, bảng 5.513 MB, index 250 MB và Parallel Seq Scan sau DROP INDEX](evidence/aws/warehouse-explain-before-1-20261029.png)
+
+![EXPLAIN trước index: Parallel Seq Scan, APP-00482 mất 42.567,429 ms và ELE-01103 mất 41.744,754 ms](evidence/aws/warehouse-explain-before-2-20261029.png)
+
+![EXPLAIN sau CREATE INDEX và ANALYZE: APP-00482 dùng Bitmap Index Scan; ELE-01103 vẫn Parallel Seq Scan](evidence/aws/warehouse-explain-after-20261029.png)
+
+`APP-00482` có 4.517/37.045.741 dòng: trước index Parallel Seq Scan 42.567,429 ms, đọc 690.595 buffer;
+sau index Bitmap Index Scan → Bitmap Heap Scan 1.497,187 ms, đọc 4.475 buffer.
+Với SKU phổ biến `ELE-01103` (2.011.389 dòng), planner vẫn chọn Seq Scan: index không có lợi khi phải đọc
+phần lớn trang. Đây là các lượt EXPLAIN quan sát trên EBS, chưa tách ảnh hưởng cache thành benchmark ổn định.

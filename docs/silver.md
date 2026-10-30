@@ -519,3 +519,19 @@ D cũng xuất lại ở D+1..D+3 (`overlap_days = 3`). Với các Order xuất 
 khớp số đo 1,5976%.
 => Muốn đo tỉ lệ trùng ĐÚNG bằng manifest thì phải nạp cả 180 ngày. **Chưa đo.** Số 1,5976%
 là cận dưới, và nó đủ để chứng minh dedup làm việc.
+
+## Trên AWS (2026-10-28)
+
+DP2 chạy Spark Compose trên EC2, Bronze/Silver/Gold ở S3;
+run `manual__2026-10-27T16:05:58+00:00` trong [receipt](evidence/aws/data-platform-aws-20261027.json).
+[Job Amazon](../spark_jobs/silver/build_amazon_order_snapshots.py) parse hai schema rồi chuẩn hóa,
+Window theo khóa giữ revision mới nhất; [DAG](../dags/dp2_silver.py) đặt validator sau từng job Silver.
+
+![Summary DP2: Total success 1, Total Tasks 14 và danh sách task Silver, Gold, SCD2 màu xanh](evidence/aws/dp2-silver-summary-20261028.png)
+
+![Session Manager EC2: log DP2 ghi Silver validate PASS, Gold khớp từng Channel và Amazon SCD2 không lỗi](evidence/aws/dp2-validate-logs-20261028.png)
+
+Receipt ghi Silver Amazon 153.849.901, Walmart 15.562.675, TikTok Shop 33.338.110,
+Shopify 17.782.786, Shopee 6.666.831 dòng; Gold khớp từng kênh, lỗi và khóa Order Line trùng 0.
+Ảnh chứng minh trạng thái DAG và kết quả validator. Chưa có Spark UI AWS mở execution plan Union/schema và Window dedup,
+nên chưa thay được proof xử lý chi tiết DE13–14. [Airflow AWS](airflow.md#trên-aws-2026-10-27-đến-2026-10-28).

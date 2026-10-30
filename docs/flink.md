@@ -135,3 +135,26 @@ giảm **1.397** webhook trùng. Số liệu job, plan và metrics giữ trong
 93.554 record đi từ source. Ảnh và plan chứng minh phép khử trùng theo khóa đã
 được Flink thực thi; vì job đọc bounded và kết thúc sau vài giây, phép đo này
 không phải bằng chứng về kích thước state dài hạn hay checkpoint phục hồi.
+
+## Trên AWS (2026-10-28)
+
+Flink 1.20.3 và Kafka chạy Compose trên EC2; đầu ra bounded ở EBS `/mnt/platform-data/flink`.
+[Manifest AWS](evidence/aws/stream-manifest-20261028.json) ghi job_id, số đầu vào/đầu ra và cấu hình generator.
+Ảnh Completed Jobs có baseline, late, dedup, state proof và windows đều FINISHED.
+
+| Bước / code | Vấn đề và cách xử lý | Số AWS từ manifest |
+|---|---|---|
+| [Baseline](../flink_jobs/order_snapshots/baseline.sql) | Đọc Amazon bounded, chưa tách muộn | 399.410 dòng, job `ffd9de8a94c5bf67179482bfe03d3b59` |
+| [Late arrival](../flink_jobs/order_snapshots/late_arrival.sql) | Watermark event time trễ 1 giờ; lọc `event_ts <= CURRENT_WATERMARK(event_ts)` ra đích riêng | 10.166 dòng, job `b172bcf2510b47e1cbcd532f3078a82d` |
+| [Dedup](../flink_jobs/order_snapshots/dedup_webhooks.sql), [state proof](../flink_jobs/order_snapshots/dedup_state_proof.sql) | TikTok trùng ID; `ROW_NUMBER` giữ bản đầu, cạnh HASH đưa cùng ID vào keyed Deduplicate | 93.554 vào → 92.157 ra, bỏ 1.397; state-proof job `f5b642f64b133e28ec0f57021f1eab22` |
+| [Window SQL](../flink_jobs/order_snapshots/windows.sql) | Đếm Order mới theo tumbling 5 phút và HOP 5 phút trượt 1 phút | 7.555 / 37.870 cửa sổ, job `dad323a91493cdf365c5a3d3d4dd0adf` |
+
+![Flink 1.20.3 Completed Jobs: baseline Amazon, late Amazon, hai job dedup và job cửa sổ đều FINISHED](evidence/aws/flink-completed-jobs-20261028.png)
+
+![Flink dedup_tiktok_state_proof: cạnh HASH tới Deduplicate, source gửi 93.554 record, job FINISHED](evidence/aws/flink-dedup-graph-20261028.png)
+
+UI dedup thấy HASH → Deduplicate và 93.554 record nhận, chứng minh keyed operator đã chạy.
+Số 92.157 dòng đầu ra lấy từ manifest, không đọc nhầm cột Records Sent của file sink bằng 0 thành mất dữ liệu.
+Ảnh Completed Jobs chỉ xác nhận job late FINISHED; chưa có UI AWS mở operator/watermark và ví dụ event muộn.
+10.166 không phải số tất định: watermark phát theo chu kỳ, khác phép đếm out-of-order toàn cục 19.729 của generator.
+Window AWS dài hạn 24h trượt 1h có [ảnh operator/checkpoint riêng](ml-platform-stream-feature.md#trên-aws-pipeline-a-2026-10-30).

@@ -134,3 +134,13 @@ multi-stage, không giữ cache). Receipt: [`evidence/docker-compare-20261019.js
 Cấu hình hiện hành dùng Compose project `platform`, image `platform-*`, cụm kind `platform`, và tiền tố Airflow Connection/Variable `platform_`. Các tên này được dùng thống nhất trong script setup, manifest và hướng dẫn.
 
 Nếu nâng cấp từ checkout có tên tài nguyên khác, named volume, bucket, database, Vault path và Airflow metadata cũ vẫn thuộc môi trường cũ. Đổi tên cấu hình không di chuyển dữ liệu hoặc secret. Giữ bản sao dữ liệu và cấu hình cần dùng, chọn môi trường đích rồi chạy lại các bước setup tương ứng; không dùng `down -v` để đổi tên. Evidence lịch sử giữ nguyên định danh của lần chạy gốc.
+
+## Trên AWS (2026-10-27)
+
+[Receipt AWS](evidence/aws/data-platform-aws-20261027.json) ghi workload Compose trên EC2 Sydney;
+[Airflow AWS](airflow.md#trên-aws-2026-10-27-đến-2026-10-28) nhúng Graph/Gantt của các pipeline đã chạy.
+Cấu hình triển khai: [Compose AWS](../docker-compose.aws.yml).
+
+Ảnh và số so naive/optimized ở các mục trước được đo local. Chưa có capture `docker image inspect` và
+so package/lock trên EC2; không dùng receipt Compose thay bằng chứng giảm kích thước DE3–4.
+Script đo đã có: [compare_docker_dependencies.sh](../scripts/evidence/compare_docker_dependencies.sh).

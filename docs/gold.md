@@ -125,3 +125,22 @@ mapping là phù hợp với phạm vi bảng thử, chưa phải phép đo đ�
 ![Airflow Graph bridge nhãn Walmart thành công](images/airflow/dp3_walmart_labels-graph-five-channels.png)
 
 ![Airflow Grid bridge nhãn Walmart](images/airflow/dp3_walmart_labels-grid-five-channels.png)
+
+## Trên AWS (2026-10-28)
+
+DP2/DP3 chạy Spark Compose EC2, bảng Iceberg ở S3; run_id nằm trong
+[manifest AWS](evidence/aws/datahub-validation-aws-20261029.json).
+`fact_order_lines_dp2` hợp năm Silver thành 227.200.303 Order Line;
+`dim_amazon_order_dp2` giữ 106.109.637 bản hiện hành và 1.062.966 bản lịch sử.
+`feat_order_line_return_dp3` giữ thuộc tính lúc đặt Order, cũng 227.200.303 dòng.
+
+![Session Manager EC2: log DP2 ghi Silver validate PASS, Gold khớp từng Channel và Amazon SCD2 không lỗi](evidence/aws/dp2-validate-logs-20261028.png)
+
+![Session Manager EC2: fact_rows và feature_rows đều 227.200.303, missing, extra và wrong_event_time bằng 0](evidence/aws/dp3-validate-log-20261028.png)
+
+[Job fact](../spark_jobs/gold/build_order_snapshot_lines.py),
+[job SCD2](../spark_jobs/gold/build_amazon_order_status_scd2.py) và
+[job feature](../spark_jobs/gold/build_order_snapshot_return_features.py) được submit qua
+[DAG DP2](../dags/dp2_silver.py) / [DP3](../dags/dp3_features.py).
+Log kiểm SCD2/fact không lỗi; feature khớp tập khóa Gold, event time không sai.
+Chưa có capture AWS Navigator/ERD/DESCRIBE các cột; log PASS không chứng minh toàn bộ yêu cầu DE34–38.

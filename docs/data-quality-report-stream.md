@@ -242,3 +242,30 @@ Nguồn nhỏ `out/channels-small` sinh đủ năm Channel cho **Batch** (xem b�
 - Notification Amazon trong Stream luôn dùng giá trị trạng thái kiểu Orders v0 (`Shipped`), không đổi theo ngày chuyển schema như bên Batch.
 - Livestream mới gây burst, chưa gây concept drift (tỷ lệ trả quần áo tăng gần gấp đôi). Phần đó làm ở bước 4.
 - Shopify (webhook, trùng 1,5%), Walmart và Shopee (polling, đến theo lô 5 đến 15 phút) chưa có trong Stream.
+
+## Trên AWS (2026-10-28)
+
+Generator phát vào Kafka Compose trên EC2, `configs/default.yaml`, seed 42, `speed=0`, hết 41 giây.
+[Manifest AWS](evidence/aws/stream-manifest-20261028.json) là nguồn số của bảng dưới;
+đây là lần cloud riêng, không dùng nhịp `STREAM_SPEED=60` của lần local ở trên.
+
+| Đặc tính | Amazon notification | TikTok webhook |
+|---|---|---|
+| Dòng / unique key | 399.410 / 399.410 | 93.554 / 92.157 |
+| Duplicate | 0 | 1.397, tỷ lệ 0,014933 ≈ 1,49% |
+| Trễ trung vị | 5,27 phút | 0,06 phút |
+| Tỷ lệ trễ hơn 1 giờ | 0,049763 ≈ 4,98% | 0 |
+| Out-of-order quá 1 giờ | 19.729 | 0 |
+
+Tin late là Amazon `EventTime` so thời điểm nhận; duplicate TikTok giữ nguyên `tts_notification_id`.
+Burst livestream: 148,5 Order/giờ so 25,2 giờ thường, tỷ số 5,89 theo manifest.
+[Code generator](../generator/__main__.py), [cấu hình](../configs/default.yaml),
+[script đo](../scripts/evidence/measure_order_snapshots_stream.py).
+
+![Flink 1.20.3 Completed Jobs: baseline Amazon, late Amazon, hai job dedup và job cửa sổ đều FINISHED](evidence/aws/flink-completed-jobs-20261028.png)
+
+![Flink dedup_tiktok_state_proof: cạnh HASH tới Deduplicate, source gửi 93.554 record, job FINISHED](evidence/aws/flink-dedup-graph-20261028.png)
+
+Ảnh cho thấy consumer Flink hoàn tất và dedup nhận 93.554 record; đặc tính trễ/trùng ở bảng lấy từ manifest.
+Flink tách 10.166 tin muộn, thấp hơn phép đếm generator vì watermark theo chu kỳ/partition;
+[xử lý và job_id](flink.md#trên-aws-2026-10-28). Chưa có capture UI AWS chi tiết watermark/late event.

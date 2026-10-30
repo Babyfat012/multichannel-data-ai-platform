@@ -183,3 +183,15 @@ thích đã được xác thực bằng runtime. Lịch mới chưa chạy, khô
 không chạm Lakekeeper/MinIO và không kích hoạt DAG.
 
 **Chạy trên bảng thật: chưa chạy — người vận hành chạy sau.**
+
+## Trên AWS (2026-10-27 đến 2026-10-29)
+
+DAG [maintenance_iceberg](../dags/maintenance_iceberg.py) chạy Compose EC2 trên bảng S3
+`bronze.raw_shopee_orders_dp1`, run `scheduled__2026-10-27T00:00:00+00:00`.
+[Receipt AWS](evidence/aws/data-platform-aws-20261027.json) ghi plan → execute → validate 3/3 success,
+`no_op=true`: chỉ kiểm kê orphan dry-run; trước/sau đều 180 file, 4.689.957 dòng, fingerprint không đổi.
+
+[Job maintenance](../spark_jobs/maintenance/maintain_iceberg_tables.py) không gộp qua ranh giới partition ngày.
+Lần optimize riêng ngày 29 dùng [partition evolution + rewrite-all](../spark_jobs/maintenance/repartition_small_channel.py),
+180 → 6 file và giữ fingerprint. [Storage AWS](storage.md#trên-aws-2026-10-29) ghi số đo và giới hạn;
+chưa có ảnh riêng chụp compaction AWS trước/sau, không gọi no-op là optimize thành công.

@@ -98,39 +98,39 @@ Mỗi dòng dẫn tới tài liệu chứa giải thích, code liên quan và �
 
 | Mục rubric | Tài liệu |
 |---|---|
-| Docker & Docker Compose, tối ưu Dockerfile | [Docker](docs/Docker.md) |
-| Data Generator (offline + online data problems) | [Thiết kế generator](docs/generator-design.md), chất lượng [batch](docs/data-quality-report-batch.md) / [stream](docs/data-quality-report-stream.md) |
-| Spark job (baseline, skew, schema evolution, duplicate) | [Spark](docs/spark.md), [Silver](docs/silver.md), [năm Channel](docs/silver-five-channels.md) |
-| Flink job (late arrival, duplicate, window) | [Flink](docs/flink.md) |
-| Data Storage (lakehouse, warehouse indexing) | [Storage](docs/storage.md), [Iceberg maintenance](docs/iceberg-maintenance.md) |
-| Orchestration DP1 / DP2 / DP3 | [Airflow](docs/airflow.md) |
-| Data Governance (lineage, validation) | [DataHub](docs/datahub.md) |
-| Schema design (zone, SCD2, `feat_`, dim–fact, naming) | [Schema](docs/schema.md), [thiết kế Gold](docs/gold-design.md), [Gold](docs/gold.md) |
-| Novel idea 1 — Trino liên nguồn | [Trino](docs/trino.md) |
-| Novel idea 2 — CDC Debezium | [CDC](docs/cdc.md) |
-| Bằng chứng | [Evidence Data Platform](docs/data-platform-evidence.md) |
+| Docker & Docker Compose, tối ưu Dockerfile | [Docker](docs/Docker.md#trên-aws-2026-10-27) |
+| Data Generator (offline + online data problems) | [Thiết kế generator](docs/generator-design.md#trên-aws-2026-10-27-đến-2026-10-28), chất lượng [batch](docs/data-quality-report-batch.md#trên-aws-2026-10-27) / [stream](docs/data-quality-report-stream.md#trên-aws-2026-10-28) |
+| Spark job (baseline, skew, schema evolution, duplicate) | [Spark](docs/spark.md#trên-aws-2026-10-29), [Silver](docs/silver.md#trên-aws-2026-10-28), [năm Channel](docs/silver-five-channels.md) |
+| Flink job (late arrival, duplicate, window) | [Flink](docs/flink.md#trên-aws-2026-10-28) |
+| Data Storage (lakehouse, warehouse indexing) | [Storage](docs/storage.md#trên-aws-2026-10-29), [Iceberg maintenance](docs/iceberg-maintenance.md#trên-aws-2026-10-27-đến-2026-10-29) |
+| Orchestration DP1 / DP2 / DP3 | [Airflow](docs/airflow.md#trên-aws-2026-10-27-đến-2026-10-28) |
+| Data Governance (lineage, validation) | [DataHub](docs/datahub.md#trên-aws-2026-10-28-đến-2026-10-29) |
+| Schema design (zone, SCD2, `feat_`, dim–fact, naming) | [Schema](docs/schema.md#trên-aws-2026-10-28), [thiết kế Gold](docs/gold-design.md#trên-aws-2026-10-28), [Gold](docs/gold.md#trên-aws-2026-10-28) |
+| Novel idea 1 — Trino liên nguồn | [Trino](docs/trino.md#trên-aws-2026-10-29) |
+| Novel idea 2 — CDC Debezium | [CDC](docs/cdc.md#trên-aws-2026-10-28) |
+| Bằng chứng | [Evidence Data Platform](docs/data-platform-evidence.md#đọc-bằng-chứng-aws-theo-rubric) |
 
 ### ML Platform / LLM Platform (sheet `mle`)
 
 | Mục rubric | Tài liệu |
 |---|---|
-| LLM inference, custom model, benchmark, global model config | [LLM và agent](docs/llm-platform-agents.md) |
-| Agent registry, agent, coordinator, Sandbox, Warm Up | [LLM và agent](docs/llm-platform-agents.md) |
-| MCP Gateway, A2A Gateway | [Gateway](docs/llm-platform-gateway.md) |
-| RAG pipeline + governance | [RAG](docs/llm-platform-rag.md) |
-| Feature store (materialize, push stream feature) | [Feature store](docs/ml-platform-feature-store.md), [stream feature](docs/ml-platform-stream-feature.md) |
-| Training pipeline, MLflow versioning | [Training](docs/ml-platform-training.md) |
-| ML inference service (KServe) | [Serving](docs/ml-platform-serving.md) |
-| Web API + MCP tool (FastAPI, async, helm) | [Feature API](docs/ml-llm-platform-web-api.md) |
+| LLM inference, custom model, benchmark, global model config | [LLM và agent](docs/llm-platform-agents.md#trên-eks-2026-10-30) |
+| Agent registry, agent, coordinator, Sandbox, Warm Up | [LLM và agent](docs/llm-platform-agents.md#trên-eks-2026-10-30) |
+| MCP Gateway, A2A Gateway | [agentgateway: LLM, MCP và A2A](docs/llm-platform-agents.md#agentgateway-cổng-cho-llm-và-mcp) |
+| RAG pipeline + governance | [RAG](docs/llm-platform-rag.md#trên-aws-2026-10-30) |
+| Feature store (materialize, push stream feature) | [Feature store](docs/ml-platform-feature-store.md#trên-aws-2026-10-29), [stream feature](docs/ml-platform-stream-feature.md#trên-aws-pipeline-a-2026-10-30) |
+| Training pipeline, MLflow versioning | [Training](docs/ml-platform-training.md#trên-aws-2026-10-29) |
+| ML inference service (KServe) | [Serving](docs/ml-platform-serving.md#trên-eks-2026-10-31) |
+| Web API + MCP tool (FastAPI, async, helm) | [Feature API](docs/ml-llm-platform-web-api.md#trên-eks-2026-10-30) |
 | Validation & Verification (coverage, EP/BVA, mutation, property-based, locust) | [Feature API — test](docs/ml-llm-platform-web-api.md#test) |
 | CI/CD | [CI/CD](docs/ml-llm-platform-cicd.md) |
-| NGINX Ingress, basic auth, rate limit, HTTPS | [Gateway](docs/llm-platform-gateway.md) |
+| NGINX Ingress, basic auth, rate limit, HTTPS | [Gateway](docs/llm-platform-gateway.md#trên-eks-2026-10-3031) |
 | IaC (Terraform, Ansible) | [IaC](docs/IaC.md) |
-| Observability, LLM / agent telemetry | [Observability](docs/ml-llm-platform-observability.md) |
+| Observability, LLM / agent telemetry | [Observability](docs/ml-llm-platform-observability.md#trên-eks-2026-10-30) |
 | A/B testing | [A/B](docs/llm-platform-ab-test.md) |
-| Vault | [Vault](docs/ml-llm-platform-vault.md) |
+| Vault | [Vault](docs/ml-llm-platform-vault.md#trên-aws-2026-10-31) |
 | Novel idea 1 — agent eval harness | [Agent eval](docs/llm-platform-agent-eval.md) |
-| Novel idea 2 — drift theo kênh | [Drift](docs/ml-platform-drift.md) |
+| Novel idea 2 — drift theo kênh | [Drift](docs/ml-platform-drift.md#trên-aws-pipeline-a--chuẩn-bị-2026-10-30-chưa-chạy) |
 | Bằng chứng | [Evidence ML / LLM Platform](docs/ml-llm-platform-evidence.md), [kiểm kê rubric × cloud](docs/rubric-cloud-audit.md) |
 
 ## Tài liệu khác

@@ -163,3 +163,14 @@ schema. **Người dùng chọn A (2026-10-14).**
 - Sau khi chạy lại Gold/Validate và DP3/Validate, cập nhật ảnh và số liệu runtime
   thay cho bằng chứng cũ nếu đầu ra thay đổi. Bảng nhãn Walmart ở riêng và
   không bị đổi schema.
+
+## Trên AWS (2026-10-28)
+
+DP2/DP3 Spark Compose EC2 đã ghi Gold trên S3; [Gold AWS](gold.md#trên-aws-2026-10-28)
+nhúng log validator và dẫn code fact, SCD2, feature.
+[Manifest AWS](evidence/aws/datahub-validation-aws-20261029.json) ghi SCD2 không thiếu phiên bản,
+fact không trùng khóa, feature không sai event time trong các run được ghi.
+
+Quan hệ logic là `fact.amazon_order_version_key → dim.order_version_key`, feature nối fact bằng `order_line_key`.
+SCD2 dùng `valid_from_ts`, `valid_to_ts`, `is_current`; feature tách `event_timestamp` và `created` theo thiết kế trên.
+Chưa có capture metadata/ERD AWS để xác nhận trực quan các cột và quan hệ; ảnh schema local vẫn chỉ là đối chứng.

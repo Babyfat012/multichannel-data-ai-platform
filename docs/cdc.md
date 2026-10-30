@@ -189,3 +189,28 @@ cũng là lý do probe luôn ghi offset thật thay vì giả định bắt đ�
 
 Trạng thái connector và task 0 đều `RUNNING` trên Debezium 3.4.3.Final, lưu ở
 [`docs/evidence/debezium-connector-status.json`](evidence/debezium-connector-status.json).
+
+## Trên AWS (2026-10-28)
+
+Debezium 3.4.3, PostgreSQL, Kafka, Airflow và Spark chạy Compose trên EC2 Sydney; Bronze Iceberg ghi S3.
+Ý tưởng: bắt WAL để giữ create/update/delete sau lần nạp batch, không phải quét lại toàn bảng nguồn.
+[DAG dp1_cdc](../dags/dp1_cdc.py) run `manual__2026-10-28T10:51:33.422898+00:00`:
+[ingest_walmart_cdc](../spark_jobs/cdc/ingest_walmart_order_changes.py) đóng băng offset và ghi envelope/provenance;
+[validate_walmart_cdc](../spark_jobs/cdc/validate_walmart_order_changes.py) so Kafka/Bronze trong đúng source epoch.
+Cấu hình connector: [setup_order_snapshots_debezium.py](../scripts/setup/setup_order_snapshots_debezium.py).
+
+[Probe AWS](evidence/aws/cdc-probe-20261028.json) `CDC-DEMO-fb4b96588a6d` ghi topic
+`platform_cdc.walmart.orders`, partition 0, offsets 0/1/2 tương ứng `c/u/d`.
+Commit → Kafka lần lượt 730,7 / 452,1 / 295,3 ms; create có after, update có before/after, delete có before.
+Sau delete nguồn còn 0 dòng probe. Không dùng các số này làm độ trễ commit → Bronze.
+Validator ghi Kafka = Bronze = unique offset 3; thiếu, thừa, sai payload và lỗi đều 0.
+
+![Airflow validate_walmart_cdc: Kafka 3, Bronze 3, offset duy nhất 3; thiếu, thừa, sai payload và lỗi đều 0](evidence/aws/dp1-cdc-validate-20261028.png)
+
+![DataHub CDC: Kafka orders qua ingest_walmart_cdc tới raw_walmart_cdc_v2 và validate_walmart_cdc](evidence/aws/datahub/dp1-cdc-lineage.png)
+
+![DataHub Quality raw_walmart_cdc_v2: assertion dp1_cdc.validate_walmart_cdc có dấu xanh](evidence/aws/datahub/dp1-cdc-validation.png)
+
+Lineage cho thấy topic qua task ingest tới `bronze.raw_walmart_cdc_v2`; Quality ghi assertion validator xanh.
+[Manifest AWS](evidence/aws/datahub-validation-aws-20261029.json) giữ cùng run_id và metrics.
+Đây là probe ba sự kiện, chưa phải đo tải CDC hoặc chứng minh cập nhật Silver/Gold tự động.

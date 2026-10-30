@@ -716,3 +716,19 @@ gần như không đổi. Chạy lại `uv run python -m generator report` để
 | order_line_keys | object store | Parquet | 2 | 21.72 |
 | walmart.orders | PostgreSQL (bảng, gồm index) | heap, cột JSONB |  | 73.61 |
 | seller.skus | PostgreSQL (bảng, gồm index) | heap |  | 0.31 |
+
+## Trên AWS (2026-10-27 đến 2026-10-28)
+
+Generator chạy trên EC2, batch lưu S3/PostgreSQL, stream phát Kafka Compose.
+[Receipt batch](evidence/aws/data-platform-aws-20261027.json) ghi 141.774.479.087 byte raw S3;
+[manifest stream](evidence/aws/stream-manifest-20261028.json) ghi Amazon 399.410 và TikTok 93.554 message.
+
+![DataHub lọc AWS S3: bốn dataset nguồn Amazon, Shopee, Shopify và TikTok Shop ở source-exports](evidence/aws/datahub/s3-sources.png)
+
+![Flink dedup_tiktok_state_proof: cạnh HASH tới Deduplicate, source gửi 93.554 record, job FINISHED](evidence/aws/flink-dedup-graph-20261028.png)
+
+Ảnh metadata nguồn S3 và Flink nhận record xác nhận các phần của đường đi dữ liệu;
+số đặc tính AWS và giới hạn được ghi tại [batch AWS](data-quality-report-batch.md#trên-aws-2026-10-27)
+và [stream AWS](data-quality-report-stream.md#trên-aws-2026-10-28).
+[Code generator](../generator/__main__.py), [batch config](../configs/scale-100gb.yaml), [stream config](../configs/default.yaml).
+Chưa có report AWS riêng về skew/cardinality/schema/duplicate batch; không dùng histogram local thay capture cloud.
