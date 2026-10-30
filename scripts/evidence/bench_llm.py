@@ -8,6 +8,7 @@ python scripts/evidence/bench_llm.py --url http://qwen.llm:8080/v1/chat/completi
 
 import argparse
 import json
+import os
 import statistics
 import time
 import urllib.request
@@ -66,9 +67,11 @@ def one(url, model, i, max_tokens):
         "tools": TOOLS,
     }
     start = time.perf_counter()
-    request = urllib.request.Request(
-        url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}
-    )
+    headers = {"Content-Type": "application/json"}
+    # Qua agentgateway (vd model ảo `platform-chat` cho A/B) cần API key; gọi thẳng llama.cpp thì không.
+    if os.environ.get("AGW_AGENT_KEY"):
+        headers["Authorization"] = f"Bearer {os.environ['AGW_AGENT_KEY']}"
+    request = urllib.request.Request(url, data=json.dumps(body).encode(), headers=headers)
     data = json.load(urllib.request.urlopen(request, timeout=600))
     return (
         time.perf_counter() - start,

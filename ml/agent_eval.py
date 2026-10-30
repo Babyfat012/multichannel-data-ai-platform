@@ -21,7 +21,8 @@ import urllib.request
 import uuid
 
 NUMBER = re.compile(r"(?<![\w.])-?\d+(?:[.,]\d+)?%?")
-SKU_ID = re.compile(r"sku-\d+", re.IGNORECASE)
+# Mã SKU dạng chữ-số: local `sku-00001`, pipeline A trên AWS `APP-00042`; số trong mã không phải đáp án.
+SKU_ID = re.compile(r"\b[A-Za-z]+-\d+\b")
 CLAUSE = re.compile(r"[;\n]|[.,](?=\s|$)")  # "0.333", "33,3%" không bị cắt
 FIELDS = {  # tên trường → cách agent hay gọi nó trong câu văn
     "labeled_count_90d": re.compile(r"\w*label\w*", re.IGNORECASE),

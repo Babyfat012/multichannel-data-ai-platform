@@ -28,8 +28,8 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 [[ "$ready" == 1 ]] || { echo "Port-forward eval chưa sẵn sàng" >&2; exit 1; }
-# Danh sách SKU tường minh, không dùng dấu … trong lệnh CI.
+# Danh sách SKU tường minh, không dùng dấu … trong lệnh CI. AWS (pipeline A): EVAL_SKUS=APP-…,…
 python3 -m ml.agent_eval --agent "$EVAL_AGENT" \
-  --skus sku-00001,sku-00002,sku-00003,sku-00004,sku-00005,sku-00006,sku-00007,sku-00008,sku-00009,sku-00010,sku-00011,sku-00012 \
+  --skus "${EVAL_SKUS:-sku-00001,sku-00002,sku-00003,sku-00004,sku-00005,sku-00006,sku-00007,sku-00008,sku-00009,sku-00010,sku-00011,sku-00012}" \
   --gateway "http://localhost:$gateway_port" --feature-api "http://localhost:$feature_port" \
   --min-accuracy 0.95 --out out/agent-eval.jsonl | tee out/agent-eval-summary.json

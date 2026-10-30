@@ -86,6 +86,8 @@ def test_texts_collects_nested_a2a_parts():
 def test_sku_id_digits_are_not_counted_as_answer_numbers():
     """'sku-00010' không được tính là số 10 ⇒ chỉ nhắc lại mã SKU thì không đạt."""
     assert numbers("sku-00010 sku-00030") == set()
+    # Pipeline A (AWS): mã APP-00042 / ELE-01103 cũng không được đọc thành 42 / 1103.
+    assert numbers("APP-00042 has 3 returns, ELE-01103 has 0.25") == {"3", "0.25"}
     assert score("For sku-00010 and sku-00030: rate 0.33", FEATURES)["pass"] is False
 
 
