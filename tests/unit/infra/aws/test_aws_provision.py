@@ -509,8 +509,8 @@ def test_wave2_prometheus_pulls_ec2_exporters_with_alerts():
     values = yaml.safe_load((ROOT / "infra/k8s/observability/prometheus-values-aws.yaml").read_text())
     jobs = yaml.safe_load(values["extraScrapeConfigs"])
     assert {j["job_name"]: j["static_configs"][0]["targets"] for j in jobs} == {
-        "ec2-node": ["10.42.0.12:9100"],
-        "ec2-postgres": ["10.42.0.12:9187"],
+        "ec2-node": ["10.42.0.151:9100"],
+        "ec2-postgres": ["10.42.0.151:9187"],
     }
     rules = {
         r["alert"]: r["expr"]
@@ -632,3 +632,9 @@ def test_mle_drift_job_reads_s3_with_pipeline_reader_identity():
     assert container["volumeMounts"] == [{"name": "code", "mountPath": "/work/ml"}]
     identity = (ROOT / "infra/aws/kubernetes/identity.tf").read_text()
     assert 'pipeline_reader = { namespace = "kubeflow", service_account = "pipeline-runner" }' in identity
+
+
+def test_stopped_ec2_is_not_replaced_by_terraform():
+    """Máy stop không có IP public ⇒ không được để associate_public_ip_address đòi thay EC2 (mất đĩa gốc 30/10)."""
+    lifecycle = (TF_DIR / "compute.tf").read_text().split("lifecycle {")[1]
+    assert "ignore_changes = [ami, associate_public_ip_address]" in lifecycle

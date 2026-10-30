@@ -43,9 +43,10 @@ resource "aws_instance" "data_platform" {
 
   tags = { Name = "${var.name_prefix}-data-platform" }
 
-  # AMI mới ra không được tự thay máy đang chạy.
+  # AMI mới ra không được tự thay máy đang chạy. Máy đang stop không có IP public ⇒ provider đọc
+  # associate_public_ip_address=false ⇒ plan đòi thay máy (đã xoá máy cũ 30/10) ⇒ bỏ qua thuộc tính này.
   lifecycle {
-    ignore_changes = [ami]
+    ignore_changes = [ami, associate_public_ip_address]
     precondition {
       condition     = startswith(var.availability_zone, "${var.region}")
       error_message = "availability_zone phải thuộc region đã chọn."

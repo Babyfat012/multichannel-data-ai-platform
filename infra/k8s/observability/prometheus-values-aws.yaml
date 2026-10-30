@@ -3,9 +3,9 @@
 # Prometheus/Grafana. ponytail: không ai được báo nếu không mở trang; prod thêm Alertmanager + mail.
 extraScrapeConfigs: |
   - job_name: ec2-node
-    static_configs: [{targets: ["10.42.0.12:9100"]}]
+    static_configs: [{targets: ["10.42.0.151:9100"]}]
   - job_name: ec2-postgres
-    static_configs: [{targets: ["10.42.0.12:9187"]}]
+    static_configs: [{targets: ["10.42.0.151:9187"]}]
 serverFiles:
   alerting_rules.yml:
     groups:
