@@ -46,24 +46,44 @@ Kết quả 2026-10-21: 84 pass, coverage `serving/app.py` 98% (chỉ thiếu `l
 
 ## Mutation testing (mutmut)
 
-Cấu hình `[tool.mutmut]` trong `pyproject.toml`.
+Cấu hình [`[tool.mutmut]`](../pyproject.toml) chọn `serving/app.py`, dùng bộ test
+[`serving/tests/test_app.py`](../serving/tests/test_app.py) và sao chép `rag` để test các nhánh RAG.
+Chạy offline với dependency đã cache (mutmut 3.3.1):
 
 ```bash
-uv run --no-project --python 3.12 --with-requirements serving/requirements-dev.txt mutmut run
-uv run --no-project --python 3.12 --with-requirements serving/requirements-dev.txt mutmut results
+UV_OFFLINE=1 uv run --offline --no-project --python 3.12 --with-requirements serving/requirements-dev.txt mutmut run --max-children 2
+UV_OFFLINE=1 uv run --offline --no-project --python 3.12 --with-requirements serving/requirements-dev.txt mutmut results
 ```
 
-Kết quả 2026-10-21 trên `serving/app.py` (bản cuối: feature, chunk, dự đoán KServe, MCP, metrics), 177 bản đột biến:
+Lần chạy 2026-10-31 (laptop, 4 tiến trình, ~2,5 phút): **171 mutant** trên `serving/app.py`.
 
-| Loại | Số | Ghi chú |
+| Kết quả | Số | Nghĩa |
 |---|---:|---|
-| killed | 142 | test bắt được |
-| timeout → killed | 21 | mutmut báo timeout vì chạy song song bằng fork làm treo `TestClient`; chạy lại từng bản tuần tự (`MUTANT_UNDER_TEST=<tên> pytest -x serving/tests` trong `mutants/`) thì cả 21 đều fail |
-| survived | 5 | 3 bản đổi `zip(strict=True)` (tương đương: số view luôn bằng số kết quả); 2 bản đổi `host=` của MCP app (chỉ đổi danh sách Host chống DNS rebinding; test gọi bằng Host `testserver` nên không phân biệt) |
-| no tests | 9 | `load_store` — chỉ chạy khi có Feast thật |
+| killed | 138 | test fail khi code bị đổi ⇒ test bắt được |
+| timeout | 19 | test chạy quá giới hạn thời gian của mutmut (code bị đổi làm request treo) — coi là bắt được |
+| no tests | 9 | `load_store` nạp Feast thật; test thay bằng `store_factory` giả nên không chạy hàm này (cố ý) |
+| survived | 5 | cả 5 là **mutant tương đương** (dưới) |
 
-**Mutation score: 163/168 = 97,0%**. Cấu hình `[tool.mutmut]` trong `pyproject.toml`
-(`also_copy` gồm `rag` vì test `load_rag` import nó); chạy `mutmut run --max-children 2` cho đỡ RAM.
+**Mutation score** = (killed + timeout) / (171 − no tests) = 157/162 = **96,9%** (chỉ tính killed: 138/162 = 85,2%).
+
+5 mutant sống, xem bằng `mutmut show <tên>`:
+- `x_fetch_features__mutmut_29/32/33`: `zip(VIEWS.values(), results, strict=True)` → `strict=None`/`False`/bỏ.
+  `results` sinh từ `asyncio.gather` trên chính `VIEWS` nên hai dãy luôn dài bằng nhau; `strict` không bao giờ đổi
+  hành vi ⇒ tương đương, không viết được test giết nó.
+- `x_create_app__mutmut_17/25`: `host="0.0.0.0"` của MCP → `None` / `"XX0.0.0.0XX"`. SDK MCP chỉ bật chặn
+  DNS-rebinding khi host là `localhost`/`127.0.0.1`; mọi giá trị khác cho cùng hành vi ⇒ tương đương.
+
+![mutmut serving/app.py: 171 mutant, 138 killed, 19 timeout, 9 no tests, 5 survived tương đương; score 96,9%](evidence/mutmut-serving-20261031.png)
+
+Ảnh dựng từ [output thật](evidence/mutmut-serving-20261031.txt) (giữ đủ danh sách timeout/no tests); bỏ dòng
+timeout/no tests trong ảnh cho gọn. Lần chạy đầu trong sandbox Codex bị treo vì sandbox chặn socket nội bộ
+(`TestClient` cần), không phải lỗi test.
+
+Mutmut 3.3.1 có bộ chọn tên mutant ở `mutmut run [MUTANT_NAMES]...`, không có tùy chọn chọn dòng
+theo Git diff trong `mutmut run --help`. Lần này mutate **toàn bộ `serving/app.py`**, file thay đổi nhiều
+của Web API, theo cấu hình trên; không khẳng định chỉ mutate các dòng đổi. Để giới hạn theo file ở lần
+sau, dùng `git diff --name-only <base> -- '*.py'` lấy danh sách file đổi, đối chiếu và cập nhật
+`paths_to_mutate` tương ứng trước khi chạy; cách này vẫn không giới hạn từng dòng trong file.
 
 ## Load test (locust)
 

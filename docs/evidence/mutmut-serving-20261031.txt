@@ -1,0 +1,41 @@
+$ uv run --no-project --python 3.12 --with-requirements serving/requirements-dev.txt mutmut run --max-children 4   # 2026-10-31, laptop
+⠋ 171/171  🎉 138 🫥 9  ⏰ 19  🤔 0  🙁 5  🔇 0
+1.16 mutations/second
+
+$ mutmut results   # chỉ liệt kê mutant không bị giết
+    serving.app.x_load_store__mutmut_1: no tests
+    serving.app.x_load_store__mutmut_2: no tests
+    serving.app.x_load_store__mutmut_3: no tests
+    serving.app.x_load_store__mutmut_4: no tests
+    serving.app.x_load_store__mutmut_5: no tests
+    serving.app.x_load_store__mutmut_6: no tests
+    serving.app.x_load_store__mutmut_7: no tests
+    serving.app.x_load_store__mutmut_8: no tests
+    serving.app.x_load_store__mutmut_9: no tests
+    serving.app.x_fetch_features__mutmut_1: timeout
+    serving.app.x_fetch_features__mutmut_2: timeout
+    serving.app.x_fetch_features__mutmut_3: timeout
+    serving.app.x_fetch_features__mutmut_7: timeout
+    serving.app.x_fetch_features__mutmut_16: timeout
+    serving.app.x_fetch_features__mutmut_24: timeout
+    serving.app.x_fetch_features__mutmut_25: timeout
+    serving.app.x_fetch_features__mutmut_26: timeout
+    serving.app.x_fetch_features__mutmut_27: timeout
+    serving.app.x_fetch_features__mutmut_28: timeout
+    serving.app.x_fetch_features__mutmut_29: survived
+    serving.app.x_fetch_features__mutmut_30: timeout
+    serving.app.x_fetch_features__mutmut_31: timeout
+    serving.app.x_fetch_features__mutmut_32: survived
+    serving.app.x_fetch_features__mutmut_33: survived
+    serving.app.x_fetch_features__mutmut_34: timeout
+    serving.app.x_fetch_features__mutmut_35: timeout
+    serving.app.x_fetch_features__mutmut_38: timeout
+    serving.app.x_fetch_features__mutmut_40: timeout
+    serving.app.x_fetch_features__mutmut_41: timeout
+    serving.app.x_fetch_features__mutmut_42: timeout
+    serving.app.x_fetch_features__mutmut_43: timeout
+    serving.app.x_create_app__mutmut_17: survived
+    serving.app.x_create_app__mutmut_25: survived
+
+SUMMARY: 171 mutant | killed 138 | timeout 19 | no tests 9 (load_store) | survived 5 (tương đương)
+score = (killed + timeout) / (171 - no tests) = 157/162 = 96.9%  ·  chỉ killed: 138/162 = 85.2%
