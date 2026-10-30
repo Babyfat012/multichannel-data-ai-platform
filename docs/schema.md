@@ -94,3 +94,34 @@ này trong các run được ghi nhận. Hậu tố `_dp1`, `_dp2`, `_dp3` phân
 chứng Airflow với các bảng benchmark/smoke. Catalog là `lakehouse`, namespace
 là `bronze`, `silver`, `gold`; các khái niệm nghiệp vụ nằm ở
 [thuật ngữ](terminology.md).
+
+## Trên AWS (2026-10-28)
+
+DP1/DP2/DP3 chạy Compose EC2, các bảng Iceberg nằm ở S3. [DataHub AWS](datahub.md#trên-aws-2026-10-28-đến-2026-10-29)
+nhúng lineage raw → stg → fact/dim → feat; [Gold AWS](gold.md#trên-aws-2026-10-28) nhúng log validator.
+[Manifest](evidence/aws/datahub-validation-aws-20261029.json) giữ tên bảng và run_id.
+
+Các bảng `raw_` giữ payload nguồn, `stg_` chuẩn hóa/dedup, `fact_` giữ Order Line hoặc nhãn,
+`dim_` giữ phiên bản SCD2, `feat_` giữ feature lúc đặt Order. Bảng nhãn năm Channel AWS là
+`gold.fact_return_labels_dp3`, khác bridge Walmart trong sơ đồ local trên.
+Code quan hệ: [SCD2](../spark_jobs/gold/build_amazon_order_status_scd2.py),
+[fact](../spark_jobs/gold/build_order_snapshot_lines.py), [feature](../spark_jobs/gold/build_order_snapshot_return_features.py).
+
+Bảng thật trên AWS, đọc qua Trino EC2 (catalog `lakehouse` = Iceberg S3 qua Lakekeeper), 2026-10-31:
+
+![Trino AWS: schema bronze/silver/gold; bronze 10 bảng raw_*, silver 5 bảng stg_*_order_lines_dp2, gold dim_/fact_/feat_](evidence/aws/trino-zones-tables-20261031.png)
+
+- **Bronze** `raw_<channel>_orders_dp1` (5 Channel) giữ payload nguồn + cột provenance; `raw_walmart_cdc_v2` là đích
+  CDC Debezium ([cdc](cdc.md)). `raw_amazon_orders`, `raw_walmart_orders`, `raw_amazon_orders_sample` là bảng chạy tay
+  giữ làm bằng chứng đo Spark; `raw__orders` là bảng hỏng còn sót (gap #10, chưa xoá).
+- **Silver** `stg_<channel>_order_lines_dp2`: một dòng một Order Line, đã chuẩn hoá schema và bỏ trùng.
+- **Gold** `dim_amazon_order_dp2` (SCD2 trạng thái đơn), `fact_order_lines_dp2` (Order Line năm Channel),
+  `fact_return_labels_dp3` + `fact_walmart_return_labels_dp3` (nhãn Return), `feat_order_line_return_dp3` (feature).
+- Schema `runtime_smoke` là bảng thử của Ansible khi kiểm Lakekeeper ghi được, không thuộc pipeline.
+
+![Trino AWS DESCRIBE: dim_amazon_order_dp2 có valid_from_ts, valid_to_ts, is_current, order_version_key; feat_order_line_return_dp3 có event_timestamp, created](evidence/aws/trino-gold-scd2-feat-columns-20261031.png)
+
+SCD2: `valid_from_ts` / `valid_to_ts` / `is_current` cho từng phiên bản trạng thái của một `order_id`, khoá phiên
+bản `order_version_key` là khoá fact dùng để nối (quan hệ dim–fact vẽ ở ảnh DBeaver ERD phía trên, cùng code Spark).
+Feature: `event_timestamp` (thời điểm đặt Order — mốc point-in-time) và `created` (lúc job ghi), đúng hai cột
+Feast cần.
