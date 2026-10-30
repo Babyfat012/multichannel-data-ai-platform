@@ -48,6 +48,7 @@ def chunk_markdown(doc_id, markdown, max_chars=700, overlap=100):
 
 @functools.lru_cache(maxsize=2)
 def _model(model_name, cache_dir):
+    """Nạp và cache model embedding theo tên và thư mục lưu model."""
     from fastembed import TextEmbedding
 
     return TextEmbedding(model_name, cache_dir=cache_dir)

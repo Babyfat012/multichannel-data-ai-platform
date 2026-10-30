@@ -9,7 +9,6 @@ from urllib.parse import unquote, urlsplit
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-PYTHON_ROOTS = ("generator", "spark_jobs", "dags", "scripts", "tests", "infra")
 SKIP_PARTS = {".git", ".venv", "out", "__pycache__", ".pytest_cache"}
 COMMENT_PREFIXES = {
     ".sh": ("#",),
@@ -22,12 +21,19 @@ COMMENT_PREFIXES = {
 
 
 def python_files():
-    """Liệt kê Python trong phạm vi brief, kể cả file chưa được Git theo dõi."""
+    """Liệt kê Python được Git theo dõi, bỏ test và cây mutant sinh tự động."""
+    result = subprocess.run(
+        ["git", "ls-files", "-z", "--", "*.py"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    )
     return sorted(
-        path
-        for name in PYTHON_ROOTS
-        for path in (ROOT / name).rglob("*.py")
-        if not SKIP_PARTS.intersection(path.relative_to(ROOT).parts)
+        ROOT / name
+        for name in result.stdout.decode().split("\0")
+        if name
+        and not (SKIP_PARTS | {"tests", "mutants"}).intersection(Path(name).parts)
+        and (ROOT / name).is_file()
     )
 
 

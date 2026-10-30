@@ -37,16 +37,19 @@ PROBES = {
 
 
 def _fs():
+    """Tạo client S3 dùng endpoint cấu hình cho dữ liệu RAG."""
     import s3fs
 
     return s3fs.S3FileSystem(endpoint_url=os.environ.get("FEAST_S3_ENDPOINT_URL"))
 
 
 def _root():
+    """Lấy đường dẫn gốc RAG trên S3, bỏ tiền tố giao thức và dấu gạch cuối."""
     return os.environ["RAG_ROOT"].removeprefix("s3://").rstrip("/")
 
 
 def upload(corpus):
+    """Tải các tài liệu Markdown trong corpus lên vùng raw trên S3."""
     fs = _fs()
     files = sorted(Path(corpus).glob("*.md"))
     for path in files:
@@ -55,6 +58,7 @@ def upload(corpus):
 
 
 def chunk():
+    """Cắt tài liệu raw thành chunk và ghi Parquet chứa văn bản trên S3."""
     import pandas as pd
 
     fs = _fs()
@@ -69,6 +73,7 @@ def chunk():
 
 
 def embed_step(cache_dir):
+    """Tạo embedding cho chunk và ghi Parquet kèm thời điểm sự kiện trên S3."""
     import pandas as pd
 
     fs = _fs()
@@ -90,6 +95,7 @@ def _store():
 
 
 def load():
+    """Áp dụng định nghĩa Feast và ghi các chunk vào online store."""
     import pandas as pd
 
     fs = _fs()
@@ -147,6 +153,7 @@ def get_chunks(store, chunk_ids):
 
 
 def validate(receipt_dir, run_id, cache_dir):
+    """Kiểm số chunk, vector và truy vấn mẫu rồi ghi receipt đạt hoặc lỗi."""
     import pandas as pd
     import psycopg
 
@@ -191,6 +198,7 @@ def validate(receipt_dir, run_id, cache_dir):
 
 
 def _mcp(entity_type, urn, aspect, value):
+    """Tạo đề xuất cập nhật một aspect của thực thể DataHub."""
     return {
         "entityType": entity_type,
         "entityUrn": urn,
@@ -207,6 +215,7 @@ def lineage_mcps(bucket_root, receipt):
     """Dataset (S3 raw, Parquet, bảng online Postgres), job theo task DAG, cạnh lineage, assertion."""
 
     def ds(platform, name):
+        """Tạo URN dataset DataHub từ nền tảng và tên dữ liệu."""
         return f"urn:li:dataset:(urn:li:dataPlatform:{platform},{name},PROD)"
 
     flow = f"urn:li:dataFlow:(airflow,{DAG_ID},prod)"
@@ -317,6 +326,7 @@ def lineage_mcps(bucket_root, receipt):
 
 
 def publish(receipt_dir, server):
+    """Gửi dataset, job, lineage và assertion RAG tới DataHub từ receipt kiểm tra."""
     receipt = json.loads((Path(receipt_dir) / "validate.json").read_text())
     proposals = lineage_mcps(_root(), receipt)
     for proposal in proposals:
@@ -330,6 +340,7 @@ def publish(receipt_dir, server):
 
 
 def main():
+    """Đọc tham số dòng lệnh và chạy bước pipeline RAG được chọn."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("step", choices=["upload", "chunk", "embed", "load", "validate", "publish"])
     parser.add_argument("--corpus", default=str(Path(__file__).resolve().parent / "corpus"))

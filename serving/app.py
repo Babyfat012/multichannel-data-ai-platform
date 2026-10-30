@@ -40,6 +40,7 @@ def counted(tool):
 
     @functools.wraps(tool)
     async def wrapper(*args, **kwargs):
+        """Đếm lượt gọi MCP tool thành công hoặc lỗi rồi trả kết quả của tool."""
         try:
             result = await tool(*args, **kwargs)
         except Exception:
@@ -59,6 +60,8 @@ Rounded = Annotated[float, AfterValidator(lambda v: round(v, 4))]
 
 
 class FeatureRequest(BaseModel):
+    """Danh sách SKU hợp lệ cần tra feature, giới hạn số SKU mỗi request."""
+
     seller_skus: list[SellerSku] = Field(min_length=1, max_length=MAX_SKUS)
 
 
@@ -73,10 +76,14 @@ class SkuFeatures(BaseModel):
 
 
 class FeatureResponse(BaseModel):
+    """Kết quả tra feature cho danh sách SKU được yêu cầu."""
+
     features: list[SkuFeatures]
 
 
 class ChunkRequest(BaseModel):
+    """Câu hỏi và số chunk chính sách cần tìm theo độ tương đồng."""
+
     query: str = Field(min_length=3, max_length=500)
     top_k: int = Field(default=3, ge=1, le=10)
 
@@ -106,6 +113,8 @@ ChunkId = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{16}$")]
 
 
 class ChunkIdRequest(BaseModel):
+    """Danh sách mã chunk hợp lệ cần tra trực tiếp trong online store."""
+
     chunk_ids: list[ChunkId] = Field(min_length=1, max_length=20)
 
 
@@ -120,6 +129,8 @@ class PolicyChunk(BaseModel):
 
 
 class ChunkResponse(BaseModel):
+    """Danh sách các đoạn chính sách trả về từ truy vấn RAG."""
+
     chunks: list[PolicyChunk]
 
 
@@ -283,6 +294,7 @@ def create_app(store_factory=load_store, rag_factory=load_rag, http_factory=http
 
     @asynccontextmanager
     async def lifespan(app):
+        """Nạp các store và quản lý vòng đời HTTP client cùng phiên MCP."""
         app.state.store = store_factory()
         app.state.rag = rag_factory()
         app.state.http = http_factory()
@@ -294,6 +306,7 @@ def create_app(store_factory=load_store, rag_factory=load_rag, http_factory=http
 
     @app.middleware("http")
     async def metrics(request: Request, call_next):
+        """Ghi số request, trạng thái và độ trễ theo đường dẫn xử lý."""
         start = time.perf_counter()
         status = 500
         try:
@@ -312,6 +325,7 @@ def create_app(store_factory=load_store, rag_factory=load_rag, http_factory=http
 
     @app.get("/metrics", include_in_schema=False)
     async def metrics_endpoint():
+        """Xuất các metric theo định dạng Prometheus."""
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     @app.get("/healthz")
@@ -328,18 +342,22 @@ def create_app(store_factory=load_store, rag_factory=load_rag, http_factory=http
 
     @app.post("/features", response_model=FeatureResponse)
     async def features(body: FeatureRequest, request: Request):
+        """Tra feature online cho các SKU trong request REST."""
         return await fetch_features(request.app.state.store, body.seller_skus)
 
     @app.post("/chunks", response_model=ChunkResponse)
     async def chunks(body: ChunkRequest, request: Request):
+        """Tìm các chunk chính sách gần câu hỏi trong request REST."""
         return await fetch_chunks(request.app.state.rag, "search", body.query, body.top_k)
 
     @app.post("/predict", response_model=Prediction)
     async def predict_endpoint(body: PredictRequest, request: Request):
+        """Gửi thuộc tính đơn hàng tới KServe và trả dự đoán rủi ro."""
         return await predict(request.app.state.http, os.environ.get("KSERVE_URL"), body)
 
     @app.post("/chunks/by-id", response_model=ChunkResponse)
     async def chunks_by_id(body: ChunkIdRequest, request: Request):
+        """Tra các chunk chính sách theo mã trong request REST."""
         return await fetch_chunks(request.app.state.rag, "get", body.chunk_ids)
 
     return app

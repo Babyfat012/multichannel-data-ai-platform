@@ -33,6 +33,7 @@ class ReturnRisk(Model):
     """Model v1 protocol: `{"instances": [...]}` → `{"predictions": [...]}`."""
 
     def __init__(self, name: str):
+        """Khởi tạo cấu hình, phiên bản và trạng thái nạp model dự đoán rủi ro."""
         super().__init__(name)
         self.min_history = int(os.environ.get("MIN_HISTORY", "20"))
         self.version = os.environ.get("MODEL_VERSION", "unknown")

@@ -590,9 +590,11 @@ def observed_evidence(known: DataFrame) -> DataFrame:
     in_scope = lambda key: F.get_json_object(top_scope, f"$.{key}")  # noqa: E731
 
     def in_affected(key):
+        """Lấy thuộc tính phạm vi bị ảnh hưởng từ envelope hoặc payload."""
         return F.coalesce(raw(f"$.affected_scope.{key}"), raw(f"$.payload.affected_scope.{key}"))
 
     def pick(key):
+        """Chọn thuộc tính phạm vi theo loại bản ghi uncertainty, coverage hoặc sự kiện."""
         return (
             F.when(is_uncertainty, in_scope(key))
             .when(is_coverage, F.lit(None))
@@ -600,6 +602,7 @@ def observed_evidence(known: DataFrame) -> DataFrame:
         )
 
     def plural(key):
+        """Đọc thuộc tính phạm vi dạng mảng chuỗi theo loại bản ghi."""
         return (
             F.when(is_uncertainty, F.from_json(in_scope(key), "array<string>"))
             .when(is_coverage, F.lit(None).cast("array<string>"))

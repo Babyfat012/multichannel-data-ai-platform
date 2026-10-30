@@ -139,6 +139,7 @@ def register(
     from ml.train_lib import FEATURES
 
     def sha256(path):
+        """Tính mã băm SHA-256 của file để ghi nhận phiên bản artifact."""
         with open(path, "rb") as f:
             return hashlib.sha256(f.read()).hexdigest()
 
