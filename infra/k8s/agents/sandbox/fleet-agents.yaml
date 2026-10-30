@@ -1,0 +1,77 @@
+# Agent Fleet (Warm Up): 5 SandboxAgent nhỏ, không tool, dùng chung WorkerPool `kagent-default` (1 worker).
+# Actor rảnh snapshot về object storage và "Suspended" ⇒ nhiều Agent sống trên ít worker, khởi động lại từ snapshot.
+---
+apiVersion: kagent.dev/v1alpha2
+kind: SandboxAgent
+metadata:
+  name: fleet-returns-glossary
+  namespace: kagent
+spec:
+  type: Declarative
+  description: "Fleet agent: returns glossary."
+  declarative:
+    runtime: go
+    modelConfig: default-model-config
+    systemMessage: "Explain return and refund terms (approved return, refund without return, label) in one or two sentences. Reply briefly."
+  substrate:
+    workerPoolRef: {name: kagent-default}
+---
+apiVersion: kagent.dev/v1alpha2
+kind: SandboxAgent
+metadata:
+  name: fleet-channel-guide
+  namespace: kagent
+spec:
+  type: Declarative
+  description: "Fleet agent: channel guide."
+  declarative:
+    runtime: go
+    modelConfig: default-model-config
+    systemMessage: "Explain in one sentence how a sales channel (Amazon, TikTok Shop, Shopify, Walmart, Shopee) differs for returns. Reply briefly."
+  substrate:
+    workerPoolRef: {name: kagent-default}
+---
+apiVersion: kagent.dev/v1alpha2
+kind: SandboxAgent
+metadata:
+  name: fleet-currency-helper
+  namespace: kagent
+spec:
+  type: Declarative
+  description: "Fleet agent: currency helper."
+  declarative:
+    runtime: go
+    modelConfig: default-model-config
+    systemMessage: "Convert an amount between minor units and normal units for USD, GBP, EUR and VND; answer with one line. Reply briefly."
+  substrate:
+    workerPoolRef: {name: kagent-default}
+---
+apiVersion: kagent.dev/v1alpha2
+kind: SandboxAgent
+metadata:
+  name: fleet-risk-explainer
+  namespace: kagent
+spec:
+  type: Declarative
+  description: "Fleet agent: risk explainer."
+  declarative:
+    runtime: go
+    modelConfig: default-model-config
+    systemMessage: "Explain what a return-risk score between 0 and 1 means for a seller in two sentences, without numbers you were not given. Reply briefly."
+  substrate:
+    workerPoolRef: {name: kagent-default}
+---
+apiVersion: kagent.dev/v1alpha2
+kind: SandboxAgent
+metadata:
+  name: fleet-triage-helper
+  namespace: kagent
+spec:
+  type: Declarative
+  description: "Fleet agent: triage helper."
+  declarative:
+    runtime: go
+    modelConfig: default-model-config
+    systemMessage: "Say which agent should answer: data-agent for SKU numbers, model-agent for risk of a new order, policy search for rules. Reply briefly."
+  substrate:
+    workerPoolRef: {name: kagent-default}

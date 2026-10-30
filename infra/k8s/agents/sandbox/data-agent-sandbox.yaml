@@ -1,0 +1,23 @@
+# Data Agent chạy trong sandbox gVisor (Agent Substrate): cùng model (qua agentgateway) và cùng tool MCP với
+# data-agent, nhưng mã Agent không chạm kernel node. Substrate chỉ hỗ trợ runtime Go (ADK Python chưa).
+apiVersion: kagent.dev/v1alpha2
+kind: SandboxAgent
+metadata:
+  name: data-agent-sandbox
+  namespace: kagent
+spec:
+  type: Declarative
+  description: Data Agent in a gVisor sandbox; looks up SKU return features through the gateway MCP tools.
+  declarative:
+    runtime: go
+    modelConfig: default-model-config
+    systemMessageFrom: {type: ConfigMap, name: agent-prompts, key: data-agent}
+    tools:
+      - type: McpServer
+        mcpServer:
+          apiGroup: kagent.dev
+          kind: RemoteMCPServer
+          name: feature-tools
+          toolNames: [get_sku_features]
+  substrate:
+    workerPoolRef: {name: kagent-default}

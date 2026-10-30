@@ -72,6 +72,7 @@ Cấu hình: EC2 `r6i.xlarge` (4 vCPU/32 GB, IP riêng 10.42.0.12 giữ nguyên 
 `r6i.xlarge` (2 × 4 vCPU/32 GB). 12/16 vCPU quota. ~1,1 USD/giờ khi bật cả hai; ~0,18 USD/giờ khi tắt hết
 (EKS control plane 0,10 + EBS). Ngân sách tính 100 USD ⇒ chạy theo đợt, tắt khi nghỉ (~10 ngày).
 gVisor KHÔNG cài qua launch template (sai key containerd 1.x/2.x có thể làm node không join) ⇒ DaemonSet ở đợt 5.
+30/10: đổi hướng — Agent Substrate 0.0.9 (khớp kagent 0.10.3) tự đặt runtime gVisor qua node agent của nó ⇒ không tự viết DaemonSet sửa containerd ([ví dụ kagent](https://www.kagent.dev/docs/kagent/examples/agent-substrate)); code `scripts/setup/deploy_substrate.sh` + `infra/k8s/agents/sandbox/`.
 
 | Đợt | Bật | Việc |
 |---|---|---|
