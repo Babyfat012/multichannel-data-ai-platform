@@ -79,3 +79,13 @@ resource "aws_vpc_security_group_ingress_rule" "data_to_redis" {
   to_port                      = 30379
   description                  = "Data Platform Airflow to Feast Redis NodePort"
 }
+
+# Đợt 4: Airflow EC2 (ml_rag_ingest) ghi embedding vào pgvector NodePort 30432 (infra/k8s/rag/pgvector.yaml).
+resource "aws_vpc_security_group_ingress_rule" "data_to_pgvector" {
+  security_group_id            = aws_eks_cluster.apps.vpc_config[0].cluster_security_group_id
+  referenced_security_group_id = data.terraform_remote_state.data.outputs.data_security_group_id
+  ip_protocol                  = "tcp"
+  from_port                    = 30432
+  to_port                      = 30432
+  description                  = "Data Platform Airflow to RAG pgvector NodePort"
+}

@@ -62,3 +62,38 @@ def resolve_runtime_env(
             }
         )
     return env
+
+
+def resolve_rag_env(
+    connections: Mapping[str, Mapping[str, object]],
+    variables: Mapping[str, str],
+    *,
+    storage: str = "minio",
+) -> dict[str, str]:
+    """Env cho `rag.pipeline`: pgvector + registry RAG; MinIO cần key, S3 (AWS) dùng IAM role của máy."""
+    if storage not in {"minio", "s3"}:
+        raise ValueError(f"unknown runtime storage: {storage!r}")
+    pg = connections["platform_rag_pg"]
+    if not pg.get("host"):
+        # AWS: pgvector là NodePort trên node EKS, IP đổi mỗi lần node thay ⇒ Ansible -e rag_pg=<IP>:30432.
+        raise ValueError("platform_rag_pg chưa có host: chạy Ansible với -e rag_pg=<IP node EKS>:30432")
+    root = variables["platform_rag_root"]
+    env = {
+        "RAG_ROOT": root,
+        "FEAST_RAG_REGISTRY": variables["platform_feast_root"] + "/rag-registry.db",
+        "FEAST_RAG_CHUNKS_PATH": f"{root}/chunks.parquet",
+        "RAG_PG_HOST": str(pg["host"]),
+        "RAG_PG_PORT": str(pg["port"] or 5432),
+        "RAG_PG_USER": str(pg["login"]),
+        "RAG_PG_PASSWORD": str(pg["password"]),
+    }
+    if storage == "minio":
+        minio = connections["platform_minio"]
+        env.update(
+            {
+                "AWS_ACCESS_KEY_ID": str(minio["login"]),
+                "AWS_SECRET_ACCESS_KEY": str(minio["password"]),
+                "FEAST_S3_ENDPOINT_URL": variables["platform_minio_internal_endpoint"],
+            }
+        )
+    return env

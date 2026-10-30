@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from dags.platform_runtime import resolve_runtime_env
+from dags.platform_runtime import resolve_rag_env, resolve_runtime_env
 
 
 def test_resolve_runtime_env_maps_requested_connection_groups_only():
@@ -128,3 +128,39 @@ def test_cloud_operator_clears_inherited_keys_and_restores_state(monkeypatch, st
         assert operator.execute({}) == "submitted"
     assert operator.env_vars is original
     assert all(os.environ[key] == "stale-local-credential" for key in keys)
+
+
+RAG_VARS = {"platform_rag_root": "s3://lake/rag", "platform_feast_root": "s3://lake/feature-store",
+            "platform_minio_internal_endpoint": "http://minio:9000"}
+RAG_PG = {"host": "10.42.0.50", "port": 30432, "login": "u", "password": "p"}
+
+
+def test_rag_env_on_s3_uses_machine_identity_without_minio():
+    """AWS: không key, không endpoint MinIO; registry RAG cạnh registry Feast; pgvector từ connection."""
+    env = resolve_rag_env({"platform_rag_pg": RAG_PG}, RAG_VARS, storage="s3")
+    assert not {"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "FEAST_S3_ENDPOINT_URL"} & env.keys()
+    assert env["FEAST_RAG_REGISTRY"] == "s3://lake/feature-store/rag-registry.db"
+    assert env["FEAST_RAG_CHUNKS_PATH"] == "s3://lake/rag/chunks.parquet"
+    assert (env["RAG_PG_HOST"], env["RAG_PG_PORT"]) == ("10.42.0.50", "30432")
+
+
+def test_rag_env_on_minio_adds_local_keys_and_endpoint():
+    """Local: giữ hành vi cũ (key + endpoint MinIO)."""
+    minio = {"login": "ak", "password": "sk"}
+    env = resolve_rag_env({"platform_rag_pg": RAG_PG, "platform_minio": minio}, RAG_VARS)
+    assert (env["AWS_ACCESS_KEY_ID"], env["FEAST_S3_ENDPOINT_URL"]) == ("ak", "http://minio:9000")
+
+
+@pytest.mark.parametrize("host", ["", None])
+def test_rag_env_refuses_missing_pgvector_host(host):
+    """Quên -e rag_pg khi node EKS đổi IP ⇒ báo rõ, không chạy với host rỗng."""
+    with pytest.raises(ValueError, match="rag_pg"):
+        resolve_rag_env({"platform_rag_pg": RAG_PG | {"host": host}}, RAG_VARS, storage="s3")
+
+
+def test_rag_dag_skips_minio_lookups_on_s3():
+    """DAG chỉ tra connection/variable MinIO khi không phải s3 (AWS không có MinIO)."""
+    text = (Path(__file__).resolve().parents[3] / "dags/ml_rag_ingest.py").read_text()
+    assert '(["platform_minio"] if storage != "s3" else [])' in text
+    assert '["platform_minio_internal_endpoint"] if storage != "s3" else []' in text
+    assert "resolve_rag_env(connections, variables, storage=storage)" in text

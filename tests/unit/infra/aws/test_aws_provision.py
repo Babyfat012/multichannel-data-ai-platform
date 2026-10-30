@@ -547,3 +547,18 @@ def test_letsencrypt_first_issue_opens_then_closes_each_route():
     assert "get secret" not in fn
     assert '.yaml" | apply_ing "${f%/*}" "${f#*/}-tls"' in script
     assert 'ops-ui.yaml | apply_ing "$ns" "$name-tls"' in script
+
+
+def test_wave4_rag_reaches_pgvector_nodeport_with_iam_s3():
+    """Airflow EC2: mount rag, root S3 lakehouse, connection pgvector JSON từ Ansible; SG mở đúng 30432."""
+    airflow = yaml.load((ROOT / "docker-compose.aws.yml").read_text(), Loader=ComposeLoader)["services"]["airflow"]
+    assert "./rag:/opt/rag/rag:ro" in airflow["volumes"]
+    assert airflow["environment"]["AIRFLOW_VAR_PLATFORM_RAG_ROOT"] == "s3://${LAKEHOUSE_BUCKET}/rag"
+    assert airflow["environment"]["AIRFLOW_CONN_PLATFORM_RAG_PG"].startswith("${PLATFORM_RAG_PG_CONN:?")
+    env = (ANSIBLE / "roles/app/templates/env.j2").read_text()
+    assert "(rag_pg | default(':30432')).split(':')" in env
+    assert "| to_json | quote }}" in env.split("PLATFORM_RAG_PG_CONN=")[1].splitlines()[0]
+    tf = (ROOT / "infra/aws/kubernetes/cluster.tf").read_text()
+    rule = tf[tf.index('"data_to_pgvector"') :].split("}")[0]
+    assert "from_port                    = 30432" in rule and "to_port                      = 30432" in rule
+    assert "data_security_group_id" in rule

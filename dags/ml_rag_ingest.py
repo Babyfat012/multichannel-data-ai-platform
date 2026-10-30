@@ -14,6 +14,7 @@ from airflow.exceptions import AirflowSkipException
 from airflow.hooks.base import BaseHook
 from airflow.models import Variable
 from airflow.operators.python import PythonOperator
+from platform_runtime import resolve_rag_env
 
 PYTHON = "/home/airflow/feast-venv/bin/python"
 RECEIPTS = "/opt/airflow/receipts/rag/{{ run_id }}"
@@ -22,23 +23,19 @@ MODEL_CACHE = "/opt/airflow/rag-models"  # volume airflow-data: tải model 1 l�
 
 def run_step(step, receipt_dir=None, run_id=None, **_):
     """Chạy `python -m rag.pipeline <step>` với env dựng từ Connection/Variable."""
-    minio = BaseHook.get_connection("platform_minio")
-    pg = BaseHook.get_connection("platform_rag_pg")
-    root = Variable.get("platform_rag_root")
-    env = {
-        **os.environ,
-        "PYTHONPATH": "/opt/rag",
-        "AWS_ACCESS_KEY_ID": minio.login,
-        "AWS_SECRET_ACCESS_KEY": minio.password,
-        "FEAST_S3_ENDPOINT_URL": Variable.get("platform_minio_internal_endpoint"),
-        "RAG_ROOT": root,
-        "FEAST_RAG_REGISTRY": Variable.get("platform_feast_root") + "/rag-registry.db",
-        "FEAST_RAG_CHUNKS_PATH": f"{root}/chunks.parquet",
-        "RAG_PG_HOST": pg.host,
-        "RAG_PG_PORT": str(pg.port),
-        "RAG_PG_USER": pg.login,
-        "RAG_PG_PASSWORD": pg.password,
-    }
+    storage = os.environ.get("PLATFORM_STORAGE", "minio")
+    # AWS (s3): không có MinIO ⇒ không tra connection đó; S3 qua IAM role EC2.
+    names = ["platform_rag_pg"] + (["platform_minio"] if storage != "s3" else [])
+    connections = {}
+    for name in names:
+        conn = BaseHook.get_connection(name)
+        connections[name] = {"host": conn.host, "port": conn.port, "login": conn.login,
+                             "password": conn.password}
+    keys = ["platform_rag_root", "platform_feast_root"]
+    keys += ["platform_minio_internal_endpoint"] if storage != "s3" else []
+    variables = {k: Variable.get(k) for k in keys}
+    env = {**os.environ, "PYTHONPATH": "/opt/rag",
+           **resolve_rag_env(connections, variables, storage=storage)}
     args = [PYTHON, "-m", "rag.pipeline", step, "--model-cache", MODEL_CACHE]
     if receipt_dir:
         args += ["--receipt-dir", receipt_dir, "--run-id", run_id]

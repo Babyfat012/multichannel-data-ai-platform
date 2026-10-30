@@ -15,6 +15,7 @@ def test_performance_merge_fits_vm_and_keeps_cloud_auth(tmp_path):
         (ROOT / ".env.example").read_text()
         + "\nAWS_REGION=ap-southeast-2\nRAW_BUCKET=test-raw\nLAKEHOUSE_BUCKET=test-lake\nPLATFORM_PRIVATE_IP=10.42.0.12\n"
         + "PLATFORM_SPARK_PACKAGES_AWS=org.example:test:1\n"
+        + "PLATFORM_RAG_PG_CONN={}\n"
     )
     result = subprocess.run(
         [
@@ -45,6 +46,7 @@ def test_performance_merge_fits_vm_and_keeps_cloud_auth(tmp_path):
             "LAKEHOUSE_BUCKET": "test-lake",
             "PLATFORM_PRIVATE_IP": "10.42.0.12",
             "PLATFORM_SPARK_PACKAGES_AWS": "org.example:test:1",
+            "PLATFORM_RAG_PG_CONN": "{}",
         },
         text=True,
         capture_output=True,

@@ -167,6 +167,9 @@ services:
       # ML: Feast đọc/ghi S3 thật bằng IAM role; Redis online là NodePort trên EKS; cutoff của Gold A.
       AIRFLOW_VAR_PLATFORM_FEAST_ROOT: s3://${LAKEHOUSE_BUCKET}/feature-store
       AIRFLOW_VAR_PLATFORM_FEAST_REDIS: ${PLATFORM_FEAST_REDIS:-}
+      # RAG (đợt 4): tài liệu + chunk trên S3 lakehouse; pgvector là NodePort trên node EKS (Ansible -e rag_pg).
+      AIRFLOW_VAR_PLATFORM_RAG_ROOT: s3://${LAKEHOUSE_BUCKET}/rag
+      AIRFLOW_CONN_PLATFORM_RAG_PG: ${PLATFORM_RAG_PG_CONN:?PLATFORM_RAG_PG_CONN_required}
       AIRFLOW_VAR_PLATFORM_ML_CUTOFF: "2026-06-30T00:00:00Z"
       # Task Walmart của DAG v1 đọc PostgreSQL qua JDBC ngay trong driver Airflow.
       POSTGRES_USER: ${POSTGRES_USER}
@@ -182,6 +185,7 @@ services:
       - ./sql:/opt/sql:ro
       # Định nghĩa Feast cho ml_feature_materialize (feast apply/materialize chạy trong container này).
       - ./feature_repo:/opt/feature_repo:ro
+      - ./rag:/opt/rag/rag:ro
       - /mnt/platform-data/spark-events:/spark-events
       - /mnt/platform-data/airflow:/opt/airflow
       - ./dags:/opt/airflow/dags:ro
