@@ -155,3 +155,23 @@ rolling không gián đoạn.
 ![Swagger /predict APP-00042 amazon US 1 cái 25 USD: score 0.1661, abstain false, model_version 1](evidence/aws/feature-api-swagger-predict-20261030.png)
 
 `approved_returns_24h` còn `null`: feature stream chưa chạy trên AWS.
+
+#### Load test trên EKS
+
+Locust chạy trên laptop (Việt Nam), đi qua `kubectl port-forward svc/feature-api` tới cụm ở Sydney
+(ap-southeast-2); 20 user, 60 s, cùng [`serving/locustfile.py`](../serving/locustfile.py), SKU thật
+`APP-00042,APP-00482,ELE-01103`. Đi port-forward để tránh rate limit 50 r/s của ingress.
+
+| Request | Số | Lỗi | p50 | p95 | p99 | req/s |
+|---|---:|---:|---:|---:|---:|---:|
+| `POST /features` | 1.999 | 0 | 250 ms | 270 ms | 290 ms | 33,6 |
+| `POST /features [batch]` | 530 | 0 | 250 ms | 270 ms | 280 ms | 8,9 |
+| `GET /healthz` | 475 | 0 | 250 ms | 270 ms | 280 ms | 8,0 |
+| **Tổng** | **3.004** | **0** | 250 ms | 270 ms | 290 ms | **50,5** |
+
+Báo cáo HTML: [`evidence/aws/load-test-feature-api-20261030.html`](evidence/aws/load-test-feature-api-20261030.html).
+
+Đọc số: `/healthz` không làm gì cũng mất ~250 ms ⇒ gần hết là đường mạng laptop → Sydney, không phải API.
+Phía server (`http_request_duration_seconds` của pod nhận tải): `/features` trung bình **1,8 ms**
+(4,57 s / 2.536 request). Port-forward dồn hết vào 1 pod; req/s bị chặn bởi 20 user × ~250 ms mạng, không phải
+bởi API. 0 lỗi.
