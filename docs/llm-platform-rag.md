@@ -91,3 +91,15 @@ Receipt: [`evidence/rag-validate-airflow-20261021.json`](evidence/rag-validate-a
 [`ci/jenkins/rag-pipeline.Jenkinsfile`](../ci/jenkins/rag-pipeline.Jenkinsfile).
 
 Còn lại cho GCP: chạy DataHub, đặt `platform_datahub_gms_url`, chạy lại DAG để `publish` đẩy dataset/job/lineage/assertion; ảnh Graph/Grid Airflow và Lineage DataHub.
+
+## Trên AWS, 2026-10-30
+
+DAG `ml_rag_ingest` chạy trên Airflow EC2, chunk + embedding ghi S3, online store là pgvector trên EKS (NodePort
+30432). Lần đầu `load` hỏng: `type "vector" does not exist`. PVC `pgdata` vừa tạo lại nên database mới chưa bật
+extension; image pgvector chỉ cài sẵn, không tự bật. Sửa: [`pgvector.yaml`](../infra/k8s/rag/pgvector.yaml) thêm
+ConfigMap initdb `CREATE EXTENSION IF NOT EXISTS vector` (chạy khi PVC mới), DB đang chạy thì bật tay một lần; test
+`test_fresh_pgvector_volume_enables_vector_extension`.
+
+![ml_rag_ingest trên AWS: upload, chunk, embed, load, validate xanh; publish skipped vì DataHub không chạy](evidence/aws/airflow-ml-rag-ingest-20261030.png)
+
+`publish` (lineage DataHub) bỏ qua có chủ đích khi chưa đặt Variable `platform_datahub_gms_url`.

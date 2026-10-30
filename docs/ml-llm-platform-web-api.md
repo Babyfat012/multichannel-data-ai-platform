@@ -143,3 +143,15 @@ Image v3 có thêm `feast[postgres]`, `fastembed` và model `BAAI/bge-small-en-v
 | MCP qua agentgateway `tools/call search_policy_chunks` "Can a TikTok buyer get a refund without returning the item?" | `tiktok-shop-returns / Refund only` |
 
 Agent dùng tool: [`docs/llm-platform-agents.md`](llm-platform-agents.md).
+
+### Trên EKS, 2026-10-30
+
+Feature API (helm, 2 replica) sau ingress HTTPS `https://api.<ip>.sslip.io` (cert Let's Encrypt). `helm upgrade` lên
+image `813627b-pii1` (làm tròn số, xem [LLM và agent](llm-platform-agents.md#trên-eks-2026-10-30)) là revision 2,
+rolling không gián đoạn.
+
+![Swagger /features APP-00042: 15306 dòng có nhãn, 2599 Return, tỉ lệ 0.1698](evidence/aws/feature-api-swagger-features-20261030.png)
+
+![Swagger /predict APP-00042 amazon US 1 cái 25 USD: score 0.1661, abstain false, model_version 1](evidence/aws/feature-api-swagger-predict-20261030.png)
+
+`approved_returns_24h` còn `null`: feature stream chưa chạy trên AWS.

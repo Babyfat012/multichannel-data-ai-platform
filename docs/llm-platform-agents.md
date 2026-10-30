@@ -290,6 +290,11 @@ trong 150 s ([log](evidence/aws/keda-data-agent-20261030.txt)):
 | 206 s | 45m (hết tải) | 3 |
 | 491 s | 0 | **2** (HPA "All metrics below target") |
 
+**Agent registry.** agentregistry trên EKS (`https://registry.<ip>.sslip.io`, basic auth `ops`): 3 Agent đã publish
+kèm mô tả, model và nhãn `latest`, cùng 1 MCP server.
+
+![agentregistry: coordinator, data-agent, model-agent](evidence/aws/agent-registry-ui-20261030.png)
+
 **Prompt từ Langfuse.** Ba prompt `platform-*` ở nhãn `production`, script seed tạo bằng API rồi đổ vào ConfigMap
 `agent-prompts`:
 
