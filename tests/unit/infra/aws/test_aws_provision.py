@@ -592,3 +592,25 @@ def test_wave4_flink_a_reads_replayed_topic_without_postgres_lookup():
     replay_sql = (ROOT / "sql/ml/return_events_replay.sql").read_text()
     assert "l.label = 1" in replay_sql and "ORDER BY l.label_available_at" in replay_sql
 
+
+def test_wave5_ci_role_is_namespace_scoped_and_ecr_limited():
+    """EC2 vào EKS bằng nhóm platform-ci (không access policy AWS); RBAC toàn quyền chỉ trong namespace CI;
+    ECR chỉ push/pull repo của dự án, không xoá."""
+    tf = (ROOT / "infra/aws/kubernetes/cluster.tf").read_text()
+    entry = tf[tf.index('resource "aws_eks_access_entry" "ci"') :].split("}")[0]
+    assert 'kubernetes_groups = ["platform-ci"]' in entry
+    assert "aws_eks_access_policy_association" not in tf[tf.index('resource "aws_eks_access_entry" "ci"') :]
+    api = tf[tf.index('"data_to_api"') :].split("}")[0]
+    assert "from_port                    = 443" in api and "data_security_group_id" in api
+    docs = [d for d in yaml.safe_load_all((ROOT / "infra/k8s/ci/rbac.yaml").read_text()) if d]
+    bindings = [d for d in docs if d["kind"] in ("RoleBinding", "ClusterRoleBinding")]
+    assert all(b["subjects"] == [{"apiGroup": "rbac.authorization.k8s.io", "kind": "Group", "name": "platform-ci"}]
+               for b in bindings)
+    cluster_roles = [d for d in docs if d["kind"] == "ClusterRole"]
+    assert [r["rules"] for r in cluster_roles] == [[{"apiGroups": [""], "resources": ["namespaces"], "verbs": ["get", "list"]}]]
+    assert {d["metadata"]["namespace"] for d in docs if d["kind"] == "Role"} == {
+        "kagent", "feature-store", "agentgateway", "langfuse"}
+    iam = (ROOT / "infra/aws/terraform/iam.tf").read_text()
+    ecr = iam[iam.index('data "aws_iam_policy_document" "ci_ecr"') :]
+    assert "resources = [for repo in aws_ecr_repository.application : repo.arn]" in ecr
+    assert "Delete" not in ecr.split('resource "aws_iam_role_policy" "ci_ecr"')[0]

@@ -278,3 +278,11 @@ services:
       DATA_SOURCE_PASS: ${POSTGRES_PASSWORD}
     ports:
       - "${PLATFORM_PRIVATE_IP:?PLATFORM_PRIVATE_IP_required}:9187:9187"
+  # Jenkins trên EC2 (đợt 5): build tại chỗ, deploy compose tại chỗ, push ECR + deploy EKS bằng IAM role EC2.
+  # Chỉ nghe loopback (network host) ⇒ UI qua tunnel 8090. Job lấy code từ git bundle (rsync không mang .git).
+  jenkins:
+    environment:
+      JENKINS_OPTS: --httpPort=8090 --httpListenAddress=127.0.0.1
+      CI_GIT_REMOTE: file:///repo/out/platform.bundle
+      AWS_REGION: ${AWS_REGION:?AWS_REGION_required}
+    mem_limit: 1536m

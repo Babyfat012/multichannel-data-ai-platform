@@ -5,6 +5,11 @@
 set -euo pipefail
 REGISTRY=${REGISTRY:-localhost:5001}
 [[ $# -gt 0 ]] || { echo 'Cần ít nhất một image:tag' >&2; exit 1; }
+# ECR: đăng nhập bằng credential đang có (IAM role EC2 cho Jenkins, profile SSO trên laptop).
+if [[ "$REGISTRY" =~ ^([0-9]+\.dkr\.ecr\.([a-z0-9-]+)\.amazonaws\.com) ]]; then
+  aws ecr get-login-password --region "${BASH_REMATCH[2]}" \
+    | docker login --username AWS --password-stdin "${BASH_REMATCH[1]}" >/dev/null
+fi
 for image in "$@"; do
   source_tag=${image##*:}
   [[ "$source_tag" != "$image" && "$source_tag" != */* ]] || { echo "Thiếu tag: $image" >&2; exit 1; }

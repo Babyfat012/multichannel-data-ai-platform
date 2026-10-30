@@ -44,3 +44,28 @@ resource "aws_iam_instance_profile" "vm" {
   name = "${var.name_prefix}-data-platform-vm"
   role = aws_iam_role.vm.name
 }
+
+# Jenkins trên EC2 (đợt 5) push/pull image vào đúng các repo ECR của dự án; không xoá repo/image.
+data "aws_iam_policy_document" "ci_ecr" {
+  statement {
+    sid       = "EcrLogin"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+  statement {
+    sid = "EcrPushPull"
+    actions = [
+      "ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer",
+      "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage",
+      "ecr:DescribeImages", "ecr:DescribeRepositories",
+    ]
+    resources = [for repo in aws_ecr_repository.application : repo.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "ci_ecr" {
+  count  = var.enable_ecr ? 1 : 0
+  name   = "platform-ci-ecr"
+  role   = aws_iam_role.vm.id
+  policy = data.aws_iam_policy_document.ci_ecr.json
+}

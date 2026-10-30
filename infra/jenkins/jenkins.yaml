@@ -37,7 +37,7 @@ jobs:
         pipelineJob(name) {
           definition {
             cpsScm {
-              scm { git { remote { url('file:///repo') }; branch('*/main') } }
+              scm { git { remote { url('${CI_GIT_REMOTE:-file:///repo}') }; branch('*/main') } }
               scriptPath("ci/jenkins/${name}.Jenkinsfile")
             }
           }

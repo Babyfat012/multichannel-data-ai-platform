@@ -209,3 +209,42 @@ def test_registry_setup_repeated_on_existing_nodes(tmp_path):
     configs = [yaml.safe_load(call[2]) for call in calls if call[0] == "kubectl"]
     assert configs[0] == configs[1]
     assert configs[0]["metadata"] == {"name": "local-registry-hosting", "namespace": "kube-public"}
+
+
+def test_push_logs_into_ecr_only_for_ecr_registries(tmp_path):
+    """Registry ECR ⇒ aws ecr get-login-password đúng region rồi docker login; registry local ⇒ không gọi aws."""
+    for tool in ("docker", "aws"):
+        fake = tmp_path / tool
+        fake.write_text(f'#!/bin/bash\nprintf "{tool} %s\\n" "$*" >> "$TOOL_LOG"\ncat >/dev/null || true\n')
+        fake.chmod(0o755)
+    log = tmp_path / "tools.log"
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "TOOL_LOG": str(log), "TAG": "abc123",
+           "REGISTRY": "665116832975.dkr.ecr.ap-southeast-2.amazonaws.com/platform"}
+    subprocess.run(["bash", str(ROOT / "scripts/run/push_images.sh"), "platform-feast:0.66.0"],
+                   env=env, check=True, stdin=subprocess.DEVNULL)
+    calls = log.read_text().splitlines()
+    assert calls[0] == "aws ecr get-login-password --region ap-southeast-2"
+    assert calls[1] == "docker login --username AWS --password-stdin 665116832975.dkr.ecr.ap-southeast-2.amazonaws.com"
+    assert calls[-1] == "docker push 665116832975.dkr.ecr.ap-southeast-2.amazonaws.com/platform/platform-feast:abc123"
+    log.unlink()
+    env["REGISTRY"] = "localhost:5001"
+    subprocess.run(["bash", str(ROOT / "scripts/run/push_images.sh"), "platform-feast:0.66.0"],
+                   env=env, check=True, stdin=subprocess.DEVNULL)
+    assert not any(line.startswith("aws ") for line in log.read_text().splitlines())
+
+
+def test_jenkins_on_ec2_is_loopback_with_eks_kubeconfig_and_bundle_source():
+    """Jenkins AWS: chỉ loopback, job lấy git bundle, kubeconfig EKS khi s3, kubectl khớp EKS 1.37, có aws CLI."""
+    import yaml as _yaml
+
+    from tests.unit.infra.aws.test_aws_provision import ComposeLoader
+
+    jenkins = _yaml.load((ROOT / "docker-compose.aws.yml").read_text(), Loader=ComposeLoader)["services"]["jenkins"]
+    assert "--httpListenAddress=127.0.0.1" in jenkins["environment"]["JENKINS_OPTS"]
+    assert jenkins["environment"]["CI_GIT_REMOTE"] == "file:///repo/out/platform.bundle"
+    assert "url('${CI_GIT_REMOTE:-file:///repo}')" in (ROOT / "infra/jenkins/jenkins.yaml").read_text()
+    setup = (ROOT / "scripts/setup/setup_jenkins.sh").read_text()
+    eks = setup[setup.index('if [[ "${PLATFORM_STORAGE:-minio}" == s3 ]]; then') :].split("else")[0]
+    assert "eks update-kubeconfig" in eks and "kind get kubeconfig" not in eks
+    dockerfile = (ROOT / "docker/Dockerfile.jenkins").read_text()
+    assert "/release/v1.37.2/" in dockerfile and "awscli-exe-linux-x86_64-2.31.0.zip" in dockerfile

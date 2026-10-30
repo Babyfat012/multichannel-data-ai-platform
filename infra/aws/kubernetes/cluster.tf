@@ -89,3 +89,26 @@ resource "aws_vpc_security_group_ingress_rule" "data_to_pgvector" {
   to_port                      = 30432
   description                  = "Data Platform Airflow to RAG pgvector NodePort"
 }
+
+# Jenkins trên EC2 (đợt 5): role EC2 vào cụm qua private endpoint với nhóm `platform-ci`, KHÔNG gắn access policy
+# AWS. Quyền thật nằm ở infra/k8s/ci/rbac.yaml: toàn quyền chỉ trong vài namespace CI deploy (Agent/RemoteMCPServer
+# của kagent là CRD, policy Edit của AWS không phủ).
+data "aws_iam_role" "data_vm" {
+  name = "${var.name_prefix}-data-platform-vm"
+}
+
+resource "aws_eks_access_entry" "ci" {
+  cluster_name      = aws_eks_cluster.apps.name
+  principal_arn     = data.aws_iam_role.data_vm.arn
+  kubernetes_groups = ["platform-ci"]
+  type              = "STANDARD"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "data_to_api" {
+  security_group_id            = aws_eks_cluster.apps.vpc_config[0].cluster_security_group_id
+  referenced_security_group_id = data.terraform_remote_state.data.outputs.data_security_group_id
+  ip_protocol                  = "tcp"
+  from_port                    = 443
+  to_port                      = 443
+  description                  = "Data Platform Jenkins to EKS private API endpoint"
+}
