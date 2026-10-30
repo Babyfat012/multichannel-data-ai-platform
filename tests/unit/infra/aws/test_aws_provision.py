@@ -229,7 +229,7 @@ def test_stream_overlay_only_enables_kafka_flink_on_loopback():
     services = yaml.load(
         (ROOT / "docker-compose.aws-stream.yml").read_text(), Loader=ComposeLoader
     )["services"]
-    assert set(services) == {"kafka", "flink-jobmanager", "flink-taskmanager", "debezium-connect"}
+    assert set(services) == {"kafka", "flink-jobmanager", "flink-taskmanager", "debezium-connect", "feast-pusher"}
     for svc in services.values():
         assert all(port.startswith("127.0.0.1:") for port in svc.get("ports", []))
     # File gốc mở 0.0.0.0 cho Kafka và Flink UI: overlay phải ghi đè cả hai.
@@ -562,3 +562,33 @@ def test_wave4_rag_reaches_pgvector_nodeport_with_iam_s3():
     rule = tf[tf.index('"data_to_pgvector"') :].split("}")[0]
     assert "from_port                    = 30432" in rule and "to_port                      = 30432" in rule
     assert "data_security_group_id" in rule
+
+
+def test_wave4_stream_feature_a_keeps_kafka_on_ebs_and_pushes_with_iam():
+    """Gap #12: Kafka ghi log vào volume (cả local) và EBS trên AWS; pusher không key, Redis từ Ansible."""
+    base = yaml.load((ROOT / "docker-compose.yml").read_text(), Loader=ComposeLoader)["services"]
+    assert base["kafka"]["environment"]["KAFKA_LOG_DIRS"] == "/var/lib/kafka/data"
+    assert "kafka-data:/var/lib/kafka/data" in base["kafka"]["volumes"]
+    stream = yaml.load((ROOT / "docker-compose.aws-stream.yml").read_text(), Loader=ComposeLoader)["services"]
+    assert stream["kafka"]["volumes"] == ["/mnt/platform-data/kafka:/var/lib/kafka/data"]
+    env = stream["feast-pusher"]["environment"]
+    assert not {"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "FEAST_S3_ENDPOINT_URL"} & set(env)
+    assert env["FEAST_REDIS"].startswith("${PLATFORM_FEAST_REDIS:?")
+    assert env["FEAST_REGISTRY"] == "s3://${LAKEHOUSE_BUCKET}/feature-store/registry.db"
+
+
+def test_wave4_flink_a_reads_replayed_topic_without_postgres_lookup():
+    """Bản A: đọc đúng topic script phát lại, ghi topic pusher đọc, không JDBC; script submit chọn SQL."""
+    sql = (ROOT / "flink_jobs/ml/sku_return_feature_a.sql").read_text()
+    replay = (ROOT / "feature_repo/replay_return_events.py").read_text()
+    topic = replay.split('TOPIC = "')[1].split('"')[0]
+    assert f"'topic' = '{topic}'" in sql and "'topic' = 'ml.sku_return_24h'" in sql
+    assert "jdbc" not in sql.lower() and "@@PG_" not in sql
+    pusher = (ROOT / "feature_repo/push_stream_features.py").read_text()
+    assert '"FEAST_PUSH_TOPIC", "ml.sku_return_24h"' in pusher
+    run = (ROOT / "scripts/run/run_sku_return_feature.sh").read_text()
+    assert "sql_file=${FEATURE_SQL:-flink_jobs/ml/sku_return_feature.sql}" in run
+    assert "if grep -q '@@PG_' \"$sql_file\"; then" in run
+    replay_sql = (ROOT / "sql/ml/return_events_replay.sql").read_text()
+    assert "l.label = 1" in replay_sql and "ORDER BY l.label_available_at" in replay_sql
+

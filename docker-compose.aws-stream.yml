@@ -5,6 +5,9 @@
 #   CDC: ... --profile cdc up -d kafka debezium-connect
 # Cổng chỉ mở loopback; xem UI qua SSM port forwarding. Đầu ra Flink nằm trên EBS dữ liệu, thư mục phải
 # thuộc user flink của image: sudo install -d -o 9999 -g 9999 /mnt/platform-data/flink
+# Kafka (gap #5 #12) ghi topic trên EBS, thư mục thuộc appuser: sudo install -d -o 1000 -g 1000 /mnt/platform-data/kafka
+# Stream feature A (đợt 4): ... --profile stream --profile flink --profile ml-stream up -d kafka flink-jobmanager \
+#   flink-taskmanager feast-pusher (pusher: build trên EC2 trước, `... build feast-pusher`).
 services:
   kafka:
     profiles: !override [stream, cdc]
@@ -15,6 +18,8 @@ services:
       KAFKA_HEAP_OPTS: -Xms512m -Xmx1g
     ports: !override
       - "127.0.0.1:${KAFKA_PORT:-9094}:9094"
+    volumes: !override
+      - /mnt/platform-data/kafka:/var/lib/kafka/data
   flink-jobmanager:
     profiles: !override [flink]
     scale: 1
@@ -38,3 +43,16 @@ services:
     cpus: "1"
     ports: !override
       - "127.0.0.1:${DEBEZIUM_PORT:-8084}:8083"
+  # Flink ghi ml.sku_return_24h → push Feast: Redis trên EKS (NodePort, IP node từ Ansible) + Parquet offline S3.
+  # S3 qua IAM role EC2: không key, không endpoint MinIO.
+  feast-pusher:
+    cpus: "0.5"
+    depends_on:
+      kafka: {condition: service_healthy}
+    environment: !override
+      AWS_REGION: ${AWS_REGION:?AWS_REGION_required}
+      FEAST_REGISTRY: s3://${LAKEHOUSE_BUCKET}/feature-store/registry.db
+      FEAST_SKU_DAILY_PATH: s3://${LAKEHOUSE_BUCKET}/feature-store/sku_daily
+      FEAST_SKU_RETURN_24H_PATH: s3://${LAKEHOUSE_BUCKET}/feature-store/sku_return_24h.parquet
+      FEAST_REDIS: ${PLATFORM_FEAST_REDIS:?PLATFORM_FEAST_REDIS_required}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092

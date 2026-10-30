@@ -97,6 +97,8 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_NUM_PARTITIONS: 3
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      # Gap #12: mặc định image ghi /tmp/kraft-combined-logs (lớp ghi container) ⇒ tạo lại container là mất topic.
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
     volumes: [kafka-data:/var/lib/kafka/data]
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
