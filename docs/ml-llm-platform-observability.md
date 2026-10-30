@@ -100,3 +100,30 @@ Khung 15 phút, đồ thị chỉ có từ 00:01: trước đó Prometheus vẫn
 ConfigMap đã trỏ `10.42.0.151`, vì sidecar nạp lại config bị tắt và pod chạy 13 giờ không khởi động lại.
 Sửa: [`prometheus-values.yaml`](../infra/k8s/observability/prometheus-values.yaml) bật `configmapReload`, test
 `test_prometheus_reloads_config_when_targets_change`.
+
+### Telemetry LLM và Agent theo từng request (2026-10-31)
+
+**Token mỗi request.** kagent (ADK) ghi span OpenTelemetry `generate_content` cho từng lượt gọi LLM, gửi Jaeger qua
+OTLP. Một câu hỏi chính sách gửi coordinator ⇒ trace 13 span qua 3 service: coordinator gọi LLM, gọi tool A2A
+`kagent__NS__model_agent` qua agentgateway, model_agent gọi LLM rồi trả lời:
+
+![Jaeger: coordinator POST → agentgateway → model_agent, 13 span, 22,16 s; span generate_content của model_agent 15,76 s](evidence/aws/jaeger-coordinator-model-agent-trace-20261031.png)
+
+Mở tag của span `generate_content` (model_agent): `gen_ai.usage.input_tokens` = 1536, `gen_ai.usage.output_tokens` = 31,
+`gen_ai.request.model` = `qwen2.5-1.5b-instruct`, `finish_reasons` = STOP. Tổng token request = input + output = 1567.
+
+![Jaeger tag span generate_content: input_tokens 1536, output_tokens 31, cache_read 0, model qwen2.5-1.5b-instruct](evidence/aws/jaeger-llm-tokens-per-request-20261031.png)
+
+Trung bình theo request từ metric agentgateway (`agentgateway_gen_ai_client_token_usage` là histogram một mẫu mỗi
+request, nên `_sum / _count` = token trung bình mỗi request), 30 phút: input **947**, output **43,9**, input đọc từ
+cache **728**:
+
+![Grafana: token trung bình mỗi request theo gen_ai_token_type, bảng input 947, output 43,9, input_cache_read 728](evidence/aws/grafana-tokens-per-request-20261031.png)
+
+**Số lần gọi và số lỗi theo từng MCP tool.** Feature API đếm `mcp_tool_calls_total{tool, outcome}` (outcome = `error`
+khi tool trả `isError`, kể cả lúc HTTP vẫn 200). Để có số lỗi thật, gọi MCP trực tiếp với input sai: danh sách SKU
+rỗng, SKU sai định dạng, `top_k=50` (> 10), channel `ebay`, `chunk_id` sai ⇒ 5 lỗi validate:
+
+![Grafana: sum by (tool, outcome) mcp_tool_calls_total — ok/error cho get_sku_features, search_policy_chunks, predict_return_risk, get_policy_chunks](evidence/aws/grafana-mcp-tool-outcome-20261031.png)
+
+Số lượt gọi mỗi Agent (A2A theo route) và mỗi tool qua gateway: ảnh dashboard ở mục trên.
