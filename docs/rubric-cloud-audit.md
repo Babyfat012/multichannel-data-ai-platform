@@ -49,14 +49,14 @@ Ký hiệu: ✅ có bằng chứng AWS · ⚠️ có trên AWS nhưng thiếu ph
 | Unit coverage, EP/BVA, mutation, property-based | 1+2+2+2 | ✅ | Kiểm ở mức code (PR testing), không phụ thuộc nơi chạy |
 | Load test locust Web API | 2 | ⚠️ | Rubric ghi "Local Testing"; nên chạy lại trên Feature API EKS khi có |
 | CI/CD RAG / agent / coordinator / stream feature | 2×4 | ❌ | Jenkins local; cần đích ECR + EKS |
-| NGINX: Grafana, log, trace, agent UI, registry UI | 2×5 | ❌ | ingress-nginx trên EKS |
-| Basic auth + rate limit | 2 | ❌ | annotation ingress |
-| Domain + HTTPS Web API | 1 | ❌ | |
+| NGINX: Grafana, log, trace, agent UI, registry UI | 2×5 | 🟡 | 30/10: route HTTPS + cert LE cho Grafana (log Loki xem trong Grafana), metrics, traces; route `agent.` có cert, backend kagent ở đợt 3; registry đợt 3 |
+| Basic auth + rate limit | 2 | 🟡 | Basic auth đo được (401 không mật khẩu); rate limit đã khai, đo khi Feature API có ở đợt 3 |
+| Domain + HTTPS Web API | 1 | 🟡 | `api.15-134-182-157.sslip.io` có cert LE thật; Feature API deploy đợt 3 (hiện 502) |
 | Terraform / Ansible | 1+1 | ✅ | Terraform AWS + Ansible chạy thật (cập nhật dòng cũ "chưa kiểm chứng") |
-| Observability: Web API metrics, Prom+Grafana, logs, traces | 1×4 | ❌ | stack observability trên EKS |
+| Observability: Web API metrics, Prom+Grafana, logs, traces | 1×4 | 🟡 | Prom+Grafana ✅, Loki+Fluent Bit chạy (chưa có ảnh truy vấn log), Jaeger ✅ (trace của chính nó); Web API metrics chờ Feature API đợt 3. Thêm: cảnh báo EC2 (#17 #20) |
 | LLM telemetry (token, TTFT…) / Agent telemetry | 2+2 | ❌ | |
 | A/B agent / A/B LLM | 1+1 | ❌ | |
-| Vault | 1 | ❌ | |
+| Vault | 1 | ✅ | 30/10: Vault EC2 (EBS), KV v2, mật khẩu ingress sinh và đọc từ Vault |
 | README + docs theo rule | 2 | ⚠️ | Thêm sơ đồ triển khai AWS tổng thể |
 | Novel idea 1 / 2 | 2+2 | ❓ | Chưa xác định ý tưởng MLE; cần chốt |
 
