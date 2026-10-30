@@ -141,6 +141,16 @@ Nếu nâng cấp từ checkout có tên tài nguyên khác, named volume, bucke
 [Airflow AWS](airflow.md#trên-aws-2026-10-27-đến-2026-10-28) nhúng Graph/Gantt của các pipeline đã chạy.
 Cấu hình triển khai: [Compose AWS](../docker-compose.aws.yml).
 
-Ảnh và số so naive/optimized ở các mục trước được đo local. Chưa có capture `docker image inspect` và
-so package/lock trên EC2; không dùng receipt Compose thay bằng chứng giảm kích thước DE3–4.
-Script đo đã có: [compare_docker_dependencies.sh](../scripts/evidence/compare_docker_dependencies.sh).
+Đo lại trên chính EC2 (2026-10-31) bằng [compare_docker_dependencies.sh](../scripts/evidence/compare_docker_dependencies.sh):
+build [`docker/Dockerfile.naive`](../docker/Dockerfile.naive) và [`Dockerfile`](../Dockerfile) từ cùng code, liệt kê
+thư viện trong từng image bằng `importlib.metadata` rồi `diff` ⇒ **cùng 27 package** (cùng `requirements.lock`), nên phần
+giảm là nhờ cách build, không phải bỏ bớt thư viện.
+
+| Image | Disk usage | Content size (nén, đẩy registry) | `docker image inspect` Size |
+|---|---:|---:|---:|
+| `platform-generator:naive` | 2,4 GB | 670 MB | 2.395.921.890 B |
+| `platform-generator:opt` | 698 MB | 172 MB | 698.142.846 B |
+
+Giảm **70,9%** dung lượng trên đĩa và **74,3%** dung lượng đẩy registry; khớp số đo local ở mục 2 (2,39 GB → 677–698 MB).
+
+![EC2: compare_docker_dependencies.sh in digest + byte hai image, Cùng bộ thư viện: 27 package; docker image ls naive 2.4GB/670MB, opt 698MB/172MB](evidence/aws/docker-naive-vs-opt-ec2-20261031.png)
