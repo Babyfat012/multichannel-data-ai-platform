@@ -85,3 +85,37 @@ NodePort 30443 (hoặc NAT 443→30443 nếu muốn URL HTTPS không ghi cổng)
 quyền domain; không tự dựng NAT, không cập nhật bản ghi A của DuckDNS.
 
 <!-- chụp: Certificate feature-api-duckdns-production-tls Ready và trình duyệt HTTPS domain DuckDNS sau khi người vận hành kiểm chart/chạy cấp cert thật. -->
+
+## Trên EKS (2026-10-30/31)
+
+F5 NGINX Ingress Controller (namespace `ingress`) sau một NLB AWS; cert-manager cấp cert Let's Encrypt thật (HTTP-01)
+cho mỗi host `<tên>.15-134-182-157.sslip.io`. Mọi UI đều sau gateway, route tạo bởi
+[`setup_ingress.sh`](../scripts/setup/setup_ingress.sh), mật khẩu sinh một lần và cất ở Vault:
+
+| Host | Service phía sau | Setting NGINX | Auth |
+|---|---|---|---|
+| `api.` | Feature API (Web API) | [`feature-api.yaml`](../infra/k8s/ingress/feature-api.yaml): HTTPS, `limit-req-rate` 50r/s, burst 100 | không (API công khai, có rate limit) |
+| `agent.` | kagent UI (UI test agent) | [`agent-ui.yaml`](../infra/k8s/ingress/agent-ui.yaml): HTTPS, basic auth, 5r/s burst 10, vượt ⇒ 429 | `seller` |
+| `grafana.` | Grafana (metric + log Loki) | [`ops-ui.yaml`](../infra/k8s/ingress/ops-ui.yaml) | `ops` + admin Grafana |
+| `traces.` | Jaeger UI | `ops-ui.yaml` | `ops` |
+| `metrics.` | Prometheus UI | `ops-ui.yaml` | `ops` |
+| `registry.` | agentregistry UI | `ops-ui.yaml` | `ops` |
+
+Basic auth + rate limit của UI agent, đo từ laptop không kèm mật khẩu: một request ⇒ `401` với
+`WWW-Authenticate: Basic realm="PLATFORM agent UI"`; 40 request cùng lúc ⇒ 12 × `401` (trong hạn mức, tới bước auth)
+và 28 × `429` (vượt 5r/s + burst 10, NGINX chặn trước cả bước auth).
+
+![agent. không mật khẩu: 401 Basic realm PLATFORM agent UI; 40 request song song: 12 × 401, 28 × 429](evidence/aws/agent-ui-basic-auth-rate-limit-20261031.png)
+
+Các UI sau gateway (đã đăng nhập qua basic auth, HTTPS):
+
+![Grafana qua https://grafana.…sslip.io: thư mục dashboard PLATFORM](evidence/aws/grafana-dashboards-https-20261030.png)
+
+![Jaeger qua https://traces.…sslip.io: tìm trace agentgateway](evidence/aws/jaeger-search-https-20261030.png)
+
+![kagent UI qua https://agent.…sslip.io: 3 agent coordinator, data-agent, model-agent](evidence/aws/kagent-ui-agents-20261030.png)
+
+![agentregistry UI qua https://registry.…sslip.io: 1 MCP server và 3 agent đã publish](evidence/aws/agent-registry-ui-20261030.png)
+
+Log xem trong Grafana (Explore → Loki): [Observability](ml-llm-platform-observability.md#trên-eks-2026-10-30).
+Web API HTTPS: [Swagger qua `api.`](ml-llm-platform-web-api.md#trên-eks-2026-10-30).
