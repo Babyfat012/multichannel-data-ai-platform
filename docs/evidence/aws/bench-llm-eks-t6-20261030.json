@@ -1,0 +1,3 @@
+{"label": "eks-t6", "concurrency": 1, "requests": 8, "p50_s": 5.66, "p95_s": 6.25, "req_per_s": 0.188, "output_tok_per_s": 9.9, "avg_prompt_tokens": 508}
+{"label": "eks-t6", "concurrency": 2, "requests": 8, "p50_s": 8.63, "p95_s": 14.7, "req_per_s": 0.204, "output_tok_per_s": 10.6, "avg_prompt_tokens": 508}
+{"label": "eks-t6", "concurrency": 4, "requests": 8, "p50_s": 11.02, "p95_s": 12.6, "req_per_s": 0.342, "output_tok_per_s": 17.7, "avg_prompt_tokens": 508}
