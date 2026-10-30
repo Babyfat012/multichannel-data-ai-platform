@@ -19,6 +19,9 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8000"
         prometheus.io/path: /metrics
+        {{- with .Values.envChecksum }}
+        checksum/env: {{ . | quote }}   # Secret env đổi ⇒ thay pod
+        {{- end }}
     spec:
       {{- if .Values.serviceAccount.name }}
       serviceAccountName: {{ .Values.serviceAccount.name }}

@@ -126,3 +126,20 @@ def test_cloud_rag_is_opt_in(cloud, given, expected):
     secret = next(body for _, args, body in calls if "--from-env-file=/dev/stdin" in args)
     rag = [line for line in secret.splitlines() if line.startswith("FEAST_RAG_REGISTRY=")]
     assert rag == ([f"FEAST_RAG_REGISTRY={expected}"] if expected else [])
+
+
+def test_changed_secret_env_rolls_the_pods(cloud):
+    """Secret đổi một mình không thay pod ⇒ checksum env vào pod template; giữ nguyên env thì checksum giữ nguyên."""
+
+    def checksum(env):
+        Path(env["CALL_LOG"]).unlink(missing_ok=True)
+        subprocess.run(["bash", str(SCRIPT), "rev"], env=env, check=True, capture_output=True)
+        calls = [json.loads(line) for line in Path(env["CALL_LOG"]).read_text().splitlines()]
+        deploy = next(args for tool, args, _ in calls if tool == "helm" and "upgrade" in args)
+        value = next(a for a in deploy if a.startswith("envChecksum="))
+        assert "test-secret" not in value
+        return value
+
+    first = checksum(cloud)
+    assert checksum(cloud) == first
+    assert checksum({**cloud, "FEAST_RAG_REGISTRY": "s3://test-lakehouse/rag.db"}) != first

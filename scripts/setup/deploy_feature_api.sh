@@ -68,12 +68,14 @@ fi
 kubectl --context "$KCTX" create namespace "$namespace" --dry-run=client -o yaml | "${K[@]}" apply -f -
 printf '%s\n' "$secret_env" | "${K[@]}" create secret generic feature-api-env \
   --from-env-file=/dev/stdin --dry-run=client -o yaml | "${K[@]}" apply -f -
+# Dấu vân tay Secret gắn vào pod: env đổi ⇒ pod template đổi ⇒ Kubernetes thay pod (Secret đổi một mình thì không).
+env_checksum=$(printf '%s\n' "$secret_env" | sha256sum | cut -c1-16)
 unset secret_env
 H=(helm --kube-context "$KCTX" -n "$namespace")
 extra=()
 [[ "$storage" != s3 ]] || extra=(-f infra/helm/feature-api/values-aws.yaml)
 "${H[@]}" upgrade --install feature-api infra/helm/feature-api "${extra[@]}" \
   --set-string image.repository="${REGISTRY%/}/platform-feature-api" --set-string image.tag="$TAG" \
-  --set replicas="${REPLICAS:-2}" --atomic --timeout 4m
+  --set replicas="${REPLICAS:-2}" --set-string envChecksum="$env_checksum" --atomic --timeout 4m
 "${H[@]}" history feature-api --max 5
 printf 'Feature API %s deployed to %s/%s; verify /readyz through the configured ingress or port-forward.\n' "$TAG" "$KCTX" "$namespace"
