@@ -80,3 +80,12 @@ Panel guardrail có "Response Mask": chính lần gateway che nhầm tỉ lệ R
 Jaeger nhận trace OTLP của agentgateway; một trace MCP `tools/list` có span con tới backend `features`:
 
 ![Jaeger: trace agentgateway tools/list, 2 span](evidence/aws/jaeger-agentgateway-trace-20261030.png)
+
+Log: Fluent Bit (DaemonSet, 1 pod/node) đọc log container, gắn nhãn `namespace`, `pod`, `app`, đẩy vào Loki
+([`fluent-bit-values.yaml`](../infra/k8s/observability/fluent-bit-values.yaml)). Grafana Explore → Loki,
+`{namespace="feature-store"}`, 1 giờ:
+
+![Loki: log Feature API trên EKS; cột cao lúc 23:12–23:13 là đợt load test locust, dòng log là access log readyz/metrics](evidence/aws/grafana-loki-feature-store-20261030.png)
+
+Hai cột ~1,5k và ~1k dòng khớp đợt [load test trên EKS](ml-llm-platform-web-api.md#load-test-trên-eks)
+(3.004 request trong 60 s).
