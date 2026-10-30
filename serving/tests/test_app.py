@@ -194,6 +194,8 @@ def test_mcp_lists_tool(client):
         "predict_return_risk",
         "search_policy_chunks",
     ]
+    # Mô tả tool tiếng Việt làm Qwen 1,5B bỏ qua tool (đo trên EKS 30/10: 0/3, tiếng Anh 3/3).
+    assert all(t["description"].isascii() for t in tools)
 
 
 def test_mcp_tool_returns_features(client):

@@ -216,7 +216,8 @@ def create_app(store_factory=load_store, rag_factory=load_rag, http_factory=http
     @mcp.tool()
     @counted
     async def get_sku_features(seller_skus: list[str]) -> FeatureResponse:
-        """Feature trả hàng của 1–100 SKU (vd `sku-00001`); feature chưa có thì là null."""
+        # Docstring = mô tả tool LLM thấy ⇒ tiếng Anh: mô tả tiếng Việt làm Qwen 1,5B không gọi tool (0/3 so với 3/3).
+        """Return features of 1-100 SKUs (e.g. `sku-00001`, `APP-00042`); missing features are null."""
         # ToolError giữ nguyên lời nhắn cho LLM; lỗi khác MCP chỉ báo chung chung.
         try:
             body = FeatureRequest(seller_skus=seller_skus)
@@ -229,7 +230,8 @@ def create_app(store_factory=load_store, rag_factory=load_rag, http_factory=http
     @mcp.tool()
     @counted
     async def search_policy_chunks(query: str, top_k: int = 3) -> ChunkResponse:
-        """Tìm top_k (1–10) đoạn chính sách trả hàng của các Channel/Seller gần với câu hỏi (tiếng Anh)."""
+        """Search return/refund policy text of Amazon, Walmart, Shopify, TikTok Shop, Shopee and the
+        seller playbook. Use for ANY policy, return window or refund question. Returns top_k (1-10) chunks."""
         try:
             body = ChunkRequest(query=query, top_k=top_k)
             return await fetch_chunks(app.state.rag, "search", body.query, body.top_k)
@@ -241,7 +243,7 @@ def create_app(store_factory=load_store, rag_factory=load_rag, http_factory=http
     @mcp.tool()
     @counted
     async def get_policy_chunks(chunk_ids: list[str]) -> ChunkResponse:
-        """Lấy nội dung 1–20 chunk chính sách theo chunk_id (16 ký tự hex) từ Feast online store."""
+        """Get the text of 1-20 policy chunks by chunk_id (16 hex characters)."""
         try:
             body = ChunkIdRequest(chunk_ids=chunk_ids)
             return await fetch_chunks(app.state.rag, "get", body.chunk_ids)
@@ -259,11 +261,10 @@ def create_app(store_factory=load_store, rag_factory=load_rag, http_factory=http
         ordered_product_net_minor: int,
         country: str,
     ) -> Prediction:
-        """Điểm rủi ro Return (0–1, càng cao càng rủi ro, để xếp hạng) của một Order Line mới.
+        """Return risk score (0-1, higher = riskier, for ranking) of one new order line.
 
-        channel: amazon|walmart|shopify|tiktok_shop|shopee; country: nước giao hàng ISO-2 (vd US);
-        ordered_product_net_minor: giá trị hàng theo
-        đơn vị nhỏ nhất (cent). abstain=true khi SKU chưa đủ lịch sử nhãn.
+        channel: amazon|walmart|shopify|tiktok_shop|shopee; country: ISO-2 ship-to country (e.g. US);
+        ordered_product_net_minor: price in cents. abstain=true when the SKU has too little labeled history.
         """
         try:
             body = PredictRequest(

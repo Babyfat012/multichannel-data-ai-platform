@@ -103,3 +103,29 @@ ConfigMap initdb `CREATE EXTENSION IF NOT EXISTS vector` (chạy khi PVC mới),
 ![ml_rag_ingest trên AWS: upload, chunk, embed, load, validate xanh; publish skipped vì DataHub không chạy](evidence/aws/airflow-ml-rag-ingest-20261030.png)
 
 `publish` (lineage DataHub) bỏ qua có chủ đích khi chưa đặt Variable `platform_datahub_gms_url`.
+
+### Feature API phục vụ RAG trên EKS
+
+`deploy_feature_api.sh` với `FEAST_RAG_REGISTRY=s3://…/feature-store/rag-registry.db` bật `/chunks` và MCP tool
+`search_policy_chunks`. Câu hỏi "What is Amazon's return window for apparel?" qua ingress HTTPS trả 200, chunk gần
+nhất là mục "Return window" của `amazon-returns` (30 ngày).
+
+![Swagger POST /chunks trên EKS: 200, top 2 chunk của amazon-returns](evidence/aws/rag-chunks-swagger-20261030.png)
+
+Hai lỗi gặp khi bật:
+
+1. **Pod không nhận biến mới.** Script chỉ đổi Secret `feature-api-env`; pod template không đổi nên Kubernetes
+   không thay pod, `/chunks` vẫn 503. Mở khoá bằng `kubectl rollout restart deployment/feature-api`.
+2. **model-agent không gọi tool.** Qwen 1,5B trả "I'm sorry…" hoặc viết chữ "Call search_policy_chunks…".
+   Đo thẳng llama.cpp trên EKS (temperature 0,1, 3 câu chính sách, cùng system prompt): mô tả tool tiếng Việt
+   0/3 lần gọi tool, tiếng Anh 3/3. Docstring MCP tool chính là mô tả LLM đọc ⇒ đổi 4 docstring trong
+   [`serving/app.py`](../serving/app.py) sang tiếng Anh; `test_mcp_lists_tool` chặn mô tả không phải ASCII.
+   Image `f97cba1-mcpen`, rồi restart `model-agent` + `data-agent` để nạp lại danh sách tool.
+
+![Trước khi sửa: model-agent trả lời "không có thông tin", không gọi tool](evidence/aws/rag-model-agent-no-tool-20261030.png)
+
+![Sau khi sửa: model-agent gọi search_policy_chunks với query "Amazon return window for apparel"](evidence/aws/rag-model-agent-tool-call-20261030.png)
+
+![Kết quả tool (3 chunk) và câu trả lời: Amazon 30 ngày tính từ ngày giao dự kiến](evidence/aws/rag-model-agent-answer-20261030.png)
+
+Câu trả lời thêm ý Shopee 15 ngày (chunk thứ 3) dù không được hỏi: model nhỏ tóm tắt cả chunk lạc đề.
