@@ -21,3 +21,12 @@ def test_dedup_key_follows_order_line():
     row = {"seller_sku": "APP-00042", "label_available_at": "2026-06-29T13:05:07", "order_line_key": "k1"}
     assert to_event(row)["record_sha256"] == to_event(dict(row))["record_sha256"]
     assert to_event(row)["record_sha256"] != to_event(row | {"order_line_key": "k2"})["record_sha256"]
+
+
+def test_feast_apply_skips_helper_scripts():
+    """`feast apply` import mọi .py trong repo (Python 3.10 ở Airflow) ⇒ script ngoài features.py phải nằm trong .feastignore."""
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parents[2] / "feature_repo"
+    ignored = {line.split("#")[0].strip() for line in (repo / ".feastignore").read_text().splitlines()}
+    assert {p.name for p in repo.glob("*.py")} - {"features.py"} <= ignored
