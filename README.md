@@ -32,15 +32,20 @@ Trên AWS: Data Platform chạy trên một EC2 (Docker Compose) với dữ li�
 
 ## Sơ đồ triển khai
 
-Data Platform và ML Platform:
+Hệ thống nộp bài chạy trên AWS (ap-southeast-2): EC2 chạy Docker Compose, EKS chạy ML/LLM, S3 + ECR ngoài VPC.
+Mỗi hộp là một deployable unit; mũi tên theo dữ liệu, vòng tròn là bước đánh số theo từng luồng (chú thích FLOWS cuối hình).
 
-![Data Platform / ML Platform](docs/diagrams/data-ml-platform.png)
+Data Platform và ML Platform trên AWS (B batch, S stream phát lại, T train/deploy, M drift):
 
-LLM Platform:
+![AWS Data Platform / ML Platform](docs/diagrams/aws-architecture-layer12.png)
 
-![LLM Platform](docs/diagrams/llm-platform.png)
+LLM Platform và Agent trên AWS (A hội thoại, K RAG ingest, O quan sát + scale, C CI/CD):
 
-Bản tương tác: [Data / ML Platform](docs/diagrams/data-ml-platform.html) · [LLM Platform](docs/diagrams/llm-platform.html). Trên AWS: [hạ tầng](docs/diagrams/aws-infra.html) · [Data Platform](docs/diagrams/aws-data-platform.html) · [ML / LLM Platform](docs/diagrams/aws-ml-llm-platform.html).
+![AWS LLM Platform / Agents](docs/diagrams/aws-architecture-layer3.png)
+
+Bản tương tác: [AWS Data / ML](docs/diagrams/aws-architecture-layer12.html) · [AWS LLM / Agents](docs/diagrams/aws-architecture-layer3.html) · [hạ tầng AWS](docs/diagrams/aws-infra.html).
+Bản chạy local (Docker Compose + kind) để phát triển: [Data / ML Platform](docs/diagrams/data-ml-platform.png) · [LLM Platform](docs/diagrams/llm-platform.png).
+Sinh lại hình: `python3 scripts/diagrams/build.py`.
 
 ## Cấu trúc repo
 

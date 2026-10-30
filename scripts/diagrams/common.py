@@ -66,6 +66,7 @@ class Diagram:
         self.frames, self.notes, self.flows, self.edges = [], [], [], []
         self.labels, self.used = [], set()
         self.port_counts = {}
+        self.deployment = "LOCAL"
 
     def frame(self, x, y, w, h, label, blue=False):
         """Add a labeled runtime boundary."""
@@ -214,15 +215,20 @@ class Diagram:
             """Format SVG text."""
             return f'<text x="{x}" y="{y}" class="{cls}" font-size="{size}" fill="{color}" text-anchor="{anchor}">{escape(text)}</text>'
 
+        description = (
+            "Các unit triển khai local của nền tảng dữ liệu và AI. Đọc mã số và tên dữ liệu trên từng mũi tên; khung phân chia Compose, kind và bên ngoài. Chú thích các luồng ở cuối hình."
+            if self.deployment == "LOCAL"
+            else f"Các unit triển khai {self.deployment} của nền tảng dữ liệu và AI. Đọc mã số và tên dữ liệu trên từng mũi tên; khung phân chia AWS, VPC, EC2, EKS và bên ngoài. Chú thích các luồng ở cuối hình."
+        )
         svg = [
-            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {self.width} {self.height}" role="img" aria-labelledby="title desc"><title id="title">{escape(self.title)}</title><desc id="desc">Các unit triển khai local của nền tảng dữ liệu và AI. Đọc mã số và tên dữ liệu trên từng mũi tên; khung phân chia Compose, kind và bên ngoài. Chú thích các luồng ở cuối hình.</desc><defs>'
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {self.width} {self.height}" role="img" aria-labelledby="title desc"><title id="title">{escape(self.title)}</title><desc id="desc">{escape(description)}</desc><defs>'
         ]
         for key, color in COLORS.items():
             svg.append(
                 f'<marker id="arrow-{key}" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="{color}"/></marker>'
             )
         svg.append(f'</defs><rect width="100%" height="100%" fill="{BG}"/>')
-        svg.append(txt(30, 25, "Data & AI Platform · KIẾN TRÚC TRIỂN KHAI LOCAL", 11))
+        svg.append(txt(30, 25, f"Data & AI Platform · KIẾN TRÚC TRIỂN KHAI {self.deployment}", 11))
         svg.append(txt(30, 59, self.title, 28, "#2d3142", cls="serif"))
         for x, y, w, h, label, blue in self.frames:
             svg.append(

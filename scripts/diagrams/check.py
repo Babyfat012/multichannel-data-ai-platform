@@ -3,6 +3,8 @@
 Run: python3 scripts/diagrams/check.py. No browser or third-party module is needed.
 """
 
+from aws_layer3 import make as aws_layer3
+from aws_layer12 import make as aws_layer12
 from common import Diagram
 from layer3 import make as layer3
 from layer12 import make as layer12
@@ -10,7 +12,7 @@ from layer12 import make as layer12
 
 def main():
     """Build and validate the diagrams, failing on invalid geometry."""
-    for make in (layer12, layer3):
+    for make in (layer12, layer3, aws_layer12, aws_layer3):
         print(make().check())
     for points, label in (
         ([(280, 200), (400, 220)], (300, 150, 380, 168)),  # Diagonal.
