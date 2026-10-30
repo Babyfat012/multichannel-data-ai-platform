@@ -1,0 +1,26 @@
+$ trino --output-format ALIGNED -f profile_amazon_aws.sql   # 2026-10-30T17:27:45Z, EC2 Trino, catalog lakehouse (Iceberg S3)
+ export_date |                                                                                                                  payload_keys                                                                                                                  
+-------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 2026-04-08  | AmazonOrderId, FulfillmentChannel, IsBusinessOrder, IsPrime, IsReplacementOrder, LastUpdateDate, MarketplaceId, NumberOfItemsShipped, NumberOfItemsUnshipped, OrderItems, OrderStatus, OrderTotal, PurchaseDate, SalesChannel, ShippingAddress 
+ 2026-04-12  | createdTime, fulfillment, lastUpdatedTime, orderId, orderItems, proceeds, programs, salesChannel, shippingAddress                                                                                                                              
+(2 rows)
+ schema_form | from_date  |  to_date   | order_lines 
+-------------+------------+------------+-------------
+ v0          | 2026-01-01 | 2026-04-09 |    74821347 
+ 2026        | 2026-04-10 | 2026-06-29 |    79028554 
+(2 rows)
+ skus |    top1pct_share    |   top10pct_share    | max_lines | min_lines 
+------+---------------------+---------------------+-----------+-----------
+ 2000 | 25.5800000000000000 | 54.2700000000000000 |   8316158 |     18738 
+(1 row)
+ marketplace_id | order_lines |         pct         
+----------------+-------------+---------------------
+ ATVPDKIKX0DER  |   103338171 | 67.1700000000000000 
+ A1F83G8C2ARO7P |    27543936 | 17.9000000000000000 
+ A1PA6795UKMFR9 |    22967794 | 14.9300000000000000 
+(3 rows)
+ order_lines | order_id_unique |    order_id_ratio    | postal_unique |     postal_ratio     | city_unique | sku_unique 
+-------------+-----------------+----------------------+---------------+----------------------+-------------+------------
+   153849901 |       102027423 | 0.663200000000000000 |         12354 | 0.000080000000000000 |          20 |       1992 
+(1 row)
+# xong 2026-10-30T17:29:58Z

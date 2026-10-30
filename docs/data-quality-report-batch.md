@@ -210,6 +210,30 @@ PostgreSQL có 10.949.058 dòng Walmart và 2.000 SKU.
 
 Ảnh DataHub chỉ cho thấy các dataset nguồn S3 đã được khai metadata, không hiển thị số byte hay histogram.
 Số byte và số dòng trên lấy từ receipt; tỷ lệ skew, unique/total, duplicate và schema trước/sau ở các mục trước
-thuộc báo cáo local. Chưa có report/capture AWS đủ bốn đặc tính đó, nên DE5–8 chưa được coi là đủ chỉ vì byte khớp.
+thuộc báo cáo local. Mục dưới đo lại bốn đặc tính đó **trên chính dữ liệu AWS**.
 [Code generator](../generator/__main__.py), [cấu hình 100 GB](../configs/scale-100gb.yaml),
 [manifest local để đối chiếu](evidence/batch-100gb-manifest.json).
+
+### Đặc tính dữ liệu đo trên AWS (2026-10-31)
+
+Đo bằng Trino trên EC2 (catalog `lakehouse` = Iceberg S3) trên bảng Amazon 100 GB đã nạp: Bronze
+`raw_amazon_orders_dp1` (payload gốc) và Silver `stg_amazon_order_lines_dp2` (đã tách Order Line, chuẩn hoá schema).
+SQL: [`sql/profile_amazon_aws.sql`](../sql/profile_amazon_aws.sql); output đầy đủ:
+[`amazon-data-profile-trino-20261031.txt`](evidence/aws/amazon-data-profile-trino-20261031.txt) (chạy 2 phút 13 giây).
+Tỷ lệ trùng và dung lượng lấy từ `run_manifest.json` mà generator ghi lên S3 ngay trên EC2
+(`s3://…-raw/order_snapshots/run_manifest.json`, `dataset_version` `38a1f7b3…`).
+
+| Đặc tính | Số đo trên AWS |
+|---|---|
+| **Skew SKU** (Zipf 0,8) | 2.000 SKU; 1% SKU bán chạy nhất (20) chiếm **25,58%** Order Line, 10% (200) chiếm **54,27%**; SKU nhiều nhất 8.316.158 dòng, ít nhất 18.738 (gấp 444 lần) |
+| **Skew marketplace** | US `ATVPDKIKX0DER` 67,17%, UK `A1F83G8C2ARO7P` 17,90%, DE `A1PA6795UKMFR9` 14,93% |
+| **Cardinality** (unique / tổng, 153.849.901 Order Line, `approx_distinct`) | `order_id` ≈ 102 triệu (0,66 — cao), `postal_code` 12.354 (0,00008), `city` 20, `seller_sku` ≈ 2.000 |
+| **Schema evolution** | Khoá payload ngày 2026-04-08: `AmazonOrderId, FulfillmentChannel, IsBusinessOrder, IsPrime, …` (Orders API v0); ngày 2026-04-12: `orderId, createdTime, lastUpdatedTime, salesChannel, programs, fulfillment, proceeds, shippingAddress, orderItems` (API 2026). Silver gộp được: `schema_form` `v0` 2026-01-01→04-09 = 74.821.347 dòng, `2026` 04-10→06-29 = 79.028.554 dòng |
+| **Duplicate** (manifest S3) | `amazon.orders` 108.248.563 dòng / 106.109.650 khoá = **1,98%** (1.062.953 bản cũ + 1.075.960 bản sao y hệt); Walmart 1,97%, Shopify 1,98%, Shopee 1,97% |
+| **Volume** | Amazon 86.728.943.600 B (3.316 file), Walmart 13.283.621.342 B; tổng nguồn v1 100.012.790.412 B |
+
+![Trino EC2: khoá payload trước/sau đổi API, schema_form v0/2026, top 1% SKU 25,58%, marketplace 67/18/15%, cardinality order_id/postal/city/sku](evidence/aws/amazon-data-profile-trino-20261031.png)
+
+Đọc số: phần đầu Zipf rất dày (1% SKU giữ một phần tư số dòng); skew mà Spark xử lý trong [spark.md](spark.md) là skew dung lượng theo ngày, khác skew SKU này;
+`order_id` gần như duy nhất mỗi Order, còn `city` chỉ 20 giá trị; schema đổi đúng ngày 100 (2026-04-11) theo cấu hình
+`amazon_orders_api_switch_day: 100`.
