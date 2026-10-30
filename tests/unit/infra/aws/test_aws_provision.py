@@ -638,3 +638,13 @@ def test_stopped_ec2_is_not_replaced_by_terraform():
     """Máy stop không có IP public ⇒ không được để associate_public_ip_address đòi thay EC2 (mất đĩa gốc 30/10)."""
     lifecycle = (TF_DIR / "compute.tf").read_text().split("lifecycle {")[1]
     assert "ignore_changes = [ami, associate_public_ip_address]" in lifecycle
+
+
+def test_fresh_pgvector_volume_enables_vector_extension():
+    """PVC pgdata mới (30/10) không có extension ⇒ Feast RAG lỗi `type "vector" does not exist`; initdb phải bật nó."""
+    docs = list(yaml.safe_load_all((ROOT / "infra/k8s/rag/pgvector.yaml").read_text()))
+    init = next(d for d in docs if d["kind"] == "ConfigMap")
+    pod = next(d for d in docs if d["kind"] == "Deployment")["spec"]["template"]["spec"]
+    assert "CREATE EXTENSION IF NOT EXISTS vector" in "".join(init["data"].values())
+    assert {"name": "init", "mountPath": "/docker-entrypoint-initdb.d"} in pod["containers"][0]["volumeMounts"]
+    assert {"name": "init", "configMap": {"name": init["metadata"]["name"]}} in pod["volumes"]

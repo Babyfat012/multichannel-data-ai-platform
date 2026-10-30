@@ -15,6 +15,16 @@ spec:
   resources:
     requests: {storage: 1Gi}
 ---
+# Image pgvector chỉ cài sẵn extension, không bật trong DB. Feast tạo cột `vector` ⇒ cần CREATE EXTENSION.
+# initdb chỉ chạy khi PVC mới (30/10: xoá PVC pgdata ⇒ DB mới thiếu extension ⇒ `type "vector" does not exist`).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgvector-init
+  namespace: rag
+data:
+  vector.sql: CREATE EXTENSION IF NOT EXISTS vector;
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -37,7 +47,9 @@ spec:
             - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
           envFrom: [{secretRef: {name: rag-pg}}]   # POSTGRES_USER, POSTGRES_PASSWORD
           ports: [{containerPort: 5432}]
-          volumeMounts: [{name: data, mountPath: /var/lib/postgresql/data}]
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+            - {name: init, mountPath: /docker-entrypoint-initdb.d}
           resources:
             requests: {cpu: 50m, memory: 64Mi}
             limits: {memory: 256Mi}
@@ -47,6 +59,8 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim: {claimName: pgdata}
+        - name: init
+          configMap: {name: pgvector-init}
 ---
 apiVersion: v1
 kind: Service
