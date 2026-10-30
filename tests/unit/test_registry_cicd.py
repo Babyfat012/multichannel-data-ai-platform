@@ -223,8 +223,11 @@ def test_push_logs_into_ecr_only_for_ecr_registries(tmp_path):
     subprocess.run(["bash", str(ROOT / "scripts/run/push_images.sh"), "platform-feast:0.66.0"],
                    env=env, check=True, stdin=subprocess.DEVNULL)
     calls = log.read_text().splitlines()
-    assert calls[0] == "aws ecr get-login-password --region ap-southeast-2"
-    assert calls[1] == "docker login --username AWS --password-stdin 665116832975.dkr.ecr.ap-southeast-2.amazonaws.com"
+    # `aws … | docker login` chạy song song trong pipe ⇒ không giả định thứ tự giữa hai dòng đầu.
+    assert set(calls[:2]) == {
+        "aws ecr get-login-password --region ap-southeast-2",
+        "docker login --username AWS --password-stdin 665116832975.dkr.ecr.ap-southeast-2.amazonaws.com",
+    }
     assert calls[-1] == "docker push 665116832975.dkr.ecr.ap-southeast-2.amazonaws.com/platform/platform-feast:abc123"
     log.unlink()
     env["REGISTRY"] = "localhost:5001"
