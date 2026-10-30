@@ -250,3 +250,27 @@ services:
       - "127.0.0.1:${VAULT_PORT:-8200}:8200"
     volumes: !override
       - /mnt/platform-data/vault:/vault/file
+  # Exporter cho Prometheus trên EKS (pull): nghe IP riêng VPC, SG chỉ mở 9100/9187 từ SG cluster
+  # (data_service_ports). Cảnh báo ổ đầy (#20) và WAL slot (#17) — luật ở prometheus-values-aws.yaml.
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:v1.9.1
+    command: ["--path.rootfs=/host"]
+    pid: host
+    cpus: "0.1"
+    mem_limit: 64m
+    volumes:
+      - /:/host:ro,rslave
+    ports:
+      - "${PLATFORM_PRIVATE_IP:?PLATFORM_PRIVATE_IP_required}:9100:9100"
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.17.1
+    cpus: "0.1"
+    mem_limit: 64m
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      DATA_SOURCE_URI: postgres:5432/${POSTGRES_DB}?sslmode=disable
+      DATA_SOURCE_USER: ${POSTGRES_USER}
+      DATA_SOURCE_PASS: ${POSTGRES_PASSWORD}
+    ports:
+      - "${PLATFORM_PRIVATE_IP:?PLATFORM_PRIVATE_IP_required}:9187:9187"

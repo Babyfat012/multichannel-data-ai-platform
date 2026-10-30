@@ -122,7 +122,7 @@
 - name: Bật đúng dịch vụ Data Platform v2, chờ healthcheck
   ansible.builtin.command: >-
     docker compose --profile catalog --profile spark --profile airflow up -d --wait --wait-timeout 300
-    postgres lakekeeper spark-master spark-worker-1 spark-worker-2 airflow
+    postgres lakekeeper spark-master spark-worker-1 spark-worker-2 airflow node-exporter postgres-exporter
   args:
     chdir: '{{ app_dir }}'
   register: compose_up

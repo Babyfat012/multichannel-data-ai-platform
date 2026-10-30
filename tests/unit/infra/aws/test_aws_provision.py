@@ -132,10 +132,15 @@ def test_overlay_fits_c6i_2xlarge_without_keys_or_gcs():
     """Service chạy thường trực vừa 8 vCPU/16 GiB (chừa 2 vCPU), port loopback, không key, không GCS."""
     text = (ROOT / "docker-compose.aws.yml").read_text()
     services = yaml.load(text, Loader=ComposeLoader)["services"]
-    # Ngoại lệ duy nhất: MLflow nghe thêm IP riêng VPC cho pod EKS (SG chỉ mở 5050 từ SG cluster).
-    private = "${PLATFORM_PRIVATE_IP:?PLATFORM_PRIVATE_IP_required}:${MLFLOW_PORT:-5050}:5000"
+    # Ngoại lệ: MLflow + 2 exporter nghe IP riêng VPC cho pod EKS (SG chỉ mở cổng đó từ SG cluster).
+    ip = "${PLATFORM_PRIVATE_IP:?PLATFORM_PRIVATE_IP_required}"
+    private = {
+        "mlflow": f"{ip}:${{MLFLOW_PORT:-5050}}:5000",
+        "node-exporter": f"{ip}:9100:9100",
+        "postgres-exporter": f"{ip}:9187:9187",
+    }
     for name, svc in services.items():
-        ports = [p for p in svc.get("ports", []) if not (name == "mlflow" and p == private)]
+        ports = [p for p in svc.get("ports", []) if p != private.get(name)]
         assert all(port.startswith("127.0.0.1:") for port in ports), name
     assert "AWS_ACCESS_KEY_ID" not in text and "gcs" not in text.lower()
     running = [
@@ -146,6 +151,8 @@ def test_overlay_fits_c6i_2xlarge_without_keys_or_gcs():
         "spark-worker-2",
         "airflow",
         "mlflow",
+        "node-exporter",
+        "postgres-exporter",
     ]
 
     def gib(value: str) -> float:
@@ -155,7 +162,8 @@ def test_overlay_fits_c6i_2xlarge_without_keys_or_gcs():
     # cpus là trần, không giữ chỗ: 6 cho Data Platform + 0,25 MLflow (rảnh trừ lúc KFP register model).
     # Từ 29/10 EC2 là r6i.xlarge (4 vCPU/32 GiB): trần CPU cộng lại vượt 4 là có chủ đích (Spark nặng đã
     # chạy xong; job còn lại nhỏ), RAM thì dư gấp đôi.
-    assert sum(float(services[n]["cpus"]) for n in running) <= 6.25
+    # + 0,2 cho 2 exporter (đợt 2).
+    assert sum(float(services[n]["cpus"]) for n in running) <= 6.45
     assert sum(gib(str(services[n]["mem_limit"])) for n in running) <= 15
     for name in ("minio", "kafka", "flink-jobmanager"):
         assert services[name]["profiles"] == ["disabled-aws"]
@@ -490,3 +498,52 @@ def test_wave2_vault_ingress_and_letsencrypt_for_eks():
     script = (ROOT / "scripts/setup/setup_ingress.sh").read_text()
     assert script.count('-e "s/cluster-issuer: platform-local-ca/cluster-issuer: $issuer/"') == 2
     assert ': "${LE_EMAIL:?' in script and "ROOT=${VAULT_TOKEN:-" in script
+
+
+def test_wave2_prometheus_pulls_ec2_exporters_with_alerts():
+    """Exporter EC2 chỉ mở cho SG cluster; Ansible bật chúng; luật up/ổ/slot chỉ nạp trên EKS."""
+    variables = (ROOT / "infra/aws/kubernetes/variables.tf").read_text()
+    assert "contains([5432, 8181, 5050, 8200, 9100, 9187], p)" in variables
+    tasks = (ANSIBLE / "roles/app/tasks/main.yml").read_text()
+    assert "spark-worker-2 airflow node-exporter postgres-exporter" in tasks
+    values = yaml.safe_load((ROOT / "infra/k8s/observability/prometheus-values-aws.yaml").read_text())
+    jobs = yaml.safe_load(values["extraScrapeConfigs"])
+    assert {j["job_name"]: j["static_configs"][0]["targets"] for j in jobs} == {
+        "ec2-node": ["10.42.0.12:9100"],
+        "ec2-postgres": ["10.42.0.12:9187"],
+    }
+    rules = {
+        r["alert"]: r["expr"]
+        for g in values["serverFiles"]["alerting_rules.yml"]["groups"]
+        for r in g["rules"]
+    }
+    assert rules["EC2ExporterDown"] == 'up{job=~"ec2-.*"} == 0'
+    assert 'mountpoint="/mnt/platform-data"' in rules["EC2DataDiskAlmostFull"]
+    assert "> 0.8" in rules["EC2DataDiskAlmostFull"]
+    assert "confirmed_flush_lsn > 1073741824" in rules["PostgresSlotWalRetained"]
+    script = (ROOT / "scripts/setup/deploy_kind_observability.sh").read_text()
+    assert '[[ "${KCTX:-kind-platform}" == kind-* ]] || prom_aws=(-f $V/prometheus-values-aws.yaml)' in script
+    assert '"${prom_aws[@]}" --wait' in script
+
+
+def test_letsencrypt_first_issue_opens_then_closes_each_route():
+    """HTTP-01 trên F5 NGINX: edit-in-place mọi Ingress; lần đầu apply bản mở, chờ Ready, rồi bản đủ."""
+    for f in ("feature-api", "agent-ui", "ops-ui"):
+        doc = yaml.safe_load(
+            (ROOT / f"infra/k8s/ingress/{f}.yaml").read_text().replace("@@", "x")
+        )
+        assert doc["metadata"]["annotations"]["acme.cert-manager.io/http01-edit-in-place"] == "true", f
+    script = (ROOT / "scripts/setup/setup_ingress.sh").read_text()
+    fn = script[script.index("apply_ing() {") : script.index("\n}\n", script.index("apply_ing() {"))]
+    opened, wait, full = (
+        fn.index("/nginx.org\\/basic-auth/d"),
+        fn.index('wait --for=condition=Ready "certificate/$2"'),
+        fn.index('$K apply -f - <<<"$y"'),
+    )
+    assert opened < wait < full
+    assert 'ingress.kubernetes.io/ssl-redirect: "false"' in fn
+    # Secret có thể tồn tại mà chưa có cert thật ⇒ phải hỏi Certificate Ready, không hỏi secret.
+    assert '(@.type=="Ready")].status}\'' in fn and '!= True ]]' in fn
+    assert "get secret" not in fn
+    assert '.yaml" | apply_ing "${f%/*}" "${f#*/}-tls"' in script
+    assert 'ops-ui.yaml | apply_ing "$ns" "$name-tls"' in script

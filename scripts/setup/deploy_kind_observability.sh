@@ -21,7 +21,9 @@ if ! $KC get secret grafana-admin >/dev/null 2>&1; then
 fi
 $KC create configmap grafana-dashboards-platform --from-file=$V/dashboards --dry-run=client -o yaml | $KC apply -f -
 
-$H upgrade --install prometheus prometheus-community/prometheus --version 29.36.2 -f $V/prometheus-values.yaml --wait
+# EKS: thêm scrape exporter EC2 + luật cảnh báo (kind không có EC2, khỏi kêu oan).
+prom_aws=(); [[ "${KCTX:-kind-platform}" == kind-* ]] || prom_aws=(-f $V/prometheus-values-aws.yaml)
+$H upgrade --install prometheus prometheus-community/prometheus --version 29.36.2 -f $V/prometheus-values.yaml "${prom_aws[@]}" --wait
 $H upgrade --install loki grafana/loki --version 7.3.0 -f $V/loki-values.yaml --wait --timeout 10m
 $H upgrade --install fluent-bit fluent/fluent-bit --version 0.58.3 -f $V/fluent-bit-values.yaml --wait
 $H upgrade --install jaeger jaegertracing/jaeger --version 4.16.1 -f $V/jaeger-values.yaml --wait

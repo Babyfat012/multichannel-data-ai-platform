@@ -97,7 +97,7 @@ variable "data_service_ports" {
   type        = set(number)
   default     = [5432, 8181]
   validation {
-    condition     = alltrue([for p in var.data_service_ports : contains([5432, 8181, 5050, 8200], p)])
-    error_message = "Chỉ cho phép PostgreSQL, Lakekeeper, MLflow hoặc Vault; không mở UI/SSH công khai."
+    condition     = alltrue([for p in var.data_service_ports : contains([5432, 8181, 5050, 8200, 9100, 9187], p)])
+    error_message = "Chỉ cho phép PostgreSQL, Lakekeeper, MLflow, Vault hoặc exporter (9100/9187); không mở UI/SSH công khai."
   }
 }
