@@ -72,3 +72,39 @@ Run `train-3` (KFP 2.17.2 trong kind, 2026-10-21): **SUCCEEDED** cả 5 bước.
 `--sku-return-skew` để có version `production` cho KServe.
 
 <!-- Ảnh KFP run xanh 5 bước + MLflow model version/tag: người vận hành chụp rồi gắn vào đây. -->
+
+## Trên AWS (2026-10-29)
+
+KFP 2.17.2 chạy EKS; MLflow 3.17.0 chạy EC2, artifacts ở S3.
+Run KFP `train-aws-3`, ID `0485ebd9-d74f-4db9-9b70-aaac07e5cb24`, SUCCEEDED 5 bước trong 10:42;
+[receipt AWS](evidence/aws/data-platform-aws-20261027.json) (`ml_eks`) ghi image và mẫu 2‰, 359.457 dòng.
+[Pipeline code](../ml/training_pipeline.py), [train logic](../ml/train_lib.py), [Dockerfile](../docker/Dockerfile.train).
+
+| Bước trong graph | Công việc |
+|---|---|
+| `load-features` | Đọc training_lines từ S3 offline store, gọi Feast historical features theo event time; Pod Identity `kubeflow/pipeline-runner` cho quyền S3 |
+| `split` | Tách train/test theo ngày đặt Order; xuất train_set và test_set |
+| `train` | LightGBM trên train_set, xuất model |
+| `evaluate` | So PR-AUC model với baseline trên cùng test_set |
+| `register` | Ghi model, metrics, metadata và dataset vào MLflow; chỉ đặt production nếu thắng baseline |
+
+![KFP Runs: train-aws-3 thành công trong 0:10:42, phía dưới có bốn lần chạy lỗi](evidence/aws/kfp-runs-20261029.png)
+
+![KFP train-aws-3: load-features, split, train, evaluate, register đều có dấu xanh; graph có train_set, test_set và model](evidence/aws/kfp-train-aws-3-graph-20261029.png)
+
+MLflow run `mysterious-flea-253` liên kết model `return-risk` v1 và dataset `train (a1f3e3b9)`.
+Metric hiển thị PR-AUC model/baseline cùng làm tròn 0,25, `beats_baseline=1`, lift 2,25, prevalence 0,11,
+16.411 dòng test. Không suy khoảng cách chính xác giữa hai PR-AUC từ chart đã làm tròn.
+Registry có tags `latest=true`, `production=true` và alias `production` cho v1.
+
+![MLflow return-risk: run mysterious-flea-253 gắn dataset train (a1f3e3b9) và model return-risk v1](evidence/aws/mlflow-runs-20261029.png)
+
+![MLflow mysterious-flea-253: beats_baseline 1, lift_model 2,25, PR-AUC hai phía hiển thị 0,25 và test_rows 16.411](evidence/aws/mlflow-metrics-20261029.png)
+
+![MLflow registry return-risk: Version 1 có tags latest true, production true và alias production](evidence/aws/mlflow-registry-production-20261029.png)
+
+Version dữ liệu trong code `register`: tags `data.dataset_version`, `data.generation_id`,
+`data.train_sha256`, `data.test_sha256`, `data.entity_path`; artifacts `data/train`, `data/test` và dataset input train.
+Ảnh AWS hiện tại chỉ thấy liên kết dataset train, chưa mở các tag/hash và hai artifact của cùng run.
+MLE14 còn cần capture đó; graph KFP có train_set/test_set không thay proof chúng đã được lưu ở MLflow.
+Receipt ghi các lần chạy lỗi trước do OOM/đọc file store và port-forward; cache KFP tắt ở lần này.

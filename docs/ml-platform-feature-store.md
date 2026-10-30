@@ -118,3 +118,24 @@ Sửa: [`feature_repo/.feastignore`](../feature_repo/.feastignore) loại hai sc
 test `test_feast_apply_skips_helper_scripts`. Chạy lại: bốn task xanh, Redis `DBSIZE` 2000.
 
 ![ml_feature_materialize: export_sku_daily, export_training_lines, feast_apply, materialize_incremental đều success](evidence/aws/airflow-ml-feature-materialize-success-20261030.png)
+
+## Trên AWS (2026-10-29)
+
+Airflow/Spark chạy Compose EC2, offline Parquet và registry ở S3; online Redis ở EKS qua NodePort 30379.
+Run `manual__2026-10-29T00:30:43+00:00` của [DAG ml_feature_materialize](../dags/ml_feature_materialize.py)
+hoàn tất 4/4 task theo [receipt](evidence/aws/data-platform-aws-20261027.json) (`airflow_ml_feature_materialize`).
+
+`export_sku_daily` gọi [export feature SKU](../spark_jobs/gold/export_sku_daily_features.py);
+`export_training_lines` gọi [export tập train](../spark_jobs/gold/export_training_lines.py), chỉ giữ nhãn có trước cutoff 2026-06-30.
+`feast_apply` đăng ký [feature repo](../feature_repo/feature_store.yaml); `materialize_incremental` nạp phần thời gian mới
+của `sku_return_daily` vào Redis. Log apply thấy credentials lấy từ IAM role EC2.
+
+![Airflow ml_feature_materialize: export_sku_daily, export_training_lines, feast_apply, materialize_incremental đều success](evidence/aws/ml-feature-materialize-graph-20261029.png)
+
+![Gantt ml_feature_materialize: export_training_lines và feast_apply có attempt đỏ trước trạng thái cuối xanh](evidence/aws/ml-feature-materialize-gantt-20261029.png)
+
+![Log feast_apply: triển khai sku_return_daily và sku_return_24h, lấy credentials từ IAM Role platform-data-platform-vm, Done](evidence/aws/ml-feature-materialize-feast-apply-log-20261029.png)
+
+Receipt ghi hai lỗi đã sửa: cột run_id trùng khi export training lines, thiếu mount feature_repo khi feast_apply.
+Gantt còn dấu attempt lỗi; Graph ghi trạng thái cuối success. Tại mốc này `sku_return_24h` offline rỗng;
+apply thành công không chứng minh stream pusher đã ghi dữ liệu. Lần chạy ngày 30 ở mục trên có proof riêng.
