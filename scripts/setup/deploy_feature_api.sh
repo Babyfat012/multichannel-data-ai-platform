@@ -45,6 +45,10 @@ values = {
     "KSERVE_URL": env.get("KSERVE_URL", "http://return-risk-predictor.ml-serving.svc.cluster.local/v1/models/return-risk:predict"),
 }
 if cloud:
+    # RAG chỉ bật khi truyền FEAST_RAG_REGISTRY: thiếu file, Feast tự tạo registry mới (ghi S3) mà Pod
+    # Identity chỉ đọc ⇒ app chết lúc khởi động. Không có biến thì /chunks trả 503, phần còn lại chạy.
+    if not env.get("FEAST_RAG_REGISTRY"):
+        del values["FEAST_RAG_REGISTRY"]
     values["AWS_REGION"] = env["AWS_REGION"]
     values["AWS_DEFAULT_REGION"] = env["AWS_REGION"]
 else:
