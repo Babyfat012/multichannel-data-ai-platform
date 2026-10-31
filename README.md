@@ -47,6 +47,23 @@ LLM Platform và Agent trên AWS (A hội thoại, K RAG ingest, O quan sát + s
 
 ![AWS LLM Platform / Agents — Excalidraw](docs/diagrams/aws-architecture-layer3-excalidraw.svg)
 
+### Chú giải mã luồng
+
+Chữ cái xác định luồng; số phía sau là bước trong luồng đó, ví dụ `K1` là bước đầu của RAG ingest.
+
+| Mã | Thuật ngữ | Ý nghĩa trong sơ đồ |
+|---|---|---|
+| **B** | Batch processing | Nạp và xử lý dữ liệu theo lô: nguồn → Bronze / Silver / Gold → truy vấn, warehouse. |
+| **S** | Streaming feature | Phát lại sự kiện Return qua Kafka / Flink, đẩy feature vào online và offline store. |
+| **T** | Training & model deployment | Huấn luyện bằng KFP, đăng ký model ở MLflow, build/push image và triển khai KServe. |
+| **I** | Inference | Tra feature và gọi model dự đoán qua Feature API / KServe. |
+| **M** | Monitoring data drift | So phân phối dữ liệu tham chiếu với lô mới, xuất kết quả drift. |
+| **A** | Agent interaction | Hội thoại, điều phối Agent, gọi LLM và MCP tool qua gateway. |
+| **K** | Knowledge ingestion | Nạp tri thức cho RAG: tài liệu → chunk → embedding → Feast / pgvector. |
+| **C** | Continuous Integration / Continuous Delivery (CI/CD) | Kiểm thử, build/push image, đồng bộ prompt, triển khai và đánh giá Agent. |
+| **O** | Observability | Thu và xem metrics, logs, traces; cung cấp metric cho KEDA autoscaling. |
+| **P** | Phụ trợ / điều phối | Giao task cho Spark worker, Flink TaskManager và trao đổi metadata với catalog; dùng nét đứt. |
+
 Bản vẽ có thể mở và chỉnh sửa bằng Excalidraw: [AWS Data / ML](docs/diagrams/aws-architecture-layer12-excalidraw.excalidraw) · [AWS LLM / Agents](docs/diagrams/aws-architecture-layer3-excalidraw.excalidraw).
 Bản HTML: [AWS Data / ML](docs/diagrams/aws-architecture-layer12.html) · [AWS LLM / Agents](docs/diagrams/aws-architecture-layer3.html) · [hạ tầng AWS](docs/diagrams/aws-infra.html).
 Bản chạy local (Docker Compose + kind) để phát triển: [Data / ML Platform](docs/diagrams/data-ml-platform.png) · [LLM Platform](docs/diagrams/llm-platform.png).
