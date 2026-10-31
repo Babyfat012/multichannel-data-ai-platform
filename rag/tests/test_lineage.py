@@ -44,3 +44,9 @@ def test_assertion_result_follows_check_value():
     runs = by_aspect(lineage_mcps("platform/rag", RECEIPT), "assertionRunEvent")
     results = sorted(v["result"]["type"] for _, v in runs)
     assert results == ["FAILURE", "SUCCESS"]
+
+
+def test_aspect_values_are_latin1_bytes_for_restli():
+    """DataHub GMS từ chối value có ký tự > U+00FF ('is not a valid string representation of bytes')."""
+    for mcp in lineage_mcps("platform/rag", RECEIPT):
+        mcp["aspect"]["value"].encode("latin-1")

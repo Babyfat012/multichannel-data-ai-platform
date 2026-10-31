@@ -205,7 +205,8 @@ def _mcp(entity_type, urn, aspect, value):
         "changeType": "UPSERT",
         "aspectName": aspect,
         "aspect": {
-            "value": json.dumps(value, ensure_ascii=False),
+            # Rest.li đọc `value` là bytes (mỗi ký tự ≤ U+00FF): "→"/tiếng Việt thô ⇒ HTTP 400 ⇒ escape \uXXXX.
+            "value": json.dumps(value),
             "contentType": "application/json",
         },
     }
