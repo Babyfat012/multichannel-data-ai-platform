@@ -49,3 +49,4 @@ terraform.tfvars
 *.auto.tfvars
 infra/aws/ansible/inventory.ini
 infra/aws/ansible/group_vars/all.yml
+*.plan
