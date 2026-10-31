@@ -36,14 +36,14 @@ Agent truy xuất feature, gọi model dự đoán và tìm chính sách trả h
 ## Kiến trúc
 
 Mô hình triển khai tham chiếu trên AWS (ap-southeast-2): EC2 chạy Docker Compose, EKS chạy ML/LLM, S3 + ECR ngoài VPC.
-Mỗi hộp là một deployable unit; các luồng được tách thành từng hàng, có màu và mã bước trên mũi tên.
-Dịch vụ xuất hiện ở nhiều hàng là cùng một dịch vụ, không phải thêm replica.
+Mỗi cụm giải thích một cơ chế; các hộp chính là workload, dịch vụ hoặc tài nguyên triển khai.
+Mũi tên có hướng, tên dữ liệu/lời gọi và mã luồng. Dịch vụ lặp lại giữa các cụm là cùng một dịch vụ.
 
-Data Platform và ML Platform trên AWS (B batch, S stream phát lại, T train/deploy, I tra feature/dự đoán, M drift):
+Data Platform và ML Platform trên AWS (B batch, S stream/feature store, T train/deploy, M drift):
 
 ![AWS Data Platform / ML Platform — Excalidraw](docs/diagrams/aws-architecture-layer12-excalidraw.svg)
 
-LLM Platform và Agent trên AWS (A hội thoại, K RAG ingest, O quan sát + scale, C CI/CD):
+LLM Platform và Agent trên AWS (A hội thoại, I tra feature/dự đoán, K RAG ingest, O quan sát + scale, C CI/CD):
 
 ![AWS LLM Platform / Agents — Excalidraw](docs/diagrams/aws-architecture-layer3-excalidraw.svg)
 
@@ -54,7 +54,7 @@ Chữ cái xác định luồng; số phía sau là bước trong luồng đó, 
 | Mã | Thuật ngữ | Ý nghĩa trong sơ đồ |
 |---|---|---|
 | **B** | Batch processing | Nạp và xử lý dữ liệu theo lô: nguồn → Bronze / Silver / Gold → truy vấn, warehouse. |
-| **S** | Streaming feature | Phát lại sự kiện Return qua Kafka / Flink, đẩy feature vào online và offline store. |
+| **S** | Streaming feature | Kafka / Flink xử lý sự kiện; materialize hoặc push feature vào online và offline store. |
 | **T** | Training & model deployment | Huấn luyện bằng KFP, đăng ký model ở MLflow, build/push image và triển khai KServe. |
 | **I** | Inference | Tra feature và gọi model dự đoán qua Feature API / KServe. |
 | **M** | Monitoring data drift | So phân phối dữ liệu tham chiếu với lô mới, xuất kết quả drift. |
@@ -62,7 +62,7 @@ Chữ cái xác định luồng; số phía sau là bước trong luồng đó, 
 | **K** | Knowledge ingestion | Nạp tri thức cho RAG: tài liệu → chunk → embedding → Feast / pgvector. |
 | **C** | Continuous Integration / Continuous Delivery (CI/CD) | Kiểm thử, build/push image, đồng bộ prompt, triển khai và đánh giá Agent. |
 | **O** | Observability | Thu và xem metrics, logs, traces; cung cấp metric cho KEDA autoscaling. |
-| **P** | Phụ trợ / điều phối | Giao task cho Spark worker, Flink TaskManager và trao đổi metadata với catalog; dùng nét đứt. |
+| **P** | Phụ trợ / điều phối | Quản trị, điều phối workload, cấp quyền và lưu trữ; nét đứt dùng cho một số đường phụ trợ. |
 
 Bản vẽ có thể mở và chỉnh sửa bằng Excalidraw: [AWS Data / ML](docs/diagrams/aws-architecture-layer12-excalidraw.excalidraw) · [AWS LLM / Agents](docs/diagrams/aws-architecture-layer3-excalidraw.excalidraw).
 Bản HTML: [AWS Data / ML](docs/diagrams/aws-architecture-layer12.html) · [AWS LLM / Agents](docs/diagrams/aws-architecture-layer3.html) · [hạ tầng AWS](docs/diagrams/aws-infra.html).
