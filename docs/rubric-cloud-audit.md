@@ -52,7 +52,7 @@ Cập nhật 30/10 tối sau buổi EKS. Bằng chứng: [LLM và agent](llm-pla
 | Warm Up (Agent Substrate) | 2 | ❌ | Bước 8 |
 | Unit coverage, EP/BVA, mutation, property-based | 1+2+2+2 | ✅ | Kiểm ở mức code (PR testing), không phụ thuộc nơi chạy |
 | Load test locust Web API | 2 | ✅ | Locust → Feature API EKS: 3.004 request, 0 lỗi (`load-test-feature-api-20261030.html`) |
-| CI/CD RAG / agent / coordinator / stream feature | 2×4 | ❌ | Bước 7 Jenkins EC2 |
+| CI/CD RAG / agent / coordinator / stream feature | 2×4 | ⚠️ | 31/10 Jenkins EC2 → ECR/EKS/Compose: `feature-api-agents` #8 (eval agent 12/12), `rag-pipeline` #2, `stream-features` #2 xanh ([ảnh](evidence/aws/jenkins-feature-api-agents-20261031.png), [rag](evidence/aws/jenkins-rag-pipeline-20261031.png), [stream](evidence/aws/jenkins-stream-features-20261031.png)); `coordinator` deploy xanh, eval timeout 180 s (LLM CPU) ❌ |
 | NGINX: Grafana, log, trace, agent UI, registry UI | 2×5 | ✅ | Route HTTPS + cert LE: grafana., traces., agent., registry. |
 | Basic auth + rate limit | 2 | ✅ | 401 không mật khẩu; rate limit trong gateway smoke |
 | Domain + HTTPS Web API | 1 | ✅ | `api.15-134-182-157.sslip.io` cert LE, Swagger qua HTTPS |
