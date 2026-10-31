@@ -692,6 +692,7 @@ def test_mle_drift_job_reads_s3_with_pipeline_reader_identity():
     container = spec["containers"][0]
     command = container["args"][0]
     assert '"evidently==0.7.23"' in command
+    assert '"pandas==2.3.3"' in command  # pandas 3 làm Evidently 0.7 ImportError
     assert "s3://@@LAKEHOUSE_BUCKET@@/feature-store/training_lines" in command
     assert "--shift-channel shopee" in command
     assert not {"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"} & {

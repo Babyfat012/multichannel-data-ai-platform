@@ -18,8 +18,9 @@ spec:
         - name: drift
           image: python:3.12-slim
           command: ["sh", "-c"]
+          # pandas 3 bỏ infer_dtype_from_object mà Evidently 0.7 cần ⇒ ghim pandas 2.
           args:
-            - pip install --quiet --no-cache-dir "evidently==0.7.23" "s3fs==2026.9.0" pyarrow
+            - pip install --quiet --no-cache-dir "evidently==0.7.23" "pandas==2.3.3" "s3fs==2026.9.0" pyarrow
               && cd /work && python -m ml.drift --reference "s3://@@LAKEHOUSE_BUCKET@@/feature-store/training_lines"
               --reference-days 30 --shift-channel shopee --out /tmp/drift
           env:
