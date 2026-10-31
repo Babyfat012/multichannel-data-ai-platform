@@ -40,15 +40,16 @@ Mỗi hộp là một deployable unit; mũi tên theo dữ liệu, vòng tròn l
 
 Data Platform và ML Platform trên AWS (B batch, S stream phát lại, T train/deploy, M drift):
 
-![AWS Data Platform / ML Platform](docs/diagrams/aws-architecture-layer12.png)
+![AWS Data Platform / ML Platform — Excalidraw](docs/diagrams/aws-architecture-layer12-excalidraw.svg)
 
 LLM Platform và Agent trên AWS (A hội thoại, K RAG ingest, O quan sát + scale, C CI/CD):
 
-![AWS LLM Platform / Agents](docs/diagrams/aws-architecture-layer3.png)
+![AWS LLM Platform / Agents — Excalidraw](docs/diagrams/aws-architecture-layer3-excalidraw.svg)
 
-Bản tương tác: [AWS Data / ML](docs/diagrams/aws-architecture-layer12.html) · [AWS LLM / Agents](docs/diagrams/aws-architecture-layer3.html) · [hạ tầng AWS](docs/diagrams/aws-infra.html).
+Bản vẽ có thể mở và chỉnh sửa bằng Excalidraw: [AWS Data / ML](docs/diagrams/aws-architecture-layer12-excalidraw.excalidraw) · [AWS LLM / Agents](docs/diagrams/aws-architecture-layer3-excalidraw.excalidraw).
+Bản HTML: [AWS Data / ML](docs/diagrams/aws-architecture-layer12.html) · [AWS LLM / Agents](docs/diagrams/aws-architecture-layer3.html) · [hạ tầng AWS](docs/diagrams/aws-infra.html).
 Bản chạy local (Docker Compose + kind) để phát triển: [Data / ML Platform](docs/diagrams/data-ml-platform.png) · [LLM Platform](docs/diagrams/llm-platform.png).
-Sinh lại hình: `python3 scripts/diagrams/build.py`.
+Sinh lại bản HTML gốc: `python3 scripts/diagrams/build.py`. Bản SVG trong README xuất từ file Excalidraw tương ứng.
 
 ## Bắt đầu
 
