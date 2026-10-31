@@ -1,5 +1,7 @@
 # Tiến độ Data Platform scope mở rộng (v2) — bảng một trang
 
+> **Pipeline v2 (order lifecycle) — thiết kế và thử ở local, không phải pipeline đã nộp.** Pipeline chạy trên AWS là v1 (DP1 → DP4 + ML), xem [Data Platform evidence](data-platform-evidence.md). Các chỗ nhắc GCP dưới đây là kế hoạch cũ, chưa chạy; đích cloud hiện hành là [AWS](aws-deploy.md).
+
 Đích cloud cập nhật **2026-10-22**; bằng chứng giữ mốc **2026-10-20**, gồm kết quả local có receipt không đính kèm repo.
 Tổng hợp artifact công khai tại [evidence](data-platform-evidence.md).
 Đích triển khai: **AWS**, region `ap-southeast-1`, Data Platform batch trên EC2 + S3 (người vận hành chạy theo [runbook](aws-deploy.md)).

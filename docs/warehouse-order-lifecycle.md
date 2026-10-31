@@ -1,10 +1,12 @@
 <!-- Warehouse PostgreSQL v2: mô hình, publish an toàn và quy trình thu bằng chứng thật. -->
 # Warehouse v2 trên PostgreSQL
 
+> **Pipeline v2 (order lifecycle) — thiết kế và thử ở local, không phải pipeline đã nộp.** Pipeline chạy trên AWS là v1 (DP1 → DP4 + ML), xem [Data Platform evidence](data-platform-evidence.md). Các chỗ nhắc GCP dưới đây là kế hoạch cũ, chưa chạy; đích cloud hiện hành là [AWS](aws-deploy.md).
+
 Phần này đo warehouse indexing. Lát Walmart v1 không đại diện
 năm Channel và mất index sau overwrite. Job `spark_jobs/warehouse/export_order_lifecycle.py` đọc `build_gold`, ghi schema mới
 `warehouse_lifecycle` trên PostgreSQL service của VM. Giữ nguyên v1, không quy đổi hay
-cộng chung currency. Cấu hình VM/storage/auth xem gcp-runtime.md.
+cộng chung currency. Cấu hình VM/storage/auth xem [AWS runbook](aws-deploy.md).
 
 | Bảng | Grain và dữ liệu giữ lại |
 |---|---|

@@ -11,10 +11,10 @@ hơn số lớn nhất hiện có (hiện là 0013).
 | [0002-generator-simulate-once-render-per-channel.md](0002-generator-simulate-once-render-per-channel.md) | Mô phỏng chung, renderer từng Channel |
 | [0002-seller-advice-cloud-scope.md](0002-seller-advice-cloud-scope.md) | Quyền tư vấn và phạm vi Cloud |
 | [0003-iceberg-va-rest-catalog-cho-lakehouse.md](0003-iceberg-va-rest-catalog-cho-lakehouse.md) | Nền lakehouse hiện tại |
-| [0003-gcp-on-demand.md](0003-gcp-on-demand.md) | GCP on-demand |
+| [0003-gcp-on-demand.md](0003-gcp-on-demand.md) | **Lịch sử** — đã thay bằng AWS EC2 + S3 (2026-10-22) |
 | [0004-local-development-cloud-delivery.md](0004-local-development-cloud-delivery.md) | Local để học, Cloud là đích |
 | [0005-five-channel-data-contract.md](0005-five-channel-data-contract.md) | Warehouse/năm Channel/tiền tệ; phần 180 ngày nguồn được 0008 thay thế |
-| [0006-gcs-feast-integration.md](0006-gcs-feast-integration.md) | GCS + Feast Spark/Redis; cần POC |
+| [0006-gcs-feast-integration.md](0006-gcs-feast-integration.md) | **Lịch sử** — GCS thay bằng S3; Feast + Redis vẫn dùng |
 | [0007-versioned-publication.md](0007-versioned-publication.md) | Generation/manifest/request pin; cần POC |
 | [0008-longer-history-for-training.md](0008-longer-history-for-training.md) | Q49 thay độ dài nguồn D11; phục vụ vẫn 180 ngày |
 | [0009-partial-lifecycle-inventory-seller-triage.md](0009-partial-lifecycle-inventory-seller-triage.md) | Q52–Q55 mở scope; phần nhãn tiếp nối tại 0010 |

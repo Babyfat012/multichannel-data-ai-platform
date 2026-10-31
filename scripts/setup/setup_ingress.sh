@@ -29,7 +29,7 @@ elif [[ "$issuer" != platform-local-ca ]]; then
   echo "INGRESS_ISSUER chỉ nhận platform-local-ca hoặc platform-letsencrypt" >&2; exit 1
 fi
 # Let's Encrypt lần đầu (Certificate chưa Ready; secret có thể đã tồn tại mà rỗng): redirect HTTPS (chưa có cert) và basic auth chặn HTTP-01
-# ⇒ apply bản mở, chờ cert Ready, rồi apply bản đủ. ponytail: gia hạn ngày 60 vẫn bị basic auth chặn ⇒
+# ⇒ apply bản mở, chờ cert Ready, rồi apply bản đủ. Giới hạn: gia hạn ngày 60 vẫn bị basic auth chặn ⇒
 # chạy lại script (gap #24); prod dùng mergeable ingress hoặc DNS-01.
 apply_ing() {  # $1 namespace, $2 secret TLS; stdin = Ingress đã render
   local y; y=$(cat)

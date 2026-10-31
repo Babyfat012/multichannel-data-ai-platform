@@ -1,5 +1,7 @@
 # Chạy đầu-cuối v2 trên nguồn scale local
 
+> **Pipeline v2 (order lifecycle) — thiết kế và thử ở local, không phải pipeline đã nộp.** Pipeline chạy trên AWS là v1 (DP1 → DP4 + ML), xem [Data Platform evidence](data-platform-evidence.md). Các chỗ nhắc GCP dưới đây là kế hoạch cũ, chưa chạy; đích cloud hiện hành là [AWS](aws-deploy.md).
+
 Runner `scripts/run/run_order_lifecycle_local.py` kiểm cả chuỗi nguồn scale → Bronze → Silver → Gold →
 PostgreSQL → EXPLAIN trước/sau index. Một Spark session `local[*]`, Iceberg Hadoop
 catalog trong `/tmp`, không cần Lakekeeper/MinIO. Không đọc truth làm input.

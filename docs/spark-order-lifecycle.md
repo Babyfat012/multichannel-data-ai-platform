@@ -1,5 +1,7 @@
 # Spark baseline và skew — workload v2
 
+> **Pipeline v2 (order lifecycle) — thiết kế và thử ở local, không phải pipeline đã nộp.** Pipeline chạy trên AWS là v1 (DP1 → DP4 + ML), xem [Data Platform evidence](data-platform-evidence.md). Các chỗ nhắc GCP dưới đây là kế hoạch cũ, chưa chạy; đích cloud hiện hành là [AWS](aws-deploy.md).
+
 workload lifecycle v2, độc lập với bằng chứng Bronze v1 tại
 [spark.md](spark.md). **Chưa đo Spark trong sandbox Codex**. Các số trong bảng
 chỉ được điền sau khi người vận hành chạy và lưu JSON/event log, không suy từ thời gian.

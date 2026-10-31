@@ -1,5 +1,7 @@
 # Contract nguồn v2 — Orders và nguồn vận hành Seller giả lập
 
+> **Pipeline v2 (order lifecycle) — thiết kế và thử ở local, không phải pipeline đã nộp.** Pipeline chạy trên AWS là v1 (DP1 → DP4 + ML), xem [Data Platform evidence](data-platform-evidence.md). Các chỗ nhắc GCP dưới đây là kế hoạch cũ, chưa chạy; đích cloud hiện hành là [AWS](aws-deploy.md).
+
 Ngày 2026-10-18. Contract ID **`seller-source-v2`**. Q60/Q61 được người dùng
 chấp thuận bằng “Hiểu, xử lý”: headline sales dùng phần còn lại sau hủy
 trước ship, Refund tiền hàng hiển thị riêng; bổ sung nguồn vận hành Seller

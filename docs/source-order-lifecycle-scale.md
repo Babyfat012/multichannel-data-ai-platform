@@ -1,5 +1,7 @@
 # Nguồn v2 ở quy mô lớn — gói B+ (2026-10-19)
 
+> **Pipeline v2 (order lifecycle) — thiết kế và thử ở local, không phải pipeline đã nộp.** Pipeline chạy trên AWS là v1 (DP1 → DP4 + ML), xem [Data Platform evidence](data-platform-evidence.md). Các chỗ nhắc GCP dưới đây là kế hoạch cũ, chưa chạy; đích cloud hiện hành là [AWS](aws-deploy.md).
+
 Mở rộng bộ nguồn v2 để đo Spark baseline/skew, thử tối ưu lakehouse/warehouse,
 stream và bảo trì Iceberg với dữ liệu đa dạng. Đây là nguồn giả lập có seed;
 chưa phải bằng chứng nghiệm thu 100 GB hay kết quả Spark.

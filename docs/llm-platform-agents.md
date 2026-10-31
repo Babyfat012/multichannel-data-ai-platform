@@ -21,7 +21,7 @@ Dựng tất cả: `bash scripts/setup/deploy_kind_agents.sh` (cần cụm và F
 
 Cấu hình llm-d cần GPU. Ở local dùng **llama.cpp server** (CPU), API kiểu OpenAI,
 model **Qwen2.5-1.5B-Instruct Q4_K_M** (file ~1 GB, RAM ~1,3 GB). Lý do chọn model: nhỏ nhất mà vẫn gọi
-tool ổn định. llm-d để dành lên GCP.
+tool ổn định. llm-d để dành cho khi có GPU.
 
 - `--jinja` bật chat template có tool calling; `--ctx-size 8192`, `--parallel 2` (mỗi slot 4096 token).
 - Model tải 1 lần vào PVC `models`; image ghim digest (build b11749).
@@ -51,7 +51,7 @@ CPU i5-11400H 6 nhân / 12 luồng.
 - 1–2 request: như nhau — giải mã bị giới hạn bởi CPU (băng thông RAM), thêm luồng không giúp.
 - KV cache q8_0 giữ RAM ở 1,34 GB dù ctx gấp đôi (mỗi slot vẫn 4096 token, đủ cho prompt Agent + tool).
 - Đã chọn B ([`llm.yaml`](../infra/k8s/agents/llm.yaml)). Số liệu: [`evidence/llm-benchmark-20261021.jsonl`](evidence/llm-benchmark-20261021.jsonl).
-- Lên GCP: llm-d + GPU; cùng script đo lại để so.
+- Khi có GPU: llm-d; cùng script đo lại để so.
 
 ### Đo lại trên EKS, 2026-10-30
 
@@ -129,7 +129,7 @@ tool mẫu (k8s, istio, cilium, grafana-mcp…), chỉ giữ controller, UI, Pos
 
 **Model config dùng chung**: Helm sinh `ModelConfig default-model-config`, provider `OpenAI`,
 model `qwen2.5-1.5b-instruct`, `baseUrl` = agentgateway `/v1`, API key từ Secret `kagent-agw-key`.
-Mọi Agent tham chiếu cùng tên này; đổi LLM (vd sang llm-d trên GCP) chỉ đổi gateway, không sửa Agent.
+Mọi Agent tham chiếu cùng tên này; đổi LLM (vd sang llm-d trên GPU) chỉ đổi gateway, không sửa Agent.
 
 **Data Agent** ([`data-agent.yaml`](../infra/k8s/agents/data-agent.yaml)): Agent khai báo (Declarative),
 tool lấy từ `RemoteMCPServer feature-tools` trỏ vào gateway `/mcp` kèm header `Authorization` đọc từ Secret.
@@ -173,7 +173,7 @@ Gateway ghi nhận A2A coordinator → agent con qua route theo header (`default
 - model-agent có gọi `search_policy_chunks` nhưng tóm tắt sai (lấy "7–14 days" của mục store drop-off thay vì
   "30 days") hoặc bịa nội dung playbook. Hỏi thẳng model-agent thì đúng.
 - Kết luận: kiến trúc (routing, tool, gateway) chạy; chất lượng trả lời nhiều bước bị giới hạn bởi model 1,5B.
-  Trên GCP thay bằng model lớn hơn qua llm-d, chỉ đổi gateway/ModelConfig.
+  Có GPU thì thay bằng model lớn hơn qua llm-d, chỉ đổi gateway/ModelConfig.
 
 ### Autoscale bằng KEDA 2026-10-21
 

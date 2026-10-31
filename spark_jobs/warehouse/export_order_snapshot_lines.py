@@ -72,7 +72,7 @@ def main(argv: list[str] | None = None) -> int:
         with conn.cursor() as cur:
             cur.execute("CREATE SCHEMA IF NOT EXISTS warehouse")
         conn.close()
-        # ponytail: overwrite thẳng, lúc nạp lại bảng vắng/rỗng; cần đọc liên tục thì staging +
+        # Giới hạn: overwrite thẳng, lúc nạp lại bảng vắng/rỗng; cần đọc liên tục thì staging +
         # rename như spark_jobs/lib/order_lifecycle_warehouse.py.
         rows.repartition(4, "seller_sku").write.format("jdbc").options(**options).mode(
             "overwrite"

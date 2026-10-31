@@ -49,7 +49,7 @@ SELECT * FROM (
   WHERE event_type = 'approved' AND quantity > 0
 ) WHERE rn = 1;
 
--- ponytail: HOP chỉ phát cửa sổ CÓ tin; SKU hết Return thì Redis giữ số cũ tới khi có tin mới.
+-- Giới hạn: HOP chỉ phát cửa sổ CÓ tin; SKU hết Return thì Redis giữ số cũ tới khi có tin mới.
 INSERT INTO sku_return_24h
 SELECT seller_sku, window_end, COUNT(*)
 FROM TABLE(HOP(TABLE approved, DESCRIPTOR(event_ts), INTERVAL '1' HOUR, INTERVAL '24' HOUR))

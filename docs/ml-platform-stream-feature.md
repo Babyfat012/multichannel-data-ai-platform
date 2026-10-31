@@ -36,7 +36,7 @@ Kafka ml.sku_return_24h        {seller_sku, event_timestamp = window_end, approv
 - **At-least-once**: pusher commit offset sau khi push. Chết giữa chừng thì đọc lại, có thể ghi
   trùng dòng offline — cùng giá trị nên PIT join không đổi.
 
-**Giới hạn (đã đánh dấu `ponytail:` trong SQL):** HOP chỉ phát cửa sổ có tin. SKU hết Return thì
+**Giới hạn (đã đánh dấu `Giới hạn:` trong SQL):** HOP chỉ phát cửa sổ có tin. SKU hết Return thì
 Redis giữ số cũ tới khi có tin mới. Push offline đọc + ghi lại cả file mỗi lần — ổn ở cỡ demo.
 
 ## Chạy local
@@ -103,7 +103,7 @@ Lần chạy local 2026-10-21 (fixture 15 đơn / 2 SKU):
 ## Trên AWS (pipeline A), 2026-10-30
 
 Stream của pipeline A (thông báo đơn Amazon, webhook TikTok) không có sự kiện Return, chỉ có trạng thái đơn.
-Nên trên AWS phát **lại** Return đã duyệt từ Gold A vào Kafka, theo đúng thứ tự thời điểm biết Return (gap #25:
+Nên trên AWS phát **lại** Return đã duyệt từ Gold A vào Kafka, theo đúng thứ tự thời điểm biết Return (giới hạn:
 feature tới Redis/Parquet thật, nhưng model `return-risk` v1 train khi feature này còn rỗng nên chưa dùng nó).
 
 ```text

@@ -1,6 +1,8 @@
 <!-- Mô tả thiết kế, vận hành và giới hạn CDC trên nguồn Walmart v2; chưa có số đo service. -->
 # CDC Walmart v2 → Bronze có oracle
 
+> **Pipeline v2 (order lifecycle) — thiết kế và thử ở local, không phải pipeline đã nộp.** Pipeline chạy trên AWS là v1 (DP1 → DP4 + ML), xem [Data Platform evidence](data-platform-evidence.md). Các chỗ nhắc GCP dưới đây là kế hoạch cũ, chưa chạy; đích cloud hiện hành là [AWS](aws-deploy.md).
+
 Nhánh này dành cho `walmart_lifecycle.orders`, tách hoàn toàn CDC v1 `walmart.orders`.
 Tên “v2” trong `docs/cdc.md` trước đây chỉ phiên bản boundary/epoch của nhánh v1;
 không phải CDC nguồn `sim-native-v2` trong tài liệu này.

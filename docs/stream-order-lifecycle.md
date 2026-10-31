@@ -1,6 +1,8 @@
 <!-- Mô tả stream vận hành v2, oracle độc lập và harness do người vận hành chạy. -->
 # Stream nguồn v2 — Kafka → Flink
 
+> **Pipeline v2 (order lifecycle) — thiết kế và thử ở local, không phải pipeline đã nộp.** Pipeline chạy trên AWS là v1 (DP1 → DP4 + ML), xem [Data Platform evidence](data-platform-evidence.md). Các chỗ nhắc GCP dưới đây là kế hoạch cũ, chưa chạy; đích cloud hiện hành là [AWS](aws-deploy.md).
+
 Gói D triển khai bốn feed nguồn Seller quan sát được. Bản sửa 10b đã kiểm local,
 đang chờ người vận hành chạy lại Kafka/Flink harness. Run 10 trước đó có kiểm late
 quá rộng nên không được dùng làm proof số late của bản này. Không dùng nguồn truth, không tạo label hoặc
@@ -170,7 +172,7 @@ recovery, chưa chứng minh JobManager HA hoặc thảm họa mất disk.
 ```
 
 GCP: người vận hành bổ sung checklist triển khai sau; lượt này không gọi Cloud hoặc
-thay `docs/gcp-checklist.md`.
+thay checklist triển khai riêng.
 
 ## Số đo
 

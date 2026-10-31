@@ -1,6 +1,8 @@
 <!-- Mô tả vận hành DAG nguồn v2, receipt và các giới hạn chưa kiểm bằng Docker. -->
 # Airflow — pipeline nguồn v2
 
+> **Pipeline v2 (order lifecycle) — thiết kế và thử ở local, không phải pipeline đã nộp.** Pipeline chạy trên AWS là v1 (DP1 → DP4 + ML), xem [Data Platform evidence](data-platform-evidence.md). Các chỗ nhắc GCP dưới đây là kế hoạch cũ, chưa chạy; đích cloud hiện hành là [AWS](aws-deploy.md).
+
 DAG [`dp_order_lifecycle`](../dags/dp_order_lifecycle.py) chạy tay từ fixture tới
 Gold/nhãn/feature. DAG mặc định tạm dừng, `schedule=None`, `catchup=False`,
 `max_active_runs=1`, `max_active_tasks=1`. Fixture chưa có lịch phát dữ liệu thật.

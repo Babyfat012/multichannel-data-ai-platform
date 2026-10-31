@@ -168,7 +168,7 @@ Ngày chạy, run ID và artifact được giữ trong tài liệu kiểm chứn
 - [Coordinator CI](docs/ml-llm-platform-cicd.md): deploy xanh, eval gate timeout (>180 s/câu); một LLM chạy CPU phục vụ chung mọi Agent.
 - [Ảnh chi tiết](docs/rubric-cloud-audit.md) Spark schema evolution/dedup, Flink watermark, ERD dim–fact, Helm rollback và Coordinator scaling được chụp ở local; các job đã chạy trên AWS với receipt validate, nhưng chưa có đủ ảnh chi tiết AWS cho từng hành vi trên.
 - [MLflow](docs/ml-platform-training.md): có model version/tag trên AWS; chưa chụp data hash và artifacts train/test của cùng run.
-- [Stream feature](docs/ml-platform-stream-feature.md): `approved_returns_24h` trên AWS được replay từ nhãn Gold; `return-risk` v1 train trước khi feature có lịch sử nên chưa dùng feature này (gap #25).
+- [Stream feature](docs/ml-platform-stream-feature.md): `approved_returns_24h` trên AWS được replay từ nhãn Gold; `return-risk` v1 train trước khi feature có lịch sử nên chưa dùng feature này.
 - [Partition Shopee](docs/storage.md): chia tháng được áp dụng bằng maintenance rewrite; DP1 `createOrReplace` sẽ ghi lại partition ngày, chưa phải hành vi của pipeline.
 
 ## Giấy phép

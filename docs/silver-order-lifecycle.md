@@ -1,5 +1,7 @@
 # Bronze/Silver nguồn v2 — gói C (2026-10-18)
 
+> **Pipeline v2 (order lifecycle) — thiết kế và thử ở local, không phải pipeline đã nộp.** Pipeline chạy trên AWS là v1 (DP1 → DP4 + ML), xem [Data Platform evidence](data-platform-evidence.md). Các chỗ nhắc GCP dưới đây là kế hoạch cũ, chưa chạy; đích cloud hiện hành là [AWS](aws-deploy.md).
+
 Đưa bộ nguồn v2 nhỏ của [gói B](source-order-lifecycle-fixtures.md) vào lakehouse theo
 [source contract v2](source-contract-order-lifecycle.md). Đây là **fixture nhỏ** (5 Channel,
 3 ngày tạo đơn, 15 Order, 30 Order Line), không phải dữ liệu nghiệm thu

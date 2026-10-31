@@ -97,7 +97,7 @@ def source_query() -> str:
     ) AS src"""
 
 
-# ponytail: trùng phần lớn `lib/iceberg_session.build_spark`, giữ riêng vì cần cờ AQE và event log
+# Giới hạn: trùng phần lớn `lib/iceberg_session.build_spark`, giữ riêng vì cần cờ AQE và event log
 # (phải đặt trước khi tạo session) và vì số đo trong docs/spark.md gắn với cấu hình này.
 # Gộp khi đo lại Bronze v1.
 def build_spark(aqe: str, app_name: str) -> SparkSession:

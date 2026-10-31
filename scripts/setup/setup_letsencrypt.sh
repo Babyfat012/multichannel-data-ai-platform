@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # HTTPS domain thật là opt-in; không có domain thì không gọi Docker/kubectl/Vault/mạng.
-# TODO(planner:codex-30): kiểm chart local/version/schema trước khi bật.
+# Trước khi bật: kiểm version/schema của chart webhook DuckDNS.
 set -euo pipefail
 if [[ -z "${DUCKDNS_DOMAIN:-}" ]]; then
   echo 'Giữ CA nội bộ. Bật ACME: đặt DUCKDNS_DOMAIN=<tên>.duckdns.org, LE_EMAIL, DUCKDNS_WEBHOOK_CHART (chart local đã kiểm), VAULT_ADDR/VAULT_TOKEN.'

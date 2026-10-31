@@ -1,5 +1,7 @@
 # Vì sao Silver v2 chậm siêu tuyến tính
 
+> **Pipeline v2 (order lifecycle) — thiết kế và thử ở local, không phải pipeline đã nộp.** Pipeline chạy trên AWS là v1 (DP1 → DP4 + ML), xem [Data Platform evidence](data-platform-evidence.md). Các chỗ nhắc GCP dưới đây là kế hoạch cũ, chưa chạy; đích cloud hiện hành là [AWS](aws-deploy.md).
+
 Phân tích hiệu năng Silver, ngày 2026-10-19. Chỉ tài liệu và diff đề xuất, chưa áp dụng thay đổi Spark.
 
 ## Kết luận và phạm vi bằng chứng

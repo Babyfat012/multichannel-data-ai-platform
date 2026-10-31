@@ -1,5 +1,7 @@
 # Gold nguồn v2 — gói E (fixture nhỏ)
 
+> **Pipeline v2 (order lifecycle) — thiết kế và thử ở local, không phải pipeline đã nộp.** Pipeline chạy trên AWS là v1 (DP1 → DP4 + ML), xem [Data Platform evidence](data-platform-evidence.md). Các chỗ nhắc GCP dưới đây là kế hoạch cũ, chưa chạy; đích cloud hiện hành là [AWS](aws-deploy.md).
+
 Gold mới dùng namespace `build_gold` và **chỉ đọc Silver v2** (từ 2026-10-19; trước đó đọc thêm Bronze). Không dùng ground truth, probe hoặc nhãn v1. Policy duy nhất nằm ở
 [`spark_jobs/lib/return_label.py`](../spark_jobs/lib/return_label.py), theo
 [hợp đồng Return v2](return-label-contract.md) và [ADR-0010](adr/0010-shipment-windows-return-label-v2.md).

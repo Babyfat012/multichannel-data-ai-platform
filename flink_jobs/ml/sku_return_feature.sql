@@ -71,7 +71,7 @@ FROM approved AS a
 JOIN line_sku FOR SYSTEM_TIME AS OF a.proc_time AS l
   ON a.dataset_version = l.dataset_version AND a.payload.line_id = l.line_id;
 
--- ponytail: HOP chỉ phát cửa sổ CÓ tin; SKU hết Return thì Redis giữ số cũ tới khi có tin mới.
+-- Giới hạn: HOP chỉ phát cửa sổ CÓ tin; SKU hết Return thì Redis giữ số cũ tới khi có tin mới.
 -- Cần về 0 thật thì thêm luồng phát 0 theo lịch.
 INSERT INTO sku_return_24h
 SELECT seller_sku, window_end, COUNT(*)

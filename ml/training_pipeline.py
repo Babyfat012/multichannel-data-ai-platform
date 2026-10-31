@@ -47,7 +47,7 @@ def load_features(entity_path: str, features: dsl.Output[dsl.Dataset]):
     store = FeatureStore("/opt/feature_repo")
     # Kho offline file của Feast nối mỗi line với MỌI ảnh chụp ngày của SKU rồi mới lọc PIT:
     # 360k line × ~180 ngày ≈ 65 tr dòng trung gian ⇒ OOM. Gọi theo lô, kết quả y hệt một lần.
-    # ponytail: lô 20k cố định; dữ liệu lớn hơn thì dùng offline store Spark (gap #22).
+    # Giới hạn: lô 20k cố định; dữ liệu lớn hơn thì dùng offline store Spark.
     chunks = [entity.iloc[i : i + 20_000] for i in range(0, len(entity), 20_000)]
     frame = pd.concat(
         store.get_historical_features(entity_df=chunk, features=FEAST_FEATURES).to_df()

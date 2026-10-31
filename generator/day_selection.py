@@ -10,7 +10,7 @@ from __future__ import annotations
 DAY_MARKER = "export_date="
 
 
-# ponytail: bản sao của spark_jobs/lib/day_selection.pick_sample_days (hai image không thấy nhau).
+# Giới hạn: bản sao của spark_jobs/lib/day_selection.pick_sample_days (hai image không thấy nhau).
 # Gộp khi generator và job Spark dùng chung một package.
 def pick_sample_days(all_days: list[str], n: int) -> list[str]:
     """Chọn `n` ngày rải đều, luôn gồm ngày đầu và ngày cuối; `n <= 0` hoặc quá dài là lấy hết.

@@ -1,6 +1,8 @@
 <!-- Mô tả metadata v2 từ code/hợp đồng/receipt; chưa gửi lên DataHub trong sandbox. -->
 # DataHub — dataset, job và assertion nguồn v2
 
+> **Pipeline v2 (order lifecycle) — thiết kế và thử ở local, không phải pipeline đã nộp.** Pipeline chạy trên AWS là v1 (DP1 → DP4 + ML), xem [Data Platform evidence](data-platform-evidence.md). Các chỗ nhắc GCP dưới đây là kế hoạch cũ, chưa chạy; đích cloud hiện hành là [AWS](aws-deploy.md).
+
 [`scripts/run/publish_order_lifecycle_datahub.py`](../scripts/run/publish_order_lifecycle_datahub.py) tạo JSON
 MetadataChangeProposal (MCP) bằng thư viện chuẩn. Mặc định chỉ in offline;
 `--dry-run` cũng in **toàn bộ MCP sẽ gửi**, gồm cả schema, lineage và kết quả FAIL.

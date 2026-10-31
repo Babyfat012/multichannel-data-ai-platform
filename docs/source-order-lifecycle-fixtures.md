@@ -1,5 +1,7 @@
 # Source v2 — fixture nhỏ của gói B
 
+> **Pipeline v2 (order lifecycle) — thiết kế và thử ở local, không phải pipeline đã nộp.** Pipeline chạy trên AWS là v1 (DP1 → DP4 + ML), xem [Data Platform evidence](data-platform-evidence.md). Các chỗ nhắc GCP dưới đây là kế hoạch cũ, chưa chạy; đích cloud hiện hành là [AWS](aws-deploy.md).
+
 Triển khai local của [source contract v2](source-contract-order-lifecycle.md), giữ scope
 Q52–Q61, hạn 31/10. Entry point riêng: [generator/generate_order_lifecycle_fixture.py](../generator/generate_order_lifecycle_fixture.py).
 Không thay engine Batch/Stream v1 và không dùng root nguồn/evidence lịch sử.

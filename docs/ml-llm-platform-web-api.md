@@ -76,7 +76,7 @@ Lần chạy 2026-10-31 (laptop, 4 tiến trình, ~2,5 phút): **171 mutant** tr
 ![mutmut serving/app.py: 171 mutant, 138 killed, 19 timeout, 9 no tests, 5 survived tương đương; score 96,9%](evidence/mutmut-serving-20261031.png)
 
 Ảnh dựng từ [output thật](evidence/mutmut-serving-20261031.txt) (giữ đủ danh sách timeout/no tests); bỏ dòng
-timeout/no tests trong ảnh cho gọn. Lần chạy đầu trong sandbox Codex bị treo vì sandbox chặn socket nội bộ
+timeout/no tests trong ảnh cho gọn. Lần chạy đầu trong sandbox của công cụ AI bị treo vì sandbox chặn socket nội bộ
 (`TestClient` cần), không phải lỗi test.
 
 Mutmut 3.3.1 có bộ chọn tên mutant ở `mutmut run [MUTANT_NAMES]...`, không có tùy chọn chọn dòng

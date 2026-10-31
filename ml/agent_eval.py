@@ -84,7 +84,7 @@ def from_text(answer: str) -> dict[str, set[str]]:
     Số không đứng cạnh tên trường nào thì không tính ⇒ câu đoán mò "10, 30, 0.333" trượt; câu tráo
     "labeled 10, positive 30" trượt; nhắc một trường hai lần với hai số khác nhau cũng trượt.
     """
-    # ponytail: heuristic khoảng cách ký tự, câu lòng vòng có thể chấm sai; JSON là đường chính,
+    # Giới hạn: heuristic khoảng cách ký tự, câu lòng vòng có thể chấm sai; JSON là đường chính,
     # cột mode cho biết bao nhiêu câu đi đường này.
     out: dict[str, set[str]] = {field: set() for field in FIELDS}
     for clause in CLAUSE.split(SKU_ID.sub(" ", answer)):

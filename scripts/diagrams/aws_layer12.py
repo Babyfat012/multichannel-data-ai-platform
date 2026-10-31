@@ -233,7 +233,7 @@ def make():
     d.note(
         40,
         1732,
-        "S1: replay_return_events.py đọc Gold qua Trino → Kafka (gap #25); model v1 train khi feature stream còn rỗng. Profile chạy theo pha.",
+        "S1: replay_return_events.py đọc Gold qua Trino → Kafka; model v1 train khi feature stream còn rỗng. Profile chạy theo pha.",
     )
     d.flows = [
         (

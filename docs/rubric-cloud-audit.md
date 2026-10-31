@@ -1,6 +1,6 @@
 # Rubric × cloud — kiểm kê 2026-10-31
 
-Nguồn: `edai-k11-cw/rubic/EDAI K11 - MLE.xlsx`, sheet `de` (100đ) và `mle` (100đ). Nguyên tắc learner chốt:
+Nguồn: rubric coursework EDAI K11 (file Excel của khoá học, không nằm trong repo), sheet `de` (100đ) và `mle` (100đ). Nguyên tắc đã chốt:
 mọi dòng phải có bằng chứng **triển khai trên AWS**; thiếu là phải làm. Bằng chứng cloud ghi ở
 [data-platform-evidence.md](data-platform-evidence.md) mục "Trên AWS" và các mục AWS/EKS của tài liệu ML/LLM;
 [ml-llm-platform-evidence.md](ml-llm-platform-evidence.md) giữ bảng local lịch sử và dẫn tới kết quả AWS mới hơn.
@@ -44,13 +44,13 @@ Cập nhật 31/10 sau buổi AWS. Bằng chứng: [LLM và agent](llm-platform-
 | Agent registry | 2 | ✅ | agentregistry 0.4.0, 1 MCP + 3 agent (`agent-registry-ui`) |
 | RAG pipeline (Airflow) + governance (DataHub) | 2+2 | ✅ | `ml_rag_ingest` 6/6 task xanh trên Airflow EC2 gồm `publish` ([ảnh](evidence/aws/airflow-ml-rag-ingest-publish-20261031.png)); DataHub EC2 lineage corpus → S3 raw → chunks → embedding → pgvector → validate ([ảnh](evidence/aws/datahub-rag-lineage-20261031.png)). 31/10 sửa: value aspect escape ASCII, `DataJobInfo.type` dạng union |
 | Materialize offline → online | 2 | ✅ | `ml_feature_materialize` 4/4 |
-| Push streaming feature → offline + online | 2 | ✅ | 31/10: Flink EC2 76/76 checkpoint, đối chiếu 1.004.354 cửa sổ khớp, API `approved_returns_24h` ([stream](ml-platform-stream-feature.md)); dữ liệu phát lại (gap #25) |
+| Push streaming feature → offline + online | 2 | ✅ | 31/10: Flink EC2 76/76 checkpoint, đối chiếu 1.004.354 cửa sổ khớp, API `approved_returns_24h` ([stream](ml-platform-stream-feature.md)); dữ liệu phát lại |
 | KFP training ≥4 bước | 2 | ✅ | `train-aws-3` 5/5 |
 | MLflow version model + data + tag | 2 | ⚠️ | v1 `production` chạy trên AWS; ảnh model/tag có, chưa có ảnh mở hash dữ liệu và artifacts train/test cùng run. Mô tả version dữ liệu cũ thuộc lần local ([Training](ml-platform-training.md#trên-aws-2026-10-29)). |
 | KServe model-inside-image | 2 | ✅ | predict OK |
 | FastAPI + pydantic + healthcheck / async / MCP helm rolling + fallback | 1+1+2 | ⚠️ | Feature API 2 replica chạy trên AWS, có Swagger; proof chi tiết rolling/rollback khi bản hỏng là local, chưa có capture fallback trên AWS. |
 | Agent 1 multi-replica + KEDA, Sandbox, publish | 2+1+1 | ✅ | data-agent 2 pod + KEDA 2→3→2 ✅, publish registry ✅; Sandbox 31/10: Agent Substrate 0.0.9 (gVisor) trên EKS, `data-agent-sandbox` gọi tool `get-sku-features` qua gateway và trả số ([ảnh](evidence/aws/substrate-sandbox-agent-ui-20261031.png)); model 1,5B chép sai `labeled_count` (83,084 thay 830847), positive/rate đúng |
-| Agent 2: online feature + predict + RAG | 8 | ⚠️ | Tool/chat chạy trên AWS (ảnh `rag-model-agent-*`); chưa có proof KEDA riêng cho model-agent. Comment manifest nhắc `model-agent-keda.yaml` nhưng file này chưa có; không lấy log scale Agent khác làm proof. |
+| Agent 2: online feature + predict + RAG | 8 | ⚠️ | Tool/chat chạy trên AWS (ảnh `rag-model-agent-*`); chưa có proof KEDA riêng cho model-agent. Chưa có ScaledObject cho model-agent ([`model-agent.yaml`](../infra/k8s/agents/model-agent.yaml)); không lấy log scale Agent khác làm proof. |
 | MCP gateway / A2A gateway | 2+2 | ✅ | route `/mcp`, A2A theo header; Grafana đếm theo route |
 | Coordinator multi-replica + KEDA, publish | 2+2 | ⚠️ | Chạy trên AWS, đã publish registry; proof chi tiết scale 2→3→2 là local. ScaledObject min 2 max 3 chưa thay capture test scaling trên AWS. |
 | Warm Up (Agent Substrate) | 2 | ✅ | 31/10: 6 SandboxAgent Ready trên 1 WorkerPool `kagent-default` (DESIRED/REPLICAS 1), golden snapshot ([ảnh](evidence/aws/substrate-warmup-6-agents-1-worker-20261031.png)) |
@@ -70,38 +70,13 @@ Cập nhật 31/10 sau buổi AWS. Bằng chứng: [LLM và agent](llm-platform-
 
 ## Ước lượng (2026-10-31)
 
-- Tự đánh giá theo phần đã chạy: `de` **100đ**, `mle` **~98đ**. Đây là ước lượng chức năng, chưa trừ rủi ro thiếu ảnh chi tiết ở các dòng ⚠️; không khẳng định đã đủ mọi capture mà rubric yêu cầu.
-- Phần còn mở của MLE: **CI eval Coordinator 2đ** (deploy xanh, eval timeout). A/B Agent + LLM và lineage DataHub RAG xong tối 31/10; Sandbox/Warm Up có ảnh EKS; ML-N1/ML-N2 có kết quả 31/10. Người chấm thử (review độc lập) ước MLE 85–90 vì các dòng ⚠️ thiếu ảnh chi tiết AWS — xem README "Giới hạn đã biết".
+- Tự đánh giá theo phần đã chạy: `de` **100đ**, `mle` **~98đ** nếu tính đủ các dòng ⚠️. Các dòng ⚠️ thiếu ảnh chi tiết trên AWS nên điểm thực có thể thấp hơn.
+- Phần còn mở của MLE: **CI eval Coordinator 2đ** (deploy xanh, eval timeout). A/B Agent + LLM và lineage DataHub RAG xong tối 31/10; Sandbox/Warm Up có ảnh EKS; ML-N1/ML-N2 có kết quả 31/10. Xem README "Giới hạn đã biết".
 - EKS context `platform-apps`: **2 node r6i.xlarge** (mỗi node 4 vCPU/32 GB). Cùng EC2 Data Platform `r6i.xlarge`: tổng 12/16 vCPU quota.
 
-## Cấu hình và kế hoạch chốt (learner duyệt 29/10)
+## Cấu hình AWS (31/10)
 
-Cấu hình ngày 31/10: EC2 `i-0d657089ba4a4ea7e`, `r6i.xlarge` (4 vCPU/32 GB, IP riêng `10.42.0.151`), 2 node EKS
-`r6i.xlarge` (2 × 4 vCPU/32 GB). 12/16 vCPU quota. ~1,1 USD/giờ khi bật cả hai; ~0,18 USD/giờ khi tắt hết
-(EKS control plane 0,10 + EBS). Ngân sách tính 100 USD ⇒ chạy theo đợt, tắt khi nghỉ (~10 ngày).
-Kế hoạch cũ ngày 29/10 không cài gVisor qua launch template; hướng DaemonSet thủ công đã được thay thế ngày 30/10.
-30/10: đổi hướng — Agent Substrate 0.0.9 (khớp kagent 0.10.3) tự đặt runtime gVisor qua node agent của nó ⇒ không tự viết DaemonSet sửa containerd ([ví dụ kagent](https://www.kagent.dev/docs/kagent/examples/agent-substrate)); code `scripts/setup/deploy_substrate.sh` + `infra/k8s/agents/sandbox/`.
-
-| Đợt | Bật | Việc |
-|---|---|---|
-| 0 | cả hai | Terraform EC2 + EKS đổi type; Ansible với `feast_redis` = IP node mới; materialize lại |
-| 1 | EC2 | dp4_warehouse + EXPLAIN; compaction có trước/sau thật; đo skew AWS; Trino liên nguồn; DataHub 2 DAG mới |
-| 2 | EKS | Mạng public cho Ingress (LB AWS, tag subnet, SG 80/443, domain DuckDNS) → ingress-nginx + basic auth + rate limit + HTTPS; Prometheus/Grafana/Loki/Jaeger (+ alert đĩa, slot lag, retry: gap #7 #8 #17 #20); Vault; KEDA |
-| 3 | EKS | llama.cpp Qwen + benchmark; agentgateway; model config; registry; Feature API (MCP, helm); data-agent, model-agent, coordinator + KEDA; MCP/A2A gateway; Langfuse; telemetry LLM + agent |
-| 4 | cả hai | RAG (Airflow → pgvector) + lineage DataHub; stream push (Flink → feast-pusher, gap #5 #12); materialize lại |
-| 5 | EKS (+EC2) | Jenkins 4 pipeline (gap #9); A/B agent + LLM; gVisor DaemonSet + Substrate (Sandbox, Warm Up) |
-| 6 | — | README + sơ đồ AWS; evidence; chốt 2 Novel MLE; commit |
-| 7 | tuỳ | Gap loại 2 còn lại: nhỏ trước #10 #15 #19 #14 #6, lớn sau #3 #22 #18 (#11 nói thật) |
-
-## Đối chiếu từng dòng rubric thật (30/10 tối)
-
-Đọc lại `EDAI K11 - MLE.xlsx` sheet `mle` cột "Document": nhiều dòng đòi **ảnh**, không chỉ chạy được. Ngoài bước
-4–9 trong handoff, còn thiếu để đủ 100/100:
-
-| # | Dòng | Điểm | Thiếu | Cần cloud |
-|---|---|---|---|---|
-| 1 | RAG pipeline + governance | 2+2 | Ảnh lineage DataHub cho `ml_rag_ingest` (`publish` đang skipped) | Có: bật DataHub EC2 |
-| 2 | Terraform / Ansible | 1+1 | ✅ 31/10 ảnh `terraform plan` No changes + Ansible `PLAY RECAP` trong `IaC.md` | — |
-| 3 | Computing telemetry | 1 | ✅ 31/10 ảnh Grafana EC2 CPU/RAM/disk/network | — |
-| 4 | README theo ô A2 | 2 | ✅ 31/10 `aws-architecture-layer12/layer3.png` trong README | — |
-| 5 | Unit coverage > 90% | 1 | ✅ 31/10 ảnh `serving-coverage-20261031.png` | — |
+EC2 Data Platform `r6i.xlarge` (4 vCPU/32 GB) + EKS `platform-apps` 2 node `r6i.xlarge`: 12/16 vCPU quota.
+~1,1 USD/giờ khi bật cả hai, ~0,18 USD/giờ khi tắt hết (EKS control plane + EBS); chạy theo đợt, tắt khi nghỉ.
+Sandbox dùng Agent Substrate 0.0.9 (khớp kagent 0.10.3), tự đặt runtime gVisor qua node agent của nó
+([ví dụ kagent](https://www.kagent.dev/docs/kagent/examples/agent-substrate)); code `scripts/setup/deploy_substrate.sh` + `infra/k8s/agents/sandbox/`.
