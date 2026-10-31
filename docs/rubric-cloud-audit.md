@@ -62,7 +62,7 @@ Cập nhật 30/10 tối sau buổi EKS. Bằng chứng: [LLM và agent](llm-pla
 | A/B agent / A/B LLM | 1+1 | ❌ | Bước 5 |
 | Vault | 1 | ✅ | Vault EC2 (EBS), KV v2, mật khẩu ingress |
 | README + docs theo rule | 2 | ⚠️ | Thiếu sơ đồ triển khai AWS tổng thể |
-| Novel idea 1 / 2 | 2+2 | ⚠️ | Chốt ML-N1 (agent eval) + ML-N2 (drift Evidently); chưa có bằng chứng AWS (bước 5, 6) |
+| Novel idea 1 / 2 | 2+2 | ✅ | 31/10: ML-N1 agent eval làm cổng CI trong Jenkins `feature-api-agents` #8 (12/12 ≥ 0,95, [ảnh](evidence/aws/jenkins-feature-api-agents-20261031.png)); ML-N2 drift Evidently = Job EKS `mle-drift` trên training_lines S3: ổn định không báo, dịch kênh shopee báo `seller_sku` JS 0,203 > 0,2 ([JSON](evidence/aws/mle-drift-20261031.json)) |
 
 ## Ước lượng
 
