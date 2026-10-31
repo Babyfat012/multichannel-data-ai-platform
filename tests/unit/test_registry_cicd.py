@@ -244,7 +244,7 @@ def test_jenkins_on_ec2_is_loopback_with_eks_kubeconfig_and_bundle_source():
 
     jenkins = _yaml.load((ROOT / "docker-compose.aws.yml").read_text(), Loader=ComposeLoader)["services"]["jenkins"]
     assert "--httpListenAddress=127.0.0.1" in jenkins["environment"]["JENKINS_OPTS"]
-    assert jenkins["environment"]["CI_GIT_REMOTE"] == "file:///repo/out/platform.bundle"
+    assert jenkins["environment"]["CI_GIT_REMOTE"] == "/repo/out/platform.bundle"
     assert "url('${CI_GIT_REMOTE:-file:///repo}')" in (ROOT / "infra/jenkins/jenkins.yaml").read_text()
     casc = (ROOT / "infra/jenkins/jenkins.yaml").read_text()
     assert "scriptPath('ci/jenkins/' + name + '.Jenkinsfile')" in casc and "${name}" not in casc

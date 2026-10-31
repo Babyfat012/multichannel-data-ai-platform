@@ -283,6 +283,7 @@ services:
   jenkins:
     environment:
       JENKINS_OPTS: --httpPort=8090 --httpListenAddress=127.0.0.1
-      CI_GIT_REMOTE: file:///repo/out/platform.bundle
+      # Đường dẫn trơn, không `file://`: git chỉ nhận ra tệp bundle khi remote là path (file:// đòi thư mục repo).
+      CI_GIT_REMOTE: /repo/out/platform.bundle
       AWS_REGION: ${AWS_REGION:?AWS_REGION_required}
     mem_limit: 1536m
