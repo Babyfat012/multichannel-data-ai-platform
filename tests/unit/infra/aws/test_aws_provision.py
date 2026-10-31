@@ -678,6 +678,8 @@ def test_wave5_ci_role_is_namespace_scoped_and_ecr_limited():
     ecr = iam[iam.index('data "aws_iam_policy_document" "ci_ecr"') :]
     assert "resources = [for repo in aws_ecr_repository.application : repo.arn]" in ecr
     assert "Delete" not in ecr.split('resource "aws_iam_role_policy" "ci_ecr"')[0]
+    assert 'actions   = ["eks:DescribeCluster"]' in ecr
+    assert "cluster/${var.name_prefix}-apps" in ecr
 
 
 def test_mle_drift_job_reads_s3_with_pipeline_reader_identity():

@@ -61,6 +61,12 @@ data "aws_iam_policy_document" "ci_ecr" {
     ]
     resources = [for repo in aws_ecr_repository.application : repo.arn]
   }
+  # `aws eks update-kubeconfig` cần DescribeCluster; quyền trong cluster vẫn do access entry `ci` + RBAC quyết.
+  statement {
+    sid       = "EksDescribe"
+    actions   = ["eks:DescribeCluster"]
+    resources = ["arn:aws:eks:${var.region}:${data.aws_caller_identity.current.account_id}:cluster/${var.name_prefix}-apps"]
+  }
 }
 
 resource "aws_iam_role_policy" "ci_ecr" {
