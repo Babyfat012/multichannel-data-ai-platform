@@ -260,7 +260,13 @@ def lineage_mcps(bucket_root, receipt):
     for task, (inputs, outputs) in jobs.items():
         urn = f"urn:li:dataJob:({flow},{task})"
         out.append(
-            _mcp("dataJob", urn, "dataJobInfo", {"name": task, "type": "COMMAND", "flowUrn": flow})
+            _mcp(
+                "dataJob",
+                urn,
+                "dataJobInfo",
+                # `type` là union (AzkabanJobType | string) ⇒ Rest.li cần {"string": ...}, không phải chữ trơn (422).
+                {"name": task, "type": {"string": "COMMAND"}, "flowUrn": flow},
+            )
         )
         out.append(
             _mcp(
