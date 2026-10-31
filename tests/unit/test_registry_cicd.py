@@ -246,6 +246,9 @@ def test_jenkins_on_ec2_is_loopback_with_eks_kubeconfig_and_bundle_source():
     assert "--httpListenAddress=127.0.0.1" in jenkins["environment"]["JENKINS_OPTS"]
     assert jenkins["environment"]["CI_GIT_REMOTE"] == "file:///repo/out/platform.bundle"
     assert "url('${CI_GIT_REMOTE:-file:///repo}')" in (ROOT / "infra/jenkins/jenkins.yaml").read_text()
+    casc = (ROOT / "infra/jenkins/jenkins.yaml").read_text()
+    assert "scriptPath('ci/jenkins/' + name + '.Jenkinsfile')" in casc and "${name}" not in casc
+    assert "-Dhudson.plugins.git.GitSCM.ALLOW_LOCAL_CHECKOUT=true" in (ROOT / "docker/Dockerfile.jenkins").read_text()
     setup = (ROOT / "scripts/setup/setup_jenkins.sh").read_text()
     eks = setup[setup.index('if [[ "${PLATFORM_STORAGE:-minio}" == s3 ]]; then') :].split("else")[0]
     assert "eks update-kubeconfig" in eks and "kind get kubeconfig" not in eks

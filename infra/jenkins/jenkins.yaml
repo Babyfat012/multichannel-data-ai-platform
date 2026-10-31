@@ -38,7 +38,7 @@ jobs:
           definition {
             cpsScm {
               scm { git { remote { url('${CI_GIT_REMOTE:-file:///repo}') }; branch('*/main') } }
-              scriptPath("ci/jenkins/${name}.Jenkinsfile")
+              scriptPath('ci/jenkins/' + name + '.Jenkinsfile')  // nối chuỗi: JCasC thay mọi biến dạng đô-la-ngoặc trước Groovy ⇒ rỗng
             }
           }
         }
