@@ -45,11 +45,11 @@ Cập nhật 30/10 tối sau buổi EKS. Bằng chứng: [LLM và agent](llm-pla
 | MLflow version model + data + tag | 2 | ✅ | v1 `production` |
 | KServe model-inside-image | 2 | ✅ | predict OK |
 | FastAPI + pydantic + healthcheck / async / MCP helm rolling + fallback | 1+1+2 | ✅ | Feature API helm 2 replica, rolling; Swagger `/features` `/predict` `/chunks` |
-| Agent 1 multi-replica + KEDA, Sandbox, publish | 2+1+1 | ⚠️ | data-agent 2 pod + KEDA 2→3→2 ✅, publish registry ✅; Sandbox (Substrate) ❌ |
+| Agent 1 multi-replica + KEDA, Sandbox, publish | 2+1+1 | ✅ | data-agent 2 pod + KEDA 2→3→2 ✅, publish registry ✅; Sandbox 31/10: Agent Substrate 0.0.9 (gVisor) trên EKS, `data-agent-sandbox` gọi tool `get-sku-features` qua gateway và trả số ([ảnh](evidence/aws/substrate-sandbox-agent-ui-20261031.png)); model 1,5B chép sai `labeled_count` (83,084 thay 830847), positive/rate đúng |
 | Agent 2: online feature + predict + RAG | 8 | ✅ | model-agent gọi `predict_return_risk` và `search_policy_chunks` (ảnh `rag-model-agent-*`) |
 | MCP gateway / A2A gateway | 2+2 | ✅ | route `/mcp`, A2A theo header; Grafana đếm theo route |
 | Coordinator multi-replica + KEDA, publish | 2+2 | ✅ | coordinator 2 pod, ScaledObject min 2 max 3, publish registry |
-| Warm Up (Agent Substrate) | 2 | ❌ | Bước 8 |
+| Warm Up (Agent Substrate) | 2 | ✅ | 31/10: 6 SandboxAgent Ready trên 1 WorkerPool `kagent-default` (DESIRED/REPLICAS 1), golden snapshot ([ảnh](evidence/aws/substrate-warmup-6-agents-1-worker-20261031.png)) |
 | Unit coverage, EP/BVA, mutation, property-based | 1+2+2+2 | ✅ | Kiểm ở mức code (PR testing), không phụ thuộc nơi chạy |
 | Load test locust Web API | 2 | ✅ | Locust → Feature API EKS: 3.004 request, 0 lỗi (`load-test-feature-api-20261030.html`) |
 | CI/CD RAG / agent / coordinator / stream feature | 2×4 | ⚠️ | 31/10 Jenkins EC2 → ECR/EKS/Compose: `feature-api-agents` #8 (eval agent 12/12), `rag-pipeline` #2, `stream-features` #2 xanh ([ảnh](evidence/aws/jenkins-feature-api-agents-20261031.png), [rag](evidence/aws/jenkins-rag-pipeline-20261031.png), [stream](evidence/aws/jenkins-stream-features-20261031.png)); `coordinator` deploy xanh, eval timeout 180 s (LLM CPU) ❌ |
