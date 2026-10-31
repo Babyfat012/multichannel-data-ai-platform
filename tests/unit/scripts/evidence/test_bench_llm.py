@@ -13,7 +13,9 @@ def _capture(monkeypatch):
     def fake_urlopen(request, timeout):
         """Ghi lại header rồi trả body có usage."""
         seen.append(dict(request.header_items()))
-        return io.BytesIO(json.dumps({"usage": {"completion_tokens": 3, "prompt_tokens": 9}}).encode())
+        return io.BytesIO(
+            json.dumps({"usage": {"completion_tokens": 3, "prompt_tokens": 9}}).encode()
+        )
 
     monkeypatch.setattr(bench_llm.urllib.request, "urlopen", fake_urlopen)
     return seen

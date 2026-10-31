@@ -13,4 +13,3 @@ def test_dag_passes_ground_truth_and_keys_with_local_defaults():
     assert "--ground-truth" in text and "--keys-path" in text
     assert "var.value.get('platform_dp3_ground_truth', '/data/ground-truth')" in text
     assert "'/data/ground-truth-bridge/walmart-keys.parquet'" in text
-

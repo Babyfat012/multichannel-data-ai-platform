@@ -9,10 +9,12 @@ CTX=${KCTX:-kind-platform}
 SUBSTRATE_VERSION=0.0.9
 KAGENT_VERSION=0.10.3   # khớp deploy_kind_agents.sh; bản < 0.9.7 bỏ qua giá trị substrate mà không báo
 H=(helm --kube-context "$CTX")
+# Issuer token SA lấy từ chính cụm: kind = kubernetes.default.svc…, EKS = oidc.eks.<region>…; mặc định chart chỉ hợp kind.
+ISSUER=$(kubectl --context "$CTX" get --raw /.well-known/openid-configuration | python3 -c 'import json,sys;print(json.load(sys.stdin)["issuer"])')
 "${H[@]}" upgrade --install substrate-crds oci://ghcr.io/kagent-dev/substrate/helm/substrate-crds \
   --version "$SUBSTRATE_VERSION" -n ate-system --create-namespace --wait
 "${H[@]}" upgrade --install substrate oci://ghcr.io/kagent-dev/substrate/helm/substrate \
-  --version "$SUBSTRATE_VERSION" -n ate-system --wait --timeout 10m
+  --version "$SUBSTRATE_VERSION" -n ate-system --set-string auth.jwt.issuer="$ISSUER" --wait --timeout 10m
 # Giữ values hiện có (model qua agentgateway, proxy A2A/MCP) và chỉ bật nối với Substrate; 1 worker cho cả fleet.
 "${H[@]}" upgrade kagent oci://ghcr.io/kagent-dev/kagent/helm/kagent --version "$KAGENT_VERSION" -n kagent \
   --reuse-values \

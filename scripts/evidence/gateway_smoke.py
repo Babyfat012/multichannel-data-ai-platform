@@ -50,27 +50,60 @@ def grade(rows):
 
 def chat(model=MODEL, content="Say OK.", **extra):
     """Body chat ngắn kiểu OpenAI; `extra` ghi đè (stream, max_tokens…)."""
-    return {"model": model, "max_tokens": 8, "temperature": 0,
-            "messages": [{"role": "user", "content": content}], **extra}
+    return {
+        "model": model,
+        "max_tokens": 8,
+        "temperature": 0,
+        "messages": [{"role": "user", "content": content}],
+        **extra,
+    }
 
 
 async def mcp_calls(client, key, sku):
     """initialize → tools/list → tools/call get_sku_features; trả (mã initialize, tên tool, feature có giá trị?)."""
     head = {**MCP_ACCEPT, "Authorization": f"Bearer {key}"}
-    init = await client.post("/mcp", headers=head, json={
-        "jsonrpc": "2.0", "id": 1, "method": "initialize",
-        "params": {"protocolVersion": "2025-06-18", "capabilities": {},
-                   "clientInfo": {"name": "gateway-smoke", "version": "1"}}})
+    init = await client.post(
+        "/mcp",
+        headers=head,
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "gateway-smoke", "version": "1"},
+            },
+        },
+    )
     session = init.headers.get("mcp-session-id")
     if session:
         head["mcp-session-id"] = session
-    await client.post("/mcp", headers=head, json={"jsonrpc": "2.0", "method": "notifications/initialized"})
-    tools = sse_json((await client.post("/mcp", headers=head, json={
-        "jsonrpc": "2.0", "id": 2, "method": "tools/list"})).text)
+    await client.post(
+        "/mcp", headers=head, json={"jsonrpc": "2.0", "method": "notifications/initialized"}
+    )
+    tools = sse_json(
+        (
+            await client.post(
+                "/mcp", headers=head, json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"}
+            )
+        ).text
+    )
     names = sorted(t["name"] for t in tools["result"]["tools"])
-    called = sse_json((await client.post("/mcp", headers=head, json={
-        "jsonrpc": "2.0", "id": 3, "method": "tools/call",
-        "params": {"name": "get_sku_features", "arguments": {"seller_skus": [sku]}}})).text)
+    called = sse_json(
+        (
+            await client.post(
+                "/mcp",
+                headers=head,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 3,
+                    "method": "tools/call",
+                    "params": {"name": "get_sku_features", "arguments": {"seller_skus": [sku]}},
+                },
+            )
+        ).text
+    )
     result = called["result"]
     # FastMCP trả structuredContent; bản cũ chỉ có content[0].text là JSON.
     body = result.get("structuredContent") or json.loads(result["content"][0]["text"])
@@ -87,35 +120,108 @@ async def run(gateway, prometheus, key, sku, burst):
     no_reuse = httpx.Limits(max_keepalive_connections=0)
     async with httpx.AsyncClient(base_url=gateway, timeout=120, limits=no_reuse) as c:
         rows = [
-            {"check": "LLM không key", "got": (await c.post("/v1/chat/completions", json=chat())).status_code, "want": 401},
-            {"check": "LLM có key", "got": (await c.post("/v1/chat/completions", headers=auth, json=chat())).status_code, "want": 200},
+            {
+                "check": "LLM không key",
+                "got": (await c.post("/v1/chat/completions", json=chat())).status_code,
+                "want": 401,
+            },
+            {
+                "check": "LLM có key",
+                "got": (
+                    await c.post("/v1/chat/completions", headers=auth, json=chat())
+                ).status_code,
+                "want": 200,
+            },
             # stream=true để gateway ghi TTFT.
-            {"check": "LLM stream có key (TTFT)", "got": (await c.post("/v1/chat/completions", headers=auth, json=chat(stream=True))).status_code, "want": 200},
-            {"check": "PII (email) bị chặn", "got": (await c.post("/v1/chat/completions", headers=auth, json=chat(content="Mail me at a.b@example.com"))).status_code, "want": 403},
-            {"check": "MCP không key", "got": (await c.post("/mcp", headers=MCP_ACCEPT, json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"})).status_code, "want": 401},
+            {
+                "check": "LLM stream có key (TTFT)",
+                "got": (
+                    await c.post("/v1/chat/completions", headers=auth, json=chat(stream=True))
+                ).status_code,
+                "want": 200,
+            },
+            {
+                "check": "PII (email) bị chặn",
+                "got": (
+                    await c.post(
+                        "/v1/chat/completions",
+                        headers=auth,
+                        json=chat(content="Mail me at a.b@example.com"),
+                    )
+                ).status_code,
+                "want": 403,
+            },
+            {
+                "check": "MCP không key",
+                "got": (
+                    await c.post(
+                        "/mcp",
+                        headers=MCP_ACCEPT,
+                        json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+                    )
+                ).status_code,
+                "want": 401,
+            },
         ]
         init, names, has_values = await mcp_calls(c, key, sku)
         rows += [
             {"check": "MCP initialize có key", "got": init, "want": 200},
-            {"check": "MCP tools/list có get_sku_features", "got": "get_sku_features" in names, "want": True, "tools": names},
-            {"check": f"MCP get_sku_features {sku} có giá trị khác null", "got": has_values, "want": True},
-            {"check": "A2A card có key", "got": (await c.get("/a2a/data-agent/.well-known/agent-card.json", headers=auth)).status_code, "want": 200},
-            {"check": "A2A card không key", "got": (await c.get("/a2a/data-agent/.well-known/agent-card.json")).status_code, "want": 401},
+            {
+                "check": "MCP tools/list có get_sku_features",
+                "got": "get_sku_features" in names,
+                "want": True,
+                "tools": names,
+            },
+            {
+                "check": f"MCP get_sku_features {sku} có giá trị khác null",
+                "got": has_values,
+                "want": True,
+            },
+            {
+                "check": "A2A card có key",
+                "got": (
+                    await c.get("/a2a/data-agent/.well-known/agent-card.json", headers=auth)
+                ).status_code,
+                "want": 200,
+            },
+            {
+                "check": "A2A card không key",
+                "got": (await c.get("/a2a/data-agent/.well-known/agent-card.json")).status_code,
+                "want": 401,
+            },
         ]
         start = time.perf_counter()
-        codes = [r.status_code for r in await asyncio.gather(
-            *(c.post("/v1/chat/completions", headers=auth, json=chat(max_tokens=1)) for _ in range(burst)))]
+        codes = [
+            r.status_code
+            for r in await asyncio.gather(
+                *(
+                    c.post("/v1/chat/completions", headers=auth, json=chat(max_tokens=1))
+                    for _ in range(burst)
+                )
+            )
+        ]
         counts = {str(code): codes.count(code) for code in sorted(set(codes))}
-        rows.append({"check": f"{burst} request LLM dồn: có 429 (rate limit)", "got": "429" in counts, "want": True,
-                     "statuses": counts, "seconds": round(time.perf_counter() - start, 1)})
+        rows.append(
+            {
+                "check": f"{burst} request LLM dồn: có 429 (rate limit)",
+                "got": "429" in counts,
+                "want": True,
+                "statuses": counts,
+                "seconds": round(time.perf_counter() - start, 1),
+            }
+        )
     await asyncio.sleep(SCRAPE_WAIT_S)
     async with httpx.AsyncClient(base_url=prometheus, timeout=30) as p:
         metrics = {}
         for name, query in QUERIES.items():
-            result = (await p.get("/api/v1/query", params={"query": query})).json()["data"]["result"]
+            result = (await p.get("/api/v1/query", params={"query": query})).json()["data"][
+                "result"
+            ]
             metrics[name] = float(result[0]["value"][1]) if result else 0.0
-    rows += [{"check": f"Prometheus {name} > 0", "got": value > 0, "want": True, "value": value}
-             for name, value in metrics.items()]
+    rows += [
+        {"check": f"Prometheus {name} > 0", "got": value > 0, "want": True, "value": value}
+        for name, value in metrics.items()
+    ]
     return rows
 
 
@@ -128,12 +234,22 @@ def main():
     ap.add_argument("--burst", type=int, default=80)
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
-    key = os.environ.get("AGW_AGENT_KEY") or sys.exit("Đặt AGW_AGENT_KEY (đọc từ Secret agentgateway-keys)")
+    key = os.environ.get("AGW_AGENT_KEY") or sys.exit(
+        "Đặt AGW_AGENT_KEY (đọc từ Secret agentgateway-keys)"
+    )
     rows = asyncio.run(run(args.gateway, args.prometheus, key, args.sku, args.burst))
     ok = grade(rows)
     with open(args.out, "w") as f:
-        json.dump({"recorded": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "passed": ok, "checks": rows},
-                  f, ensure_ascii=False, indent=2)
+        json.dump(
+            {
+                "recorded": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "passed": ok,
+                "checks": rows,
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
     for row in rows:
         print(("PASS" if row["ok"] else "FAIL"), row["check"], row["got"])
     sys.exit(0 if ok else 1)

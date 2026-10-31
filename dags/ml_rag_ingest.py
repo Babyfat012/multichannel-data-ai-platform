@@ -29,13 +29,20 @@ def run_step(step, receipt_dir=None, run_id=None, **_):
     connections = {}
     for name in names:
         conn = BaseHook.get_connection(name)
-        connections[name] = {"host": conn.host, "port": conn.port, "login": conn.login,
-                             "password": conn.password}
+        connections[name] = {
+            "host": conn.host,
+            "port": conn.port,
+            "login": conn.login,
+            "password": conn.password,
+        }
     keys = ["platform_rag_root", "platform_feast_root"]
     keys += ["platform_minio_internal_endpoint"] if storage != "s3" else []
     variables = {k: Variable.get(k) for k in keys}
-    env = {**os.environ, "PYTHONPATH": "/opt/rag",
-           **resolve_rag_env(connections, variables, storage=storage)}
+    env = {
+        **os.environ,
+        "PYTHONPATH": "/opt/rag",
+        **resolve_rag_env(connections, variables, storage=storage),
+    }
     args = [PYTHON, "-m", "rag.pipeline", step, "--model-cache", MODEL_CACHE]
     if receipt_dir:
         args += ["--receipt-dir", receipt_dir, "--run-id", run_id]

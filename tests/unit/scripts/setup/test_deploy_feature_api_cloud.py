@@ -114,14 +114,22 @@ def test_cloud_chart_does_not_publish_a_node_port():
 
 @pytest.mark.parametrize(
     ("given", "expected"),
-    [(None, None), ("s3://test-lakehouse/feature-store/rag-registry.db", "s3://test-lakehouse/feature-store/rag-registry.db")],
+    [
+        (None, None),
+        (
+            "s3://test-lakehouse/feature-store/rag-registry.db",
+            "s3://test-lakehouse/feature-store/rag-registry.db",
+        ),
+    ],
 )
 def test_cloud_rag_is_opt_in(cloud, given, expected):
     """RAG registry thiếu ⇒ Feast tự ghi file mới mà Pod Identity chỉ đọc ⇒ chỉ bật khi truyền rõ."""
     cloud.pop("FEAST_RAG_REGISTRY", None)
     if given:
         cloud["FEAST_RAG_REGISTRY"] = given
-    subprocess.run(["bash", str(SCRIPT), "revision-123"], env=cloud, check=True, capture_output=True)
+    subprocess.run(
+        ["bash", str(SCRIPT), "revision-123"], env=cloud, check=True, capture_output=True
+    )
     calls = [json.loads(line) for line in Path(cloud["CALL_LOG"]).read_text().splitlines()]
     secret = next(body for _, args, body in calls if "--from-env-file=/dev/stdin" in args)
     rag = [line for line in secret.splitlines() if line.startswith("FEAST_RAG_REGISTRY=")]

@@ -76,7 +76,9 @@ def resolve_rag_env(
     pg = connections["platform_rag_pg"]
     if not pg.get("host"):
         # AWS: pgvector là NodePort trên node EKS, IP đổi mỗi lần node thay ⇒ Ansible -e rag_pg=<IP>:30432.
-        raise ValueError("platform_rag_pg chưa có host: chạy Ansible với -e rag_pg=<IP node EKS>:30432")
+        raise ValueError(
+            "platform_rag_pg chưa có host: chạy Ansible với -e rag_pg=<IP node EKS>:30432"
+        )
     root = variables["platform_rag_root"]
     env = {
         "RAG_ROOT": root,

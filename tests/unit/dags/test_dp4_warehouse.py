@@ -19,7 +19,7 @@ def test_dag_exports_thirty_days_before_ml_cutoff():
     job = (ROOT / "spark_jobs/warehouse/export_order_snapshot_lines.py").read_text()
     assert 'F.col("channel") == "walmart"' not in job
     # JDBC chỉ tạo bảng, không tạo schema: phải tạo trước lần ghi đầu (Postgres AWS mới tinh).
-    assert job.index('CREATE SCHEMA IF NOT EXISTS warehouse') < job.index('.write.format("jdbc")')
+    assert job.index("CREATE SCHEMA IF NOT EXISTS warehouse") < job.index('.write.format("jdbc")')
 
 
 def test_count_mismatches_blocks_short_or_empty_channels():

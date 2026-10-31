@@ -15,12 +15,12 @@ def test_versions_are_pinned_and_match_running_kagent():
     running = re.search(r"KAGENT_VERSION=(\S+)", agents).group(1)
     assert re.search(r"KAGENT_VERSION=(\S+)", SCRIPT).group(1) == running == "0.10.3"
     assert "SUBSTRATE_VERSION=0.0.9" in SCRIPT
-    assert "ateom-gvisor:v\"$SUBSTRATE_VERSION\"" in SCRIPT
+    assert 'ateom-gvisor:v"$SUBSTRATE_VERSION"' in SCRIPT
 
 
 def test_kagent_upgrade_keeps_values_and_wires_substrate():
     """--reuse-values giữ model qua gateway; thiếu cờ nào thì SandboxAgent không có nơi chạy."""
-    upgrade = SCRIPT[SCRIPT.index('upgrade kagent ') :].split("--wait")[0]
+    upgrade = SCRIPT[SCRIPT.index("upgrade kagent ") :].split("--wait")[0]
     assert "--reuse-values" in upgrade
     for flag in (
         "controller.substrate.enabled=true",
@@ -33,8 +33,12 @@ def test_kagent_upgrade_keeps_values_and_wires_substrate():
 
 def test_every_sandbox_agent_runs_go_on_the_shared_pool():
     """Fleet = nhiều SandboxAgent, một WorkerPool; data-agent-sandbox giữ đúng tool MCP qua gateway."""
-    docs = [d for f in sorted((ROOT / "infra/k8s/agents/sandbox").glob("*.yaml"))
-            for d in yaml.safe_load_all(f.read_text()) if d]
+    docs = [
+        d
+        for f in sorted((ROOT / "infra/k8s/agents/sandbox").glob("*.yaml"))
+        for d in yaml.safe_load_all(f.read_text())
+        if d
+    ]
     assert len(docs) >= 6 and {d["kind"] for d in docs} == {"SandboxAgent"}
     for d in docs:
         assert d["spec"]["declarative"]["runtime"] == "go", d["metadata"]["name"]
@@ -42,3 +46,10 @@ def test_every_sandbox_agent_runs_go_on_the_shared_pool():
         assert d["spec"]["declarative"]["modelConfig"] == "default-model-config"
     data = next(d for d in docs if d["metadata"]["name"] == "data-agent-sandbox")
     assert data["spec"]["declarative"]["tools"][0]["mcpServer"]["name"] == "feature-tools"
+
+
+def test_substrate_jwt_issuer_comes_from_the_cluster():
+    """Mặc định chart = issuer kind; EKS ký token SA bằng issuer OIDC riêng ⇒ ateapi từ chối mọi worker nếu không đổi."""
+    install = SCRIPT[SCRIPT.index("upgrade --install substrate ") :].split("--timeout")[0]
+    assert '--set-string auth.jwt.issuer="$ISSUER"' in install
+    assert "get --raw /.well-known/openid-configuration" in SCRIPT

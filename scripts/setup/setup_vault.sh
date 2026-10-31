@@ -23,7 +23,14 @@ put() { api -X POST "$VAULT_ADDR/v1/secret/data/platform/$1" -d "{\"data\":$2}" 
 put minio "{\"user\":\"$MINIO_ROOT_USER\",\"password\":\"$MINIO_ROOT_PASSWORD\"}"
 put postgres "{\"user\":\"$POSTGRES_USER\",\"password\":\"$POSTGRES_PASSWORD\",\"db\":\"$POSTGRES_DB\"}"
 # Key agent của agentgateway: nguồn là Secret k8s do helm chart tạo; bỏ qua nếu cụm chưa có.
-if agw=$(kubectl --context ${KCTX:-kind-platform} -n agentgateway get secret agentgateway-keys \
+# EC2 (s3) không có kubectl/kubeconfig trên host ⇒ đọc qua container Jenkins (kubeconfig EKS, quyền nhóm platform-ci);
+# chạy lại script này SAU setup_jenkins.sh.
+if [[ "${PLATFORM_STORAGE:-minio}" == s3 ]]; then
+  KC=(docker compose exec -T jenkins kubectl --kubeconfig /run/secrets/kubeconfig --context "${EKS_CLUSTER:-platform-apps}")
+else
+  KC=(kubectl --context "${KCTX:-kind-platform}")
+fi
+if agw=$("${KC[@]}" -n agentgateway get secret agentgateway-keys \
     -o jsonpath='{.data.AGW_AGENT_KEY}' 2>/dev/null | base64 -d) && [[ -n "$agw" ]]; then
   put agentgateway "{\"AGW_AGENT_KEY\":\"$agw\"}"
 fi

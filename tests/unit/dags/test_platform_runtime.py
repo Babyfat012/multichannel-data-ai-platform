@@ -130,8 +130,11 @@ def test_cloud_operator_clears_inherited_keys_and_restores_state(monkeypatch, st
     assert all(os.environ[key] == "stale-local-credential" for key in keys)
 
 
-RAG_VARS = {"platform_rag_root": "s3://lake/rag", "platform_feast_root": "s3://lake/feature-store",
-            "platform_minio_internal_endpoint": "http://minio:9000"}
+RAG_VARS = {
+    "platform_rag_root": "s3://lake/rag",
+    "platform_feast_root": "s3://lake/feature-store",
+    "platform_minio_internal_endpoint": "http://minio:9000",
+}
 RAG_PG = {"host": "10.42.0.50", "port": 30432, "login": "u", "password": "p"}
 
 
