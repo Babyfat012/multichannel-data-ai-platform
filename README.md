@@ -12,6 +12,7 @@ Nền tảng dữ liệu và AI cho một Seller bán hàng trên Amazon, TikTok
 - [Cấu trúc repo](#cấu-trúc-repo)
 - [Phát triển và đóng góp](#phát-triển-và-đóng-góp)
 - [Kết quả kiểm chứng và giới hạn](#kết-quả-kiểm-chứng-và-giới-hạn)
+- [Giới hạn đã biết](#giới-hạn-đã-biết)
 - [Giấy phép](#giấy-phép)
 
 ## Platform cung cấp gì?
@@ -140,6 +141,16 @@ Ngày chạy, run ID và artifact được giữ trong tài liệu kiểm chứn
 - [ML/LLM Platform — bằng chứng và liên kết kết quả AWS](docs/ml-llm-platform-evidence.md).
 - [Trạng thái kiểm chứng theo rubric](docs/rubric-cloud-audit.md), gồm các phần còn mở và ảnh chi tiết còn thiếu.
 - [Tài liệu theo rubric](docs/rubric-guide.md) dành cho việc đối chiếu coursework.
+
+## Giới hạn đã biết
+
+- [Agent eval](docs/llm-platform-agent-eval.md): 12/12 trên AWS dùng SKU có `labeled_count_90d` dưới 7 chữ số; response mask `phoneNumber` che số đếm 7 chữ số, khiến lượt top seller chỉ đạt 9/12. Hướng sửa là bỏ `phoneNumber` khỏi response mask; đang chờ duyệt vì giảm một lớp guardrail.
+- [Sandbox Agent](docs/rubric-cloud-audit.md): gọi tool đúng nhưng model 1,5B đọc `830847` thành `83,084`; đã chứng minh đường gọi tool, chưa bảo đảm chất lượng câu trả lời của model CPU nhỏ.
+- [Coordinator CI](docs/ml-llm-platform-cicd.md): deploy xanh, eval gate timeout (>180 s/câu); một LLM chạy CPU phục vụ chung mọi Agent.
+- [Ảnh chi tiết](docs/rubric-cloud-audit.md) Spark schema evolution/dedup, Flink watermark, ERD dim–fact, Helm rollback và Coordinator scaling được chụp ở local; các job đã chạy trên AWS với receipt validate, nhưng chưa có đủ ảnh chi tiết AWS cho từng hành vi trên.
+- [MLflow](docs/ml-platform-training.md): có model version/tag trên AWS; chưa chụp data hash và artifacts train/test của cùng run.
+- [Stream feature](docs/ml-platform-stream-feature.md): `approved_returns_24h` trên AWS được replay từ nhãn Gold; `return-risk` v1 train trước khi feature có lịch sử nên chưa dùng feature này (gap #25).
+- [Partition Shopee](docs/storage.md): chia tháng được áp dụng bằng maintenance rewrite; DP1 `createOrReplace` sẽ ghi lại partition ngày, chưa phải hành vi của pipeline.
 
 ## Giấy phép
 

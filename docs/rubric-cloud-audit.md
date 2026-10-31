@@ -42,7 +42,7 @@ Cập nhật 31/10 sau buổi AWS. Bằng chứng: [LLM và agent](llm-platform-
 | agentgateway + security/policy | 1 | ✅ | `gateway-smoke-20261030.json` 17/17 (API key, PII, rate limit) |
 | Global model config | 2 | ✅ | `default-model-config` → agentgateway |
 | Agent registry | 2 | ✅ | agentregistry 0.4.0, 1 MCP + 3 agent (`agent-registry-ui`) |
-| RAG pipeline (Airflow) + governance (DataHub) | 2+2 | ⚠️ | `ml_rag_ingest` 5 task xanh trên Airflow EC2 + `/chunks` EKS ✅; `publish` DataHub skipped (DataHub tắt) |
+| RAG pipeline (Airflow) + governance (DataHub) | 2+2 | ✅ | `ml_rag_ingest` 6/6 task xanh trên Airflow EC2 gồm `publish` ([ảnh](evidence/aws/airflow-ml-rag-ingest-publish-20261031.png)); DataHub EC2 lineage corpus → S3 raw → chunks → embedding → pgvector → validate ([ảnh](evidence/aws/datahub-rag-lineage-20261031.png)). 31/10 sửa: value aspect escape ASCII, `DataJobInfo.type` dạng union |
 | Materialize offline → online | 2 | ✅ | `ml_feature_materialize` 4/4 |
 | Push streaming feature → offline + online | 2 | ✅ | 31/10: Flink EC2 76/76 checkpoint, đối chiếu 1.004.354 cửa sổ khớp, API `approved_returns_24h` ([stream](ml-platform-stream-feature.md)); dữ liệu phát lại (gap #25) |
 | KFP training ≥4 bước | 2 | ✅ | `train-aws-3` 5/5 |
@@ -63,15 +63,15 @@ Cập nhật 31/10 sau buổi AWS. Bằng chứng: [LLM và agent](llm-platform-
 | Terraform / Ansible | 1+1 | ✅ | Terraform AWS + Ansible chạy thật |
 | Observability: Web API metrics, Prom+Grafana, logs, traces | 1×4 | ✅ | Panel Feature API/KServe, Loki `{namespace="feature-store"}`, Jaeger trace agentgateway |
 | LLM telemetry (token, TTFT…) / Agent telemetry | 2+2 | ✅ | Grafana token, TTFT, thời gian/token, lượt gọi Agent + MCP tool |
-| A/B agent / A/B LLM | 1+1 | ❌ | Bước 5 |
+| A/B agent / A/B LLM | 1+1 | ✅ | 31/10 EKS: LLM `platform-chat` chia 1:1 Qwen 1,5B/0,5B, Grafana 9,13 vs 8,07 req, p95 ~10 s vs ~80 s ([ảnh](evidence/aws/grafana-ab-llm-20261031.png), [Prometheus](evidence/aws/ab-llm-prometheus-20261031.json)); agent cùng 12 SKU: A (1,5B) 12/12 ~10 s/câu, B (0,5B) 4/12 ~5 s/câu ([A](evidence/aws/agent-eval-data-agent-20261031.jsonl), [B](evidence/aws/agent-eval-data-agent-b-20261031.jsonl)); route chia `/a2a/data-agent-ab/` 6 câu 2/6 ([jsonl](evidence/aws/agent-eval-data-agent-ab-20261031.jsonl)) |
 | Vault | 1 | ✅ | Vault EC2 (EBS), KV v2, mật khẩu ingress |
 | README + docs theo rule | 2 | ✅ | README có sơ đồ AWS Data/ML và LLM/Agent, mục lục, cấu trúc repo và liên kết tài liệu theo rubric; các giới hạn ảnh chi tiết ghi riêng ở dòng ⚠️. |
 | Novel idea 1 / 2 | 2+2 | ✅ | 31/10: ML-N1 Jenkins `feature-api-agents` #8 đạt 12/12 ≥ 0,95 ([JSONL](evidence/aws/agent-eval-data-agent-20261031.jsonl), [ảnh](evidence/aws/jenkins-feature-api-agents-20261031.png)); chọn SKU có count dưới 7 chữ số vì PII mask còn che số đếm lớn. ML-N2 Job EKS `mle-drift`, Evidently 0.7.23 + pandas 2.3.3: stable không báo, channel_shift báo `seller_sku` JS 0,2028 > 0,2 ([JSON](evidence/aws/mle-drift-20261031.json)). |
 
 ## Ước lượng (2026-10-31)
 
-- Tự đánh giá theo phần đã chạy: `de` **100đ**, `mle` **~94đ**. Đây là ước lượng chức năng, chưa trừ rủi ro thiếu ảnh chi tiết ở các dòng ⚠️; không khẳng định đã đủ mọi capture mà rubric yêu cầu.
-- Ba phần còn mở của MLE: **CI eval Coordinator 2đ**, **A/B Agent + LLM 2đ**, **lineage DataHub RAG 2đ**. Sandbox/Warm Up đã có ảnh EKS; ML-N1/ML-N2 đã có kết quả ngày 31/10.
+- Tự đánh giá theo phần đã chạy: `de` **100đ**, `mle` **~98đ**. Đây là ước lượng chức năng, chưa trừ rủi ro thiếu ảnh chi tiết ở các dòng ⚠️; không khẳng định đã đủ mọi capture mà rubric yêu cầu.
+- Phần còn mở của MLE: **CI eval Coordinator 2đ** (deploy xanh, eval timeout). A/B Agent + LLM và lineage DataHub RAG xong tối 31/10; Sandbox/Warm Up có ảnh EKS; ML-N1/ML-N2 có kết quả 31/10. Người chấm thử (review độc lập) ước MLE 85–90 vì các dòng ⚠️ thiếu ảnh chi tiết AWS — xem README "Giới hạn đã biết".
 - EKS context `platform-apps`: **2 node r6i.xlarge** (mỗi node 4 vCPU/32 GB). Cùng EC2 Data Platform `r6i.xlarge`: tổng 12/16 vCPU quota.
 
 ## Cấu hình và kế hoạch chốt (learner duyệt 29/10)

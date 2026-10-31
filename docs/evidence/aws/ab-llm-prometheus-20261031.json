@@ -1,0 +1,9 @@
+{
+  "date": "2026-10-31",
+  "setup": "agentgateway virtual model platform-chat, weighted 1:1 between qwen2.5-1.5b-instruct (A, deploy qwen) and qwen2.5-0.5b-instruct (B, deploy qwen-small) on EKS platform-apps; traffic from scripts/evidence/bench_llm.py --model platform-chat --concurrency 2 (run cut at 900 s, LLM on CPU) plus agent traffic on A",
+  "query_increase_1h": "sum by (gen_ai_response_model) (increase(agentgateway_gen_ai_client_token_usage_count[1h]))",
+  "increase_1h": {"qwen2.5-1.5b-instruct": 54.23, "qwen2.5-0.5b-instruct": 27.58},
+  "query_total": "sum by (gen_ai_response_model) (agentgateway_gen_ai_client_token_usage_count)",
+  "total": {"qwen2.5-1.5b-instruct": 642, "qwen2.5-0.5b-instruct": 30},
+  "note": "B only exists since today (total 30 = all bench traffic it received); A also serves data-agent, coordinator and sandbox agents, so its count is higher than the bench share alone"
+}

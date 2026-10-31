@@ -23,7 +23,7 @@ spec:
           name: feature-tools
           toolNames: [get_sku_features, predict_return_risk, search_policy_chunks]
     deployment:
-      # Không khai `replicas`: KEDA quyết định (model-agent-keda.yaml).
+      # Chưa có KEDA ScaledObject cho model-agent trong repo; không khai replicas nên dùng mặc định của kagent.
       resources:
         requests: {cpu: 50m, memory: 192Mi}
         limits: {memory: 512Mi}
