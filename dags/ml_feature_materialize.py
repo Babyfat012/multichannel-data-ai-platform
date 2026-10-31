@@ -27,6 +27,7 @@ ENSURE_24H = (
 )
 REPO = "/opt/feature_repo"
 # Cutoff của Gold A (hết 180 ngày dữ liệu); local chưa đặt biến thì về cutoff cũ.
+FULL_RELOAD_START = "2000-01-01T00:00:00+00:00"  # trước mọi dữ liệu giả lập
 CUTOFF = "{{ var.value.get('platform_ml_cutoff', var.value.platform_order_lifecycle_cutoff) }}"
 # Spark ghi qua s3a://, Feast đọc cùng chỗ qua s3://.
 SPARK_ROOT = "{{ var.value.platform_feast_root | replace('s3://', 's3a://') }}"
@@ -38,8 +39,12 @@ CONF = {
 }
 
 
-def run_feast(*args):
+def run_feast(*args, params=None, **_):
     """Chạy CLI Feast trên bản sao repo (mount read-only), credential lấy lúc chạy."""
+    # Redis trống (pod Redis không có ổ, node EKS về 0) nhưng registry vẫn nhớ mốc cũ ⇒ incremental nạp 0 dòng
+    # mà vẫn xanh. full_reload: nạp lại toàn bộ (FULL_RELOAD_START, end], ghi giá trị mới nhất mỗi SKU.
+    if args[0] == "materialize-incremental" and (params or {}).get("full_reload"):
+        args = ("materialize", *args[1:-1], FULL_RELOAD_START, args[-1])
     root = Variable.get("platform_feast_root")
     redis = Variable.get("platform_feast_redis")
     if not redis:
@@ -81,7 +86,12 @@ with DAG(
     catchup=False,
     is_paused_upon_creation=False,
     max_active_runs=1,
-    params={"end": Param("", type="string", description="Mốc giả lập; trống = cutoff Gold")},
+    params={
+        "end": Param("", type="string", description="Mốc giả lập; trống = cutoff Gold"),
+        "full_reload": Param(
+            False, type="boolean", description="Nạp lại toàn bộ vào Redis (sau khi Redis bị xoá)"
+        ),
+    },
     tags=["platform", "ml-platform", "feature-store"],
 ) as dag:
     export = PlatformSparkSubmitOperator(
