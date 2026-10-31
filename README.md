@@ -36,9 +36,10 @@ Agent truy xuất feature, gọi model dự đoán và tìm chính sách trả h
 ## Kiến trúc
 
 Mô hình triển khai tham chiếu trên AWS (ap-southeast-2): EC2 chạy Docker Compose, EKS chạy ML/LLM, S3 + ECR ngoài VPC.
-Mỗi hộp là một deployable unit; mũi tên theo dữ liệu, vòng tròn là bước đánh số theo từng luồng (chú thích FLOWS cuối hình).
+Mỗi hộp là một deployable unit; các luồng được tách thành từng hàng, có màu và mã bước trên mũi tên.
+Dịch vụ xuất hiện ở nhiều hàng là cùng một dịch vụ, không phải thêm replica.
 
-Data Platform và ML Platform trên AWS (B batch, S stream phát lại, T train/deploy, M drift):
+Data Platform và ML Platform trên AWS (B batch, S stream phát lại, T train/deploy, I tra feature/dự đoán, M drift):
 
 ![AWS Data Platform / ML Platform — Excalidraw](docs/diagrams/aws-architecture-layer12-excalidraw.svg)
 
