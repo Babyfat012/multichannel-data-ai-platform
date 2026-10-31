@@ -100,8 +100,6 @@ Lần chạy local 2026-10-21 (fixture 15 đơn / 2 SKU):
   PostgreSQL, cửa sổ `[end−24h, end)`) → 72/72 cửa sổ khớp, 0 sai lệch.
 - Cửa sổ cuối dừng ở 02-05 10:00 vì watermark chỉ tiến khi có tin mới (luồng không tự kết thúc).
 
-<!-- Ảnh Flink UI job RUNNING + log pusher: người vận hành chụp rồi gắn vào đây. -->
-
 ## Trên AWS (pipeline A), 2026-10-30
 
 Stream của pipeline A (thông báo đơn Amazon, webhook TikTok) không có sự kiện Return, chỉ có trạng thái đơn.

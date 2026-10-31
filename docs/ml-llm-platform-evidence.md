@@ -1,6 +1,6 @@
 # ML Platform / LLM Platform — evidence
 
-Các ghi nhận dưới đây thuộc môi trường local (`kind` + Docker Compose), chủ yếu ngày 2026-10-21 và 2026-10-22. Cột giới hạn phân biệt kết quả chạy, artifact cấu hình và việc chưa kiểm chứng. Chưa có bằng chứng triển khai ML Platform / LLM Platform lên AWS.
+Các ghi nhận trong bảng dưới thuộc môi trường local (`kind` + Docker Compose), chủ yếu ngày 2026-10-21 và 2026-10-22. Cột giới hạn phân biệt kết quả chạy, artifact cấu hình và việc chưa kiểm chứng. Bằng chứng AWS mới hơn nằm trong các mục "Trên AWS" / "Trên EKS" của tài liệu thành phần và [kiểm kê rubric × cloud cập nhật 2026-10-31](rubric-cloud-audit.md), gồm [CI/CD](ml-llm-platform-cicd.md#trên-aws-2026-10-31), [agent eval](llm-platform-agent-eval.md#trên-aws-2026-10-31) và [drift](ml-platform-drift.md#trên-aws-pipeline-a--2026-10-31).
 
 Receipt, log và ảnh gốc giữ nguyên định danh của môi trường đã chạy. Cấu hình hiện hành dùng tiền tố `platform`; các kết quả lịch sử chưa được chạy lại sau đổi tên.
 
@@ -76,7 +76,7 @@ và nhánh lỗi HTTP của tool `get_policy_chunks`), tổng 96% > 90%. `locust
 
 - Chạy lại CI/CD từ revision cần kiểm chứng, lưu Stage View, image digest và kết quả smoke/eval.
 - Thu receipt Airflow cho materialization/RAG và lineage RAG tương ứng trong DataHub.
-- EKS/GPU, substrate/sandbox và ACME với domain thật cần môi trường triển khai riêng; chưa có evidence cloud.
-- [AWS EC2 + S3](aws-deploy.md) hiện chỉ phục vụ Data Platform batch.
+- Sandbox và Warm Up đã có ảnh EKS ngày 31/10: [SandboxAgent gọi tool](evidence/aws/substrate-sandbox-agent-ui-20261031.png), [6 Agent / 1 worker](evidence/aws/substrate-warmup-6-agents-1-worker-20261031.png). LLM đang dùng Qwen 1,5B trên CPU; không suy thành proof GPU.
+- [AWS EC2 + S3](aws-deploy.md) phục vụ Data Platform; ML/LLM chạy trên EKS `platform-apps`. Trạng thái AWS hiện tại xem [kiểm kê](rubric-cloud-audit.md); bảng local phía trên giữ nguyên phạm vi lịch sử.
 
 [Mục lục tài liệu](README.md)

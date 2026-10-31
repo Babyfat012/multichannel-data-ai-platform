@@ -71,8 +71,6 @@ Run `train-3` (KFP 2.17.2 trong kind, 2026-10-21): **SUCCEEDED** cả 5 bước.
 Đây là dữ liệu **không tín hiệu** (mục trên) ⇒ gate từ chối đúng. Chạy lại trên bộ có
 `--sku-return-skew` để có version `production` cho KServe.
 
-<!-- Ảnh KFP run xanh 5 bước + MLflow model version/tag: người vận hành chụp rồi gắn vào đây. -->
-
 ## Trên AWS (2026-10-29)
 
 KFP 2.17.2 chạy EKS; MLflow 3.17.0 chạy EC2, artifacts ở S3.

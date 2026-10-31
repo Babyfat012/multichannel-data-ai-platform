@@ -56,7 +56,7 @@ Hạ tầng vận hành dùng chung giữa các platform: [CI/CD](ml-llm-platfor
 
 - [Docker Compose](Docker.md): môi trường nguồn, profile và image.
 - [AWS runbook](aws-deploy.md), [IaC](IaC.md): đích EC2 + S3, thao tác triển khai và dọn tài nguyên.
-- Sơ đồ AWS: [hạ tầng](diagrams/aws-infra.html), [Data Platform](diagrams/aws-data-platform.html), [ML Platform / LLM Platform](diagrams/aws-ml-llm-platform.html) — EKS là bước sau.
+- Sơ đồ AWS: [hạ tầng](diagrams/aws-infra.html), [Data/ML Platform](diagrams/aws-architecture-layer12.html), [LLM Platform và Agent](diagrams/aws-architecture-layer3.html).
 - [Kiến trúc đã triển khai](architecture-decisions.md), [ADR](adr/README.md), [code style](code-style.md), [GLOSSARY](../GLOSSARY.md).
 
 ## Hợp đồng thiết kế và nghiệm thu
@@ -64,6 +64,8 @@ Hạ tầng vận hành dùng chung giữa các platform: [CI/CD](ml-llm-platfor
 [Publication contract](run-publication-contract.md) mô tả thiết kế công bố dữ liệu; các gate và POC còn mở được ghi ngay trong tài liệu. Thiết kế và ADR ghi quyết định, không tự chứng minh tính năng đã triển khai. Đích AWS và trạng thái runtime xem runbook, trạng thái và ma trận bằng chứng phía trên.
 
 ## Bằng chứng và tài liệu lịch sử
+
+[Đối chiếu tài liệu theo rubric](rubric-guide.md) dành cho coursework; hướng dẫn sử dụng platform nằm ở các mục trên.
 
 `evidence/` giữ receipt, log và metric; `images/` giữ ảnh chụp. Tìm bằng chứng qua tài liệu thành phần hoặc evidence để biết ngữ cảnh và giới hạn của từng run.
 

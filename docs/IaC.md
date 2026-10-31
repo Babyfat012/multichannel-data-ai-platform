@@ -83,9 +83,6 @@ smoke thành công. Lỗi IAM/quota/SSM/key/secret và cách xử lý tại
 State local, plan, inventory, `.env`, secret và vault password giữ ngoài hồ
 sơ công khai; chỉ ảnh/receipt đã kiểm mới đặt trong `docs/`.
 
-<!-- chụp: terraform apply thành công + output region/instance/bucket; lưu docs/images/aws/terraform-apply.png, che thông tin nhạy cảm. -->
-<!-- chụp: Console EC2 tại ap-southeast-1: instance, IAM role, IMDSv2 required/hop 2, EBS encrypted; SG không inbound; lưu docs/images/aws/ec2.png. -->
-<!-- chụp: Console S3 hai bucket raw/lakehouse, block public + versioning; lưu docs/images/aws/s3.png. -->
 ### Terraform đã chạy (2026-10-31)
 
 `terraform plan` trên hạ tầng đang chạy: Terraform đọc lại từng tài nguyên thật (VPC, subnet, SG, EC2, EBS, S3 raw/lakehouse,

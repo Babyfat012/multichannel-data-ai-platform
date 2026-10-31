@@ -4,23 +4,17 @@ Nền tảng dữ liệu và AI cho một Seller bán hàng trên Amazon, TikTok
 
 ## Mục lục
 
-1. [Business domain](#business-domain)
-2. [Tổng quan hệ thống](#tổng-quan-hệ-thống)
-3. [Sơ đồ triển khai](#sơ-đồ-triển-khai)
-4. [Cấu trúc repo](#cấu-trúc-repo)
-5. [Bắt đầu](#bắt-đầu)
-6. [Tài liệu theo rubric](#tài-liệu-theo-rubric)
-7. [Tài liệu khác](#tài-liệu-khác)
+- [Platform cung cấp gì?](#platform-cung-cấp-gì)
+- [Bài toán nghiệp vụ](#bài-toán-nghiệp-vụ)
+- [Kiến trúc](#kiến-trúc)
+- [Bắt đầu](#bắt-đầu)
+- [Tài liệu](#tài-liệu)
+- [Cấu trúc repo](#cấu-trúc-repo)
+- [Phát triển và đóng góp](#phát-triển-và-đóng-góp)
+- [Kết quả kiểm chứng và giới hạn](#kết-quả-kiểm-chứng-và-giới-hạn)
+- [Giấy phép](#giấy-phép)
 
-## Business domain
-
-Một Seller bán trên bảy Storefront: Amazon US/UK/DE, TikTok Shop US, Shopify, Walmart US và Shopee VN. Mỗi kênh xuất dữ liệu theo schema riêng; hệ thống gom về một lakehouse Bronze / Silver / Gold rồi dựng feature cho bài toán:
-
-> Dòng đơn hàng này có bị Return hoặc Refund trong 30 ngày sau giao hàng không?
-
-Feature được tra cứu theo `sku_id` + `storefront_id`. Chi tiết: [business domain](docs/Domain.md), [thuật ngữ](docs/terminology.md), [contract nhãn](docs/return-label-contract.md).
-
-## Tổng quan hệ thống
+## Platform cung cấp gì?
 
 | Phần | Chức năng | Công nghệ chính | Hướng dẫn |
 |---|---|---|---|
@@ -30,9 +24,17 @@ Feature được tra cứu theo `sku_id` + `storefront_id`. Chi tiết: [busines
 
 Trên AWS: Data Platform chạy trên một EC2 (Docker Compose) với dữ liệu ở S3; ML Platform và LLM Platform chạy trên EKS. Hạ tầng dựng bằng Terraform, cấu hình EC2 bằng Ansible.
 
-## Sơ đồ triển khai
+## Bài toán nghiệp vụ
 
-Hệ thống nộp bài chạy trên AWS (ap-southeast-2): EC2 chạy Docker Compose, EKS chạy ML/LLM, S3 + ECR ngoài VPC.
+Một Seller bán trên bảy Storefront: Amazon US/UK/DE, TikTok Shop US, Shopify, Walmart US và Shopee VN. Mỗi kênh xuất dữ liệu theo schema riêng; hệ thống gom về một lakehouse Bronze / Silver / Gold rồi dựng feature cho bài toán:
+
+> Dòng đơn hàng này có bị Return hoặc Refund trong 30 ngày sau giao hàng không?
+
+Agent truy xuất feature, gọi model dự đoán và tìm chính sách trả hàng qua MCP. Chi tiết: [business domain](docs/Domain.md), [thuật ngữ](docs/terminology.md), [contract nhãn](docs/return-label-contract.md).
+
+## Kiến trúc
+
+Mô hình triển khai tham chiếu trên AWS (ap-southeast-2): EC2 chạy Docker Compose, EKS chạy ML/LLM, S3 + ECR ngoài VPC.
 Mỗi hộp là một deployable unit; mũi tên theo dữ liệu, vòng tròn là bước đánh số theo từng luồng (chú thích FLOWS cuối hình).
 
 Data Platform và ML Platform trên AWS (B batch, S stream phát lại, T train/deploy, M drift):
@@ -46,6 +48,48 @@ LLM Platform và Agent trên AWS (A hội thoại, K RAG ingest, O quan sát + s
 Bản tương tác: [AWS Data / ML](docs/diagrams/aws-architecture-layer12.html) · [AWS LLM / Agents](docs/diagrams/aws-architecture-layer3.html) · [hạ tầng AWS](docs/diagrams/aws-infra.html).
 Bản chạy local (Docker Compose + kind) để phát triển: [Data / ML Platform](docs/diagrams/data-ml-platform.png) · [LLM Platform](docs/diagrams/llm-platform.png).
 Sinh lại hình: `python3 scripts/diagrams/build.py`.
+
+## Bắt đầu
+
+Yêu cầu: Python 3.12+, `uv`, Docker Engine và Docker Compose v2. Chạy các lệnh từ thư mục gốc repo.
+Kubernetes dùng cho ML/LLM; môi trường phát triển dùng kind, triển khai AWS dùng EKS.
+
+### Dựng nguồn dữ liệu local
+
+```bash
+cp .env.example .env          # đặt mật khẩu và cổng cho môi trường của bạn
+uv sync --frozen
+docker compose up -d --build
+docker compose wait generator-load
+```
+
+Bước này dựng nguồn dữ liệu giả lập với MinIO và PostgreSQL. Các dịch vụ xử lý, ML và Agent được bật theo
+profile và hướng dẫn riêng; xem [Docker Compose](docs/Docker.md).
+
+### Chọn phần cần triển khai
+
+| Mục tiêu | Hướng dẫn |
+|---|---|
+| Xử lý batch/stream, lakehouse và warehouse | [Data Platform](docs/data-platform.md) |
+| Feature store, training và model serving | [ML Platform](docs/ml-platform.md) |
+| LLM inference, RAG và Agent | [LLM Platform](docs/llm-platform.md) |
+| Hạ tầng AWS và cấu hình dịch vụ | [Cloud setup](docs/cloud-setup.md), [AWS runbook](docs/aws-deploy.md), [IaC](docs/IaC.md) |
+
+## Tài liệu
+
+[Mục lục tài liệu](docs/README.md) tập hợp hướng dẫn theo từng platform, code liên quan và kết quả kiểm chứng.
+
+| Chủ đề | Tài liệu |
+|---|---|
+| Nguồn dữ liệu và chất lượng | [Generator](docs/generator-design.md), chất lượng [batch](docs/data-quality-report-batch.md) / [stream](docs/data-quality-report-stream.md) |
+| Batch và mô hình dữ liệu | [Spark](docs/spark.md), [Silver](docs/silver.md), [Gold](docs/gold.md), [Schema](docs/schema.md) |
+| Streaming và CDC | [Flink](docs/flink.md), [Debezium CDC](docs/cdc.md) |
+| Storage, điều phối và governance | [Storage](docs/storage.md), [Trino](docs/trino.md), [Airflow](docs/airflow.md), [DataHub](docs/datahub.md) |
+| Feature và vòng đời model | [Feature store](docs/ml-platform-feature-store.md), [stream feature](docs/ml-platform-stream-feature.md), [training](docs/ml-platform-training.md), [serving](docs/ml-platform-serving.md) |
+| Agent và công cụ | [LLM/Agent](docs/llm-platform-agents.md), [RAG](docs/llm-platform-rag.md), [Web API và MCP](docs/ml-llm-platform-web-api.md) |
+| Vận hành và bảo mật | [CI/CD](docs/ml-llm-platform-cicd.md), [gateway](docs/llm-platform-gateway.md), [observability](docs/ml-llm-platform-observability.md), [Vault](docs/ml-llm-platform-vault.md) |
+| Đánh giá | [Agent eval](docs/llm-platform-agent-eval.md), [drift](docs/ml-platform-drift.md), [A/B testing](docs/llm-platform-ab-test.md) |
+| Thiết kế | [Thuật ngữ](GLOSSARY.md), [ADR](docs/adr/README.md), [quy ước code](docs/code-style.md) |
 
 ## Cấu trúc repo
 
@@ -72,67 +116,31 @@ Sinh lại hình: `python3 scripts/diagrams/build.py`.
 └── docs/             # Tài liệu; evidence/ và images/ giữ bằng chứng chạy thật
 ```
 
-## Bắt đầu
+## Phát triển và đóng góp
 
-Yêu cầu: Python 3.12+, `uv`, Docker Engine và Docker Compose v2. Chạy các lệnh từ thư mục gốc repo.
+Đọc [quy ước code](docs/code-style.md), [thuật ngữ](GLOSSARY.md) và tài liệu của thành phần cần thay đổi.
+Khi gửi thay đổi, mô tả vấn đề, hành vi sau sửa và cách kiểm chứng; cập nhật tài liệu liên quan nếu đổi cách dùng.
 
 ```bash
-# Kiểm tra code
 uv sync --frozen
 uv run pytest -q
+uv run ruff format --check .
 uv run ruff check .
-
-# Dựng nguồn dữ liệu local (MinIO, PostgreSQL, sinh dữ liệu theo configs/small.yaml)
-cp .env.example .env          # sửa mật khẩu và cổng trước khi chạy
-docker compose up -d --build
-docker compose wait generator-load
 ```
 
-Các platform khác bật theo hướng dẫn riêng: [Docker Compose](docs/Docker.md), [triển khai AWS](docs/aws-deploy.md), [cloud setup](docs/cloud-setup.md).
+Các lệnh trên kiểm tra code Python và bộ test mặc định. Hướng dẫn kiểm thử Spark, Web API và từng dịch vụ
+nằm trong tài liệu thành phần.
 
-## Tài liệu theo rubric
+## Kết quả kiểm chứng và giới hạn
 
-Mỗi dòng dẫn tới tài liệu chứa giải thích, code liên quan và ảnh chụp bằng chứng.
+Dự án dùng dữ liệu giả lập; các số đo gắn với môi trường, cấu hình và phạm vi dữ liệu của từng lần chạy.
+Ngày chạy, run ID và artifact được giữ trong tài liệu kiểm chứng để phân biệt kết quả local với AWS.
 
-### Data Platform (sheet `de`)
+- [Data Platform — bằng chứng và giới hạn](docs/data-platform-evidence.md).
+- [ML/LLM Platform — bằng chứng và liên kết kết quả AWS](docs/ml-llm-platform-evidence.md).
+- [Trạng thái kiểm chứng theo rubric](docs/rubric-cloud-audit.md), gồm các phần còn mở và ảnh chi tiết còn thiếu.
+- [Tài liệu theo rubric](docs/rubric-guide.md) dành cho việc đối chiếu coursework.
 
-| Mục rubric | Tài liệu |
-|---|---|
-| Docker & Docker Compose, tối ưu Dockerfile | [Docker](docs/Docker.md#trên-aws-2026-10-27) |
-| Data Generator (offline + online data problems) | [Thiết kế generator](docs/generator-design.md#trên-aws-2026-10-27-đến-2026-10-28), chất lượng [batch](docs/data-quality-report-batch.md#trên-aws-2026-10-27) / [stream](docs/data-quality-report-stream.md#trên-aws-2026-10-28) |
-| Spark job (baseline, skew, schema evolution, duplicate) | [Spark](docs/spark.md#trên-aws-2026-10-29), [Silver](docs/silver.md#trên-aws-2026-10-28), [năm Channel](docs/silver-five-channels.md) |
-| Flink job (late arrival, duplicate, window) | [Flink](docs/flink.md#trên-aws-2026-10-28) |
-| Data Storage (lakehouse, warehouse indexing) | [Storage](docs/storage.md#trên-aws-2026-10-29), [Iceberg maintenance](docs/iceberg-maintenance.md#trên-aws-2026-10-27-đến-2026-10-29) |
-| Orchestration DP1 / DP2 / DP3 | [Airflow](docs/airflow.md#trên-aws-2026-10-27-đến-2026-10-28) |
-| Data Governance (lineage, validation) | [DataHub](docs/datahub.md#trên-aws-2026-10-28-đến-2026-10-29) |
-| Schema design (zone, SCD2, `feat_`, dim–fact, naming) | [Schema](docs/schema.md#trên-aws-2026-10-28), [thiết kế Gold](docs/gold-design.md#trên-aws-2026-10-28), [Gold](docs/gold.md#trên-aws-2026-10-28) |
-| Novel idea 1 — Trino liên nguồn | [Trino](docs/trino.md#trên-aws-2026-10-29) |
-| Novel idea 2 — CDC Debezium | [CDC](docs/cdc.md#trên-aws-2026-10-28) |
-| Bằng chứng | [Evidence Data Platform](docs/data-platform-evidence.md#đọc-bằng-chứng-aws-theo-rubric) |
+## Giấy phép
 
-### ML Platform / LLM Platform (sheet `mle`)
-
-| Mục rubric | Tài liệu |
-|---|---|
-| LLM inference, custom model, benchmark, global model config | [LLM và agent](docs/llm-platform-agents.md#trên-eks-2026-10-30) |
-| Agent registry, agent, coordinator, Sandbox, Warm Up | [LLM và agent](docs/llm-platform-agents.md#trên-eks-2026-10-30) |
-| MCP Gateway, A2A Gateway | [agentgateway: LLM, MCP và A2A](docs/llm-platform-agents.md#agentgateway-cổng-cho-llm-và-mcp) |
-| RAG pipeline + governance | [RAG](docs/llm-platform-rag.md#trên-aws-2026-10-30) |
-| Feature store (materialize, push stream feature) | [Feature store](docs/ml-platform-feature-store.md#trên-aws-2026-10-29), [stream feature](docs/ml-platform-stream-feature.md#trên-aws-pipeline-a-2026-10-30) |
-| Training pipeline, MLflow versioning | [Training](docs/ml-platform-training.md#trên-aws-2026-10-29) |
-| ML inference service (KServe) | [Serving](docs/ml-platform-serving.md#trên-eks-2026-10-31) |
-| Web API + MCP tool (FastAPI, async, helm) | [Feature API](docs/ml-llm-platform-web-api.md#trên-eks-2026-10-30) |
-| Validation & Verification (coverage, EP/BVA, mutation, property-based, locust) | [Feature API — test](docs/ml-llm-platform-web-api.md#test) |
-| CI/CD | [CI/CD](docs/ml-llm-platform-cicd.md) |
-| NGINX Ingress, basic auth, rate limit, HTTPS | [Gateway](docs/llm-platform-gateway.md#trên-eks-2026-10-3031) |
-| IaC (Terraform, Ansible) | [IaC](docs/IaC.md) |
-| Observability, LLM / agent telemetry | [Observability](docs/ml-llm-platform-observability.md#trên-eks-2026-10-30) |
-| A/B testing | [A/B](docs/llm-platform-ab-test.md) |
-| Vault | [Vault](docs/ml-llm-platform-vault.md#trên-aws-2026-10-31) |
-| Novel idea 1 — agent eval harness | [Agent eval](docs/llm-platform-agent-eval.md) |
-| Novel idea 2 — drift theo kênh | [Drift](docs/ml-platform-drift.md#trên-aws-pipeline-a--chuẩn-bị-2026-10-30-chưa-chạy) |
-| Bằng chứng | [Evidence ML / LLM Platform](docs/ml-llm-platform-evidence.md), [kiểm kê rubric × cloud](docs/rubric-cloud-audit.md) |
-
-## Tài liệu khác
-
-[Mục lục tài liệu](docs/README.md) liệt kê mọi trang theo platform. Quy ước code: [code style](docs/code-style.md). Từ vựng: [GLOSSARY](GLOSSARY.md). Quyết định kiến trúc: [ADR](docs/adr/README.md).
+Dự án được phát hành theo [Apache License 2.0](LICENSE).

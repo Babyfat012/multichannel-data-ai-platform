@@ -46,5 +46,3 @@ B chỉ hợp cho câu không cần con số chính xác. Cổng CI đặt `--mi
 
 Các nhánh B đã scale về 0; bật lại: `kubectl -n llm scale deploy/qwen-small --replicas=1`,
 `kubectl -n kagent scale deploy/data-agent-b --replicas=1`.
-
-<!-- Ảnh dashboard Grafana "Data & AI Platform — A/B LLM + Agent": người vận hành chụp rồi gắn vào đây. -->

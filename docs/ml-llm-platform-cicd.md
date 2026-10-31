@@ -35,9 +35,7 @@ scripts/setup/setup_jenkins.sh    # UI http://localhost:8090, user admin, mật 
   `stream-features` và credential `vault-ci-token`, `kind-kubeconfig` — đều do JCasC tạo.
 - Đổi mật khẩu admin: xoá `secret/platform/jenkins` rồi chạy lại `setup_jenkins.sh` (đã làm một lần, login
   bằng mật khẩu mới OK).
-- **Chưa build**: các Jenkinsfile chưa được commit lên `main`.
-
-<!-- Ảnh Jenkins: danh sách job + Stage View từng pipeline sau lần build đầu: người vận hành chụp. -->
+- **Chưa build** (ghi nhận local 2026-10-21): các Jenkinsfile chưa được commit lên `main`. Trạng thái này đã được thay thế bởi kết quả AWS ngày 2026-10-31 ở mục dưới.
 
 ## Phát hành image qua registry local
 
@@ -83,6 +81,36 @@ Tag SHA giả định working tree sạch; thay code chưa commit thì đặt `T
 
 Stage **Eval agent** đã nối cho Feature API + coordinator, xem [cổng eval](llm-platform-agent-eval.md#dùng-trong-ci).
 Dưới ngưỡng hoặc không có dữ liệu chấm ⇒ build đỏ; gate này chưa tự rollback agent đã apply.
-Chưa có bằng chứng Jenkins chạy thật cho thay đổi registry/gate mới.
+Ghi nhận local 2026-10-22: **Chưa có bằng chứng Jenkins chạy thật** cho thay đổi registry/gate mới.
+Trạng thái này đã được thay thế bởi kết quả AWS ngày 2026-10-31 dưới đây.
 
-<!-- chụp: curl localhost:5001/v2/_catalog có platform-feature-api/platform-train/platform-return-risk; Jenkins Stage View có stage Push trước Deploy và Eval agent sau Deploy Agent. -->
+## Trên AWS (2026-10-31)
+
+Jenkins chạy trên EC2 `i-0d657089ba4a4ea7e` (IP riêng `10.42.0.151`), UI chỉ nghe `127.0.0.1:8090`.
+Code lấy từ git bundle; image đẩy lên ECR
+`665116832975.dkr.ecr.ap-southeast-2.amazonaws.com/platform`. Các bước Kubernetes deploy vào context
+`platform-apps`, hai node `r6i.xlarge`; RAG và stream feature dùng Compose trên EC2.
+
+| Pipeline / code | Các bước và kết quả |
+|---|---|
+| [feature-api-agents](../ci/jenkins/feature-api-agents.Jenkinsfile) #8 | Test → Build → Push ECR → Deploy MCP server → Sync prompts từ Langfuse → Deploy Agent → Eval agent → Smoke: xanh. Gate đạt **12/12 = 1,00 ≥ 0,95**; [JSONL và giới hạn PII](llm-platform-agent-eval.md#trên-aws-2026-10-31). |
+| [rag-pipeline](../ci/jenkins/rag-pipeline.Jenkinsfile) #2 | Test → Build → Push → Release config → Deploy → DAG import → Run DAG: xanh. Lineage DataHub của RAG vẫn còn mở. |
+| [stream-features](../ci/jenkins/stream-features.Jenkinsfile) #2 | Test → Build → Push → Release config → Deploy → Verify: xanh. |
+| [coordinator](../ci/jenkins/coordinator.Jenkinsfile) | Validate / Sync / Deploy xanh; **Eval agent thất bại** vì mỗi câu hỏi vượt timeout 180 s. Một Qwen 1,5B chạy CPU phục vụ chung các Agent; chưa tính pipeline này là hoàn tất. |
+
+![Jenkins EC2 feature-api-agents #8: các stage xanh, gồm Push, Sync prompts và Eval agent](evidence/aws/jenkins-feature-api-agents-20261031.png)
+
+![Jenkins EC2 rag-pipeline #2: Test, Build, Push, Release config, Deploy, DAG import và Run DAG xanh](evidence/aws/jenkins-rag-pipeline-20261031.png)
+
+![Jenkins EC2 stream-features #2: Test, Build, Push, Release config, Deploy và Verify xanh](evidence/aws/jenkins-stream-features-20261031.png)
+
+Các lỗi tìm thấy trên đường chạy:
+
+- Role EC2 thiếu `eks:DescribeCluster` khi tạo kubeconfig Jenkins; đã bổ sung quyền.
+- Checkout bundle local cần `ALLOW_LOCAL_CHECKOUT`; remote của bundle dùng đường dẫn thường.
+  JCasC ăn biến trong `scriptPath` ⇒ ghép chuỗi đường dẫn Jenkinsfile.
+- Key agentgateway được sao chép vào Vault qua container Jenkins; không đưa giá trị key vào tài liệu.
+- Redis mất dữ liệu khi node scale về 0 ⇒ chạy `ml_feature_materialize` với `full_reload` để nạp lại trước eval.
+
+Stage View chứng minh trạng thái các bước; kết quả chấm từng câu nằm trong JSONL của ML-N1.
+Gate hiện chặn pipeline sau deploy, chưa tự rollback Agent khi eval thất bại.

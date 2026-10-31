@@ -1,35 +1,39 @@
-# Rubric × cloud — kiểm kê 2026-10-29
+# Rubric × cloud — kiểm kê 2026-10-31
 
 Nguồn: `edai-k11-cw/rubic/EDAI K11 - MLE.xlsx`, sheet `de` (100đ) và `mle` (100đ). Nguyên tắc learner chốt:
 mọi dòng phải có bằng chứng **triển khai trên AWS**; thiếu là phải làm. Bằng chứng cloud ghi ở
-[data-platform-evidence.md](data-platform-evidence.md) mục "Trên AWS"; bằng chứng local ở
-[ml-llm-platform-evidence.md](ml-llm-platform-evidence.md).
+[data-platform-evidence.md](data-platform-evidence.md) mục "Trên AWS" và các mục AWS/EKS của tài liệu ML/LLM;
+[ml-llm-platform-evidence.md](ml-llm-platform-evidence.md) giữ bảng local lịch sử và dẫn tới kết quả AWS mới hơn.
 
 Ký hiệu: ✅ có bằng chứng AWS · ⚠️ có trên AWS nhưng thiếu phần rubric đòi · ❌ chỉ local / chưa có.
+Các dòng ⚠️ về ảnh: chạy trên AWS; ảnh chi tiết là local hoặc chưa có capture tương ứng trên AWS.
+Không dùng trạng thái job xanh thay ảnh chi tiết mà cột "Document" yêu cầu.
 
 ## Sheet `de`
 
 | Dòng rubric | Điểm | Trạng thái | Việc còn lại |
 |---|---|---|---|
-| Docker & Compose + optimize Dockerfile | 2+3 | ✅ | Compose chạy trên EC2; số đo multistage 2,39 GB → 698 MB (đo local, cùng Dockerfile) |
+| Docker & Compose + optimize Dockerfile | 2+3 | ✅ | Compose chạy trên EC2; 31/10 đo lại naive 2,4 GB → 698 MB, cùng 27 package ([ảnh EC2](evidence/aws/docker-naive-vs-opt-ec2-20261031.png)) |
 | Generator offline: skew, schema evolution, duplicate, lưu nguồn | 2×4 | ✅ | 100 GB sinh trên EC2, raw S3 + Postgres EC2 |
 | Generator online: late arrival, duplicate stream | 2×2 | ✅ | Kafka + producer trên EC2 |
-| Spark baseline / skew / schema evolution / other + Spark UI | 2+3+3+3 | ✅ | 29/10: đo skew trên AWS + Spark UI History EC2 ([spark.md 5g](spark.md)) |
+| Spark baseline / skew / schema evolution / other + Spark UI | 2+3+3+3 | ⚠️ | Chạy trên AWS; ảnh chi tiết Union/schema evolution và Window dedup là local. Skew có Spark UI AWS ([Spark](spark.md#trên-aws-2026-10-29)). |
 | Spark job tích hợp pipeline | 2 | ✅ | dp1–dp3 trên Airflow EC2 |
-| Flink baseline / late arrival / other / window | 2+3+3+2 | ✅ | 5 job Flink trên EC2, ảnh Flink UI |
+| Flink baseline / late arrival / other / window | 2+3+3+2 | ⚠️ | Chạy trên AWS; ảnh chi tiết watermark/late event là local. AWS có Completed Jobs và graph dedup, chưa có capture chi tiết xử lý late arrival. |
 | Lakehouse optimize (compaction/partition) | 3 | ✅ | 29/10: shopee ngày→tháng, 180→6 file, lọc 30 ngày 8× ([storage.md](storage.md)) |
 | Warehouse indexing | 3 | ✅ | 29/10: `dp4_warehouse` 37 tr dòng, EXPLAIN 42,6 s → 1,5 s ([storage.md](storage.md)) |
 | DP1 / DP2 / DP3 ingest + validate | 2×6 | ✅ | Airflow AWS |
 | DataHub lineage + validation DP1/DP2/DP3 | 2×6 | ✅ | DataHub EC2, 6 DAG: 22 dataset, 30 job, 16 assertion |
-| Schema: zones, SCD2, feat_, dim–fact, naming | 2×5 | ✅ | Tài liệu bảng Gold A (cùng bảng trên AWS) |
+| Schema: zones, SCD2, feat_, dim–fact, naming | 2×5 | ⚠️ | Chạy trên AWS; ảnh chi tiết ERD dim–fact là local. AWS có ảnh danh sách zone/bảng và DESCRIBE SCD2/feature trong [Schema](schema.md#trên-aws-2026-10-28). |
 | Novel idea 1: Trino federation | 10 | ✅ | 29/10: Trino EC2, Iceberg S3 = Postgres 4.517 dòng ([trino.md](trino.md)) |
 | Novel idea 2: CDC Debezium | 10 | ✅ | Debezium EC2, probe c/u/d |
 
 ## Sheet `mle`
 
-Cập nhật 30/10 tối sau buổi EKS. Bằng chứng: [LLM và agent](llm-platform-agents.md#trên-eks-2026-10-30),
+Cập nhật 31/10 sau buổi AWS. Bằng chứng: [LLM và agent](llm-platform-agents.md#trên-eks-2026-10-30),
 [RAG](llm-platform-rag.md#trên-aws-2026-10-30), [Web API](ml-llm-platform-web-api.md#trên-eks-2026-10-30),
-[Observability](ml-llm-platform-observability.md#trên-eks-2026-10-30), ảnh trong `evidence/aws/*-20261030.*`.
+[Observability](ml-llm-platform-observability.md#trên-eks-2026-10-30), [CI/CD](ml-llm-platform-cicd.md#trên-aws-2026-10-31),
+[eval](llm-platform-agent-eval.md#trên-aws-2026-10-31), [drift](ml-platform-drift.md#trên-aws-pipeline-a--2026-10-31);
+ảnh và receipt trong `evidence/aws/` ngày 30–31/10.
 
 | Dòng rubric | Điểm | Trạng thái | Việc còn lại |
 |---|---|---|---|
@@ -42,13 +46,13 @@ Cập nhật 30/10 tối sau buổi EKS. Bằng chứng: [LLM và agent](llm-pla
 | Materialize offline → online | 2 | ✅ | `ml_feature_materialize` 4/4 |
 | Push streaming feature → offline + online | 2 | ✅ | 31/10: Flink EC2 76/76 checkpoint, đối chiếu 1.004.354 cửa sổ khớp, API `approved_returns_24h` ([stream](ml-platform-stream-feature.md)); dữ liệu phát lại (gap #25) |
 | KFP training ≥4 bước | 2 | ✅ | `train-aws-3` 5/5 |
-| MLflow version model + data + tag | 2 | ✅ | v1 `production` |
+| MLflow version model + data + tag | 2 | ⚠️ | v1 `production` chạy trên AWS; ảnh model/tag có, chưa có ảnh mở hash dữ liệu và artifacts train/test cùng run. Mô tả version dữ liệu cũ thuộc lần local ([Training](ml-platform-training.md#trên-aws-2026-10-29)). |
 | KServe model-inside-image | 2 | ✅ | predict OK |
-| FastAPI + pydantic + healthcheck / async / MCP helm rolling + fallback | 1+1+2 | ✅ | Feature API helm 2 replica, rolling; Swagger `/features` `/predict` `/chunks` |
+| FastAPI + pydantic + healthcheck / async / MCP helm rolling + fallback | 1+1+2 | ⚠️ | Feature API 2 replica chạy trên AWS, có Swagger; proof chi tiết rolling/rollback khi bản hỏng là local, chưa có capture fallback trên AWS. |
 | Agent 1 multi-replica + KEDA, Sandbox, publish | 2+1+1 | ✅ | data-agent 2 pod + KEDA 2→3→2 ✅, publish registry ✅; Sandbox 31/10: Agent Substrate 0.0.9 (gVisor) trên EKS, `data-agent-sandbox` gọi tool `get-sku-features` qua gateway và trả số ([ảnh](evidence/aws/substrate-sandbox-agent-ui-20261031.png)); model 1,5B chép sai `labeled_count` (83,084 thay 830847), positive/rate đúng |
-| Agent 2: online feature + predict + RAG | 8 | ✅ | model-agent gọi `predict_return_risk` và `search_policy_chunks` (ảnh `rag-model-agent-*`) |
+| Agent 2: online feature + predict + RAG | 8 | ⚠️ | Tool/chat chạy trên AWS (ảnh `rag-model-agent-*`); chưa có proof KEDA riêng cho model-agent. Comment manifest nhắc `model-agent-keda.yaml` nhưng file này chưa có; không lấy log scale Agent khác làm proof. |
 | MCP gateway / A2A gateway | 2+2 | ✅ | route `/mcp`, A2A theo header; Grafana đếm theo route |
-| Coordinator multi-replica + KEDA, publish | 2+2 | ✅ | coordinator 2 pod, ScaledObject min 2 max 3, publish registry |
+| Coordinator multi-replica + KEDA, publish | 2+2 | ⚠️ | Chạy trên AWS, đã publish registry; proof chi tiết scale 2→3→2 là local. ScaledObject min 2 max 3 chưa thay capture test scaling trên AWS. |
 | Warm Up (Agent Substrate) | 2 | ✅ | 31/10: 6 SandboxAgent Ready trên 1 WorkerPool `kagent-default` (DESIRED/REPLICAS 1), golden snapshot ([ảnh](evidence/aws/substrate-warmup-6-agents-1-worker-20261031.png)) |
 | Unit coverage, EP/BVA, mutation, property-based | 1+2+2+2 | ✅ | Kiểm ở mức code (PR testing), không phụ thuộc nơi chạy |
 | Load test locust Web API | 2 | ✅ | Locust → Feature API EKS: 3.004 request, 0 lỗi (`load-test-feature-api-20261030.html`) |
@@ -61,21 +65,21 @@ Cập nhật 30/10 tối sau buổi EKS. Bằng chứng: [LLM và agent](llm-pla
 | LLM telemetry (token, TTFT…) / Agent telemetry | 2+2 | ✅ | Grafana token, TTFT, thời gian/token, lượt gọi Agent + MCP tool |
 | A/B agent / A/B LLM | 1+1 | ❌ | Bước 5 |
 | Vault | 1 | ✅ | Vault EC2 (EBS), KV v2, mật khẩu ingress |
-| README + docs theo rule | 2 | ⚠️ | Thiếu sơ đồ triển khai AWS tổng thể |
-| Novel idea 1 / 2 | 2+2 | ✅ | 31/10: ML-N1 agent eval làm cổng CI trong Jenkins `feature-api-agents` #8 (12/12 ≥ 0,95, [ảnh](evidence/aws/jenkins-feature-api-agents-20261031.png)); ML-N2 drift Evidently = Job EKS `mle-drift` trên training_lines S3: ổn định không báo, dịch kênh shopee báo `seller_sku` JS 0,203 > 0,2 ([JSON](evidence/aws/mle-drift-20261031.json)) |
+| README + docs theo rule | 2 | ✅ | README có sơ đồ AWS Data/ML và LLM/Agent, mục lục, cấu trúc repo và liên kết tài liệu theo rubric; các giới hạn ảnh chi tiết ghi riêng ở dòng ⚠️. |
+| Novel idea 1 / 2 | 2+2 | ✅ | 31/10: ML-N1 Jenkins `feature-api-agents` #8 đạt 12/12 ≥ 0,95 ([JSONL](evidence/aws/agent-eval-data-agent-20261031.jsonl), [ảnh](evidence/aws/jenkins-feature-api-agents-20261031.png)); chọn SKU có count dưới 7 chữ số vì PII mask còn che số đếm lớn. ML-N2 Job EKS `mle-drift`, Evidently 0.7.23 + pandas 2.3.3: stable không báo, channel_shift báo `seller_sku` JS 0,2028 > 0,2 ([JSON](evidence/aws/mle-drift-20261031.json)). |
 
-## Ước lượng
+## Ước lượng (2026-10-31)
 
-- `de`: **100đ có bằng chứng AWS** (29/10, đợt 1 xong).
-- `mle` (30/10 tối, tự đếm): có bằng chứng AWS **~77đ** (72 dòng ✅ + 5 phần đã xong của dòng ⚠️); thiếu ~9đ ở dòng ⚠️ (DataHub RAG 2, Sandbox 1, README 2, novel 4); ❌ 14đ (stream 2, Warm Up 2, CI/CD 8, A/B 2).
-- Ràng buộc: EKS 2 × c6i.xlarge (8 GB), quota 16 vCPU đã dùng hết.
+- Tự đánh giá theo phần đã chạy: `de` **100đ**, `mle` **~94đ**. Đây là ước lượng chức năng, chưa trừ rủi ro thiếu ảnh chi tiết ở các dòng ⚠️; không khẳng định đã đủ mọi capture mà rubric yêu cầu.
+- Ba phần còn mở của MLE: **CI eval Coordinator 2đ**, **A/B Agent + LLM 2đ**, **lineage DataHub RAG 2đ**. Sandbox/Warm Up đã có ảnh EKS; ML-N1/ML-N2 đã có kết quả ngày 31/10.
+- EKS context `platform-apps`: **2 node r6i.xlarge** (mỗi node 4 vCPU/32 GB). Cùng EC2 Data Platform `r6i.xlarge`: tổng 12/16 vCPU quota.
 
 ## Cấu hình và kế hoạch chốt (learner duyệt 29/10)
 
-Cấu hình: EC2 `r6i.xlarge` (4 vCPU/32 GB, IP riêng 10.42.0.12 giữ nguyên khi đổi type), 2 node EKS
+Cấu hình ngày 31/10: EC2 `i-0d657089ba4a4ea7e`, `r6i.xlarge` (4 vCPU/32 GB, IP riêng `10.42.0.151`), 2 node EKS
 `r6i.xlarge` (2 × 4 vCPU/32 GB). 12/16 vCPU quota. ~1,1 USD/giờ khi bật cả hai; ~0,18 USD/giờ khi tắt hết
 (EKS control plane 0,10 + EBS). Ngân sách tính 100 USD ⇒ chạy theo đợt, tắt khi nghỉ (~10 ngày).
-gVisor KHÔNG cài qua launch template (sai key containerd 1.x/2.x có thể làm node không join) ⇒ DaemonSet ở đợt 5.
+Kế hoạch cũ ngày 29/10 không cài gVisor qua launch template; hướng DaemonSet thủ công đã được thay thế ngày 30/10.
 30/10: đổi hướng — Agent Substrate 0.0.9 (khớp kagent 0.10.3) tự đặt runtime gVisor qua node agent của nó ⇒ không tự viết DaemonSet sửa containerd ([ví dụ kagent](https://www.kagent.dev/docs/kagent/examples/agent-substrate)); code `scripts/setup/deploy_substrate.sh` + `infra/k8s/agents/sandbox/`.
 
 | Đợt | Bật | Việc |

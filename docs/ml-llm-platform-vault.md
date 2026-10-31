@@ -47,8 +47,6 @@ vault_env.sh agentgateway                        → AGW_AGENT_KEY 36 ký tự, 
 restart container vault                          → sealed=true; setup_vault.sh → sealed=false
 ```
 
-<!-- Ảnh UI Vault (http://localhost:8200, secret/platform/*): người vận hành chụp rồi gắn vào đây. -->
-
 ## Trên AWS (2026-10-31)
 
 Vault 2.1.1 chạy trên EC2 (Docker Compose, dữ liệu trên EBS `/mnt/platform-data/vault`, chỉ nghe loopback 8200, vào

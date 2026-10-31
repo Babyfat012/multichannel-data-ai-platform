@@ -104,8 +104,6 @@ Lần chạy local 2026-10-21 (fixture 15 đơn / 2 SKU, cutoff 2026-06-01):
 - Feature = 0 ở fixture này là đúng: chưa line nào có nhãn đủ 30 ngày trong 90 ngày trước cutoff.
   Dữ liệu cỡ lớn (bước train) mới có số > 0.
 
-<!-- Ảnh Grid DAG xanh + log hai lần materialize: người vận hành chụp rồi gắn vào đây. -->
-
 ### Trên AWS, 2026-10-30
 
 DAG `ml_feature_materialize` trên Airflow EC2 hỏng ở `feast_apply`: `feast apply` import mọi `.py` trong

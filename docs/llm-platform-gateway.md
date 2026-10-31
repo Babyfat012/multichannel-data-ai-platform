@@ -49,8 +49,6 @@ GET https://registry.172-25-0-2.sslip.io:30443/       → 401 không mật khẩ
 Giới hạn local: redirect trả cổng 443 thay vì NodePort 30443; IP node đổi khi tạo lại cluster thì
 chạy lại `setup_ingress.sh`.
 
-<!-- Ảnh trình duyệt: hộp đăng nhập UI agent + ổ khoá HTTPS của API: người vận hành chụp. -->
-
 ## Let's Encrypt với DuckDNS (tùy chọn, mặc định tắt)
 
 ```bash
@@ -83,8 +81,6 @@ account/TLS Secret khác nhau. Script tạo Ingress riêng `feature-api-duckdns`
 giữ nguyên route sslip.io/CA nội bộ. Cần DNS A trỏ nơi client truy cập được và đường vào
 NodePort 30443 (hoặc NAT 443→30443 nếu muốn URL HTTPS không ghi cổng). DNS-01 chỉ chứng minh
 quyền domain; không tự dựng NAT, không cập nhật bản ghi A của DuckDNS.
-
-<!-- chụp: Certificate feature-api-duckdns-production-tls Ready và trình duyệt HTTPS domain DuckDNS sau khi người vận hành kiểm chart/chạy cấp cert thật. -->
 
 ## Trên EKS (2026-10-30/31)
 

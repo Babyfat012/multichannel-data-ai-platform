@@ -60,6 +60,22 @@ Stage này chặn pipeline sau khi đã deploy, **chưa tự rollback agent**.
 
 SKU phải có lịch sử để chấm được. Không có câu chấm được ⇒ accuracy 0 ⇒ build đỏ. CI không
 `flushall` hoặc thay dữ liệu Redis đang dùng; người vận hành chuẩn bị fixture có nhãn trước khi chạy.
-Bằng chứng A/B ở trên là lần chạy cũ; stage Jenkins mới vẫn cần người vận hành chạy thật.
+Bằng chứng A/B ở trên thuộc lần local 2026-10-21. Gate Jenkins đã chạy trên AWS ngày 2026-10-31 ở mục dưới.
 
-<!-- chụp: Jenkins Stage View feature-api-agents có Build → Push → Deploy MCP server → Deploy Agent → Eval agent; artifact JSONL + summary của build đạt và build đỏ dưới ngưỡng. -->
+## Trên AWS (2026-10-31)
+
+Jenkins trên EC2 `i-0d657089ba4a4ea7e` (`10.42.0.151`) gọi `data-agent` trên EKS context `platform-apps`.
+Build `feature-api-agents` **#8 xanh**, gate **12/12 = 1,00 ≥ 0,95**.
+Kết quả từng câu: [agent-eval-data-agent-20261031.jsonl](evidence/aws/agent-eval-data-agent-20261031.jsonl).
+Luồng build/push ECR/deploy: [CI/CD AWS](ml-llm-platform-cicd.md#trên-aws-2026-10-31).
+
+![Jenkins feature-api-agents #8: Eval agent xanh sau Deploy Agent](evidence/aws/jenkins-feature-api-agents-20261031.png)
+
+**Phát hiện PII mask.** Lần đầu chỉ đạt **9/12**: guardrail `phoneNumber` của gateway che cả số đếm bảy chữ số,
+ví dụ `6077845` → `<PHONE_NUMBER>`. Câu trả lời mất số chuẩn nên harness chấm trượt.
+Lần 12/12 chọn SKU có `labeled_count_90d` dưới bảy chữ số; kết quả chỉ chứng minh tập SKU đó,
+không chứng minh đã sửa lỗi mask cho mọi số đếm lớn. Khác với lỗi làm tròn tỷ lệ ngày 30/10,
+đây là số đếm nguyên bị nhận nhầm thành số điện thoại.
+
+Coordinator đã Validate / Sync / Deploy xanh nhưng Eval agent thất bại: mỗi câu vượt timeout **180 s**,
+do một Qwen 1,5B chạy CPU phục vụ chung các Agent. Chưa có kết quả gate đạt cho Coordinator trên AWS.

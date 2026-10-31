@@ -75,8 +75,6 @@ Kiểm qua Prometheus (route `metrics.`): sau 5 request × 2 dòng + 1 request t
 **Bẫy:** deploy lại cùng tag `v3` thì node kind giữ image cũ theo tag ⇒ pod chạy code cũ. Script giờ
 gắn tag `v<version>-<băm code+model>` (vd `v3-d18e5f42`), mỗi bản build một tag.
 
-<!-- Ảnh pod KServe + curl predict: người vận hành chụp rồi gắn vào đây. -->
-
 ## Trên EKS (2026-10-31)
 
 InferenceService [`return-risk`](../infra/k8s/ml/return-risk.yaml) ở namespace `ml-serving` (model-inside-image: image

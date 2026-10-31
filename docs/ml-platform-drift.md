@@ -42,14 +42,21 @@ uv run --no-project --with evidently==0.7.23 --with s3fs==2026.9.0 --with pyarro
     --sale-truth out/order_lifecycle_sale/_truth/lines.jsonl --out out/drift
 ```
 
-<!-- Ảnh hai báo cáo HTML (stable.html / sale_event.html): người vận hành chụp rồi gắn vào đây. -->
+## Trên AWS (pipeline A) — 2026-10-31
 
-## Trên AWS (pipeline A) — chuẩn bị 2026-10-30, chưa chạy
-
-- Dữ liệu: `training_lines` của pipeline A trên S3 (`s3://<lakehouse>/feature-store/training_lines`, mẫu 2‰).
+- Dữ liệu: `training_lines` của pipeline A trên S3 (`s3://platform-665116832975-lakehouse/feature-store/training_lines`, mẫu 2‰).
 - Hai phép so: `stable` (30 ngày đầu vs phần sau) và `channel_shift` (30 ngày đầu vs phần sau **chỉ kênh Shopee**:
   cơ cấu đơn dồn về một sàn). Lô Sale cũ là dữ liệu pipeline B nên không dùng trên AWS.
 - Chạy: Job [`infra/k8s/ml/drift-job.yaml`](../infra/k8s/ml/drift-job.yaml) trên EKS, ns `kubeflow`, SA `pipeline-runner`
-  (Pod Identity chỉ đọc `feature-store/*`), Evidently 0.7.23; kết quả là JSON trong log Job.
-- Chưa biết trước `channel_shift` có vượt ngưỡng không (nếu các kênh bán cùng tập SKU với tỉ lệ gần nhau thì có thể
-  không) — ghi đúng kết quả đo.
+  (Pod Identity chỉ đọc `feature-store/*`), tên Job `mle-drift`, context `platform-apps`.
+- Runtime: **Evidently 0.7.23 + pandas 2.3.3**. pandas 3 làm hỏng import; lần chạy này dùng pandas 2.3.3.
+
+Kết quả: [mle-drift-20261031.json](evidence/aws/mle-drift-20261031.json).
+
+| Phép so | Dòng tham chiếu / hiện tại | JS `seller_sku` (ngưỡng 0,2) | JS `label` (ngưỡng 0,1) | Alert |
+|---|---:|---:|---:|---|
+| `stable` | 72.109 / 287.348 | 0,0664 | 0,0008 | không |
+| `channel_shift` | 72.109 / 8.320 | **0,2028 > 0,2** | 0,0298 | **có: seller_sku** |
+
+Lô ổn định không báo; lô chỉ giữ Shopee làm đổi cơ cấu SKU và vượt ngưỡng. Đây là kết quả đo trên đầu vào S3
+của pipeline A; không dùng số lô Sale local của pipeline B thay cho lần AWS.
