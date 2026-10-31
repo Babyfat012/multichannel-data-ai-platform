@@ -34,3 +34,8 @@ def test_full_reload_switches_to_ranged_materialize():
     assert _rewrite(inc, None) == inc
     assert _rewrite(("apply",), {"full_reload": True}) == ("apply",)
     assert '"full_reload": Param(\n            False, type="boolean"' in DAG
+
+
+def test_run_feast_signature_takes_context_only_as_kwargs():
+    """`def run_feast(*args, params=None)` ⇒ Airflow 2.10 raise 'params ... reserved' với 4 op_args."""
+    assert "def run_feast(*args, **context):" in DAG

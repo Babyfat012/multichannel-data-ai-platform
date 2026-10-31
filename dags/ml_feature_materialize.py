@@ -39,8 +39,10 @@ CONF = {
 }
 
 
-def run_feast(*args, params=None, **_):
+def run_feast(*args, **context):
     """Chạy CLI Feast trên bản sao repo (mount read-only), credential lấy lúc chạy."""
+    # Không khai `params=` trong chữ ký: Airflow cấm tên context trùng vị trí của *args (ValueError reserved).
+    params = context.get("params")
     # Redis trống (pod Redis không có ổ, node EKS về 0) nhưng registry vẫn nhớ mốc cũ ⇒ incremental nạp 0 dòng
     # mà vẫn xanh. full_reload: nạp lại toàn bộ (FULL_RELOAD_START, end], ghi giá trị mới nhất mỗi SKU.
     if args[0] == "materialize-incremental" and (params or {}).get("full_reload"):
